@@ -1,6 +1,24 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 
+# Department Models
+class DepartmentBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+class DepartmentCreate(DepartmentBase):
+    pass
+
+class DepartmentUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+class DepartmentResponse(DepartmentBase):
+    id: str
+
+    class Config:
+        from_attributes = True
+
 # Role Models
 class RoleBase(BaseModel):
     name: str
