@@ -10,3 +10,4 @@ DB_NAME = os.getenv("DB_NAME", "fair_tasker_db")
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 users_collection = db["users"]
+roles_collection = db["roles"]
