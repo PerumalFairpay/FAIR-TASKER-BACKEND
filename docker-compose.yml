@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    container_name: fair_tasker_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGO_URL=mongodb://db:27017
+      - DB_NAME=fair_tasker_db
+    depends_on:
+      - db
+    volumes:
+      - .:/app  # Enable hot reloading by mounting the current directory
+
+  db:
+    image: mongo:latest
+    container_name: fair_tasker_db
+    ports:
+      - "27017:27017" # Exposed to localhost for tools like Compass
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:
