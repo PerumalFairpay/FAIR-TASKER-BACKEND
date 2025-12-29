@@ -10,9 +10,9 @@ router = APIRouter()
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(user: UserCreate):
     # Check if user already exists
-    existing_user = await users_collection.find_one({"$or": [{"email": user.email}, {"hrm_id": user.hrm_id}]})
+    existing_user = await users_collection.find_one({"$or": [{"email": user.email}, {"employee_id": user.employee_id}]})
     if existing_user:
-        raise HTTPException(status_code=400, detail="User with this email or HRM ID already exists")
+        raise HTTPException(status_code=400, detail="User with this email or Employee ID already exists")
 
     # Determine role: First user is 'admin', others are 'employee'
     from app.database import roles_collection
@@ -36,13 +36,17 @@ async def register(user: UserCreate):
     
     return UserResponse(
         id=str(created_user["_id"]),
-        first_name=created_user["first_name"],
-        last_name=created_user["last_name"],
-        phone=created_user["phone"],
+        name=created_user["name"],
         email=created_user["email"],
-        department=created_user["department"],
-        hrm_id=created_user["hrm_id"],
-        role=created_user["role"]
+        mobile=created_user["mobile"],
+        employee_id=created_user["employee_id"],
+        attendance_id=created_user["attendance_id"],
+        role=created_user["role"],
+        first_name=created_user.get("first_name"),
+        last_name=created_user.get("last_name"),
+        phone=created_user.get("phone"),
+        department=created_user.get("department"),
+        hrm_id=created_user.get("hrm_id")
     )
 
 @router.post("/login")
@@ -67,7 +71,15 @@ async def login(response: Response, user: UserLogin):
         secure=False  # Set to True in production with HTTPS
     )
     
-    return {"message": "Login successful", "user_id": str(user_record["_id"])}
+    return {
+        "message": "Login successful",
+        "id": str(user_record["_id"]),
+        "first_name": user_record.get("first_name"),
+        "last_name": user_record.get("last_name"),
+        "email": user_record.get("email"),
+        "role": user_record.get("role"),
+        "department": user_record.get("department")
+    }
 
 @router.post("/logout")
 async def logout(response: Response):

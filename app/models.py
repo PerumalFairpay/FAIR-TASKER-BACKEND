@@ -1,23 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 
-# Department Models
-class DepartmentBase(BaseModel):
-    name: str
-    description: Optional[str] = None
 
-class DepartmentCreate(DepartmentBase):
-    pass
-
-class DepartmentUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-
-class DepartmentResponse(DepartmentBase):
-    id: str
-
-    class Config:
-        from_attributes = True
 
 # Role Models
 class RoleBase(BaseModel):
@@ -41,12 +25,16 @@ class RoleResponse(RoleBase):
 
 # User Models
 class UserBase(BaseModel):
-    first_name: str
-    last_name: str
-    phone: str
+    name: str
     email: EmailStr
-    department: str
-    hrm_id: str
+    mobile: str
+    employee_id: str
+    attendance_id: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone: Optional[str] = None
+    department: Optional[str] = None
+    hrm_id: Optional[str] = None
     role: str = "employee"  # Default role
 
 class UserCreate(UserBase):
