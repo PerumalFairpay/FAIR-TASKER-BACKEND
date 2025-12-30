@@ -1,6 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import auth, roles, departments, employees, expense_categories, expenses
+from app.routes import (
+    auth, roles, departments, employees, 
+    expense_categories, expenses,
+    document_categories, documents
+)
 
 app = FastAPI(title="Fair Tasker Backend")
 
@@ -18,6 +22,8 @@ app.include_router(departments.router)
 app.include_router(employees.router)
 app.include_router(expense_categories.router)
 app.include_router(expenses.router)
+app.include_router(document_categories.router)
+app.include_router(documents.router)
 
 @app.get("/")
 def read_root():

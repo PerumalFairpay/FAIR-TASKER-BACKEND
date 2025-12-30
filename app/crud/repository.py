@@ -1,5 +1,12 @@
 from app.database import db
-from app.models import DepartmentCreate, DepartmentUpdate, EmployeeCreate, EmployeeUpdate, ExpenseCategoryCreate, ExpenseCategoryUpdate, ExpenseCreate, ExpenseUpdate
+from app.models import (
+    DepartmentCreate, DepartmentUpdate, 
+    EmployeeCreate, EmployeeUpdate, 
+    ExpenseCategoryCreate, ExpenseCategoryUpdate, 
+    ExpenseCreate, ExpenseUpdate,
+    DocumentCategoryCreate, DocumentCategoryUpdate,
+    DocumentCreate, DocumentUpdate
+)
 from app.utils import normalize, get_password_hash
 from bson import ObjectId
 from datetime import datetime
@@ -16,6 +23,8 @@ class Repository:
         self.users = self.db["users"]
         self.expense_categories = self.db["expense_categories"]
         self.expenses = self.db["expenses"]
+        self.document_categories = self.db["document_categories"]
+        self.documents = self.db["documents"]
 
     async def create_employee(self, employee: EmployeeCreate, profile_picture_path: str = None, document_proof_path: str = None) -> dict:
         try:
@@ -276,6 +285,100 @@ class Repository:
     async def delete_expense(self, expense_id: str) -> bool:
         try:
             result = await self.expenses.delete_one({"_id": ObjectId(expense_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+    # Document Category CRUD
+    async def create_document_category(self, category: DocumentCategoryCreate) -> dict:
+        try:
+            category_data = category.dict()
+            category_data["created_at"] = datetime.utcnow()
+            result = await self.document_categories.insert_one(category_data)
+            category_data["id"] = str(result.inserted_id)
+            return normalize(category_data)
+        except Exception as e:
+            raise e
+
+    async def get_document_categories(self) -> List[dict]:
+        try:
+            categories = await self.document_categories.find().to_list(length=None)
+            return [normalize(cat) for cat in categories]
+        except Exception as e:
+            raise e
+
+    async def get_document_category(self, category_id: str) -> dict:
+        try:
+            category = await self.document_categories.find_one({"_id": ObjectId(category_id)})
+            return normalize(category)
+        except Exception as e:
+            raise e
+
+    async def update_document_category(self, category_id: str, category: DocumentCategoryUpdate) -> dict:
+        try:
+            update_data = {k: v for k, v in category.dict().items() if v is not None}
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.document_categories.update_one(
+                    {"_id": ObjectId(category_id)}, {"$set": update_data}
+                )
+            return await self.get_document_category(category_id)
+        except Exception as e:
+            raise e
+
+    async def delete_document_category(self, category_id: str) -> bool:
+        try:
+            result = await self.document_categories.delete_one({"_id": ObjectId(category_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+    # Document CRUD
+    async def create_document(self, document: DocumentCreate, file_path: str = None) -> dict:
+        try:
+            document_data = document.dict()
+            if file_path:
+                document_data["file_path"] = file_path
+            
+            document_data["created_at"] = datetime.utcnow()
+            result = await self.documents.insert_one(document_data)
+            document_data["id"] = str(result.inserted_id)
+            return normalize(document_data)
+        except Exception as e:
+            raise e
+
+    async def get_documents(self) -> List[dict]:
+        try:
+            documents = await self.documents.find().to_list(length=None)
+            return [normalize(doc) for doc in documents]
+        except Exception as e:
+            raise e
+
+    async def get_document(self, document_id: str) -> dict:
+        try:
+            document = await self.documents.find_one({"_id": ObjectId(document_id)})
+            return normalize(document)
+        except Exception as e:
+            raise e
+
+    async def update_document(self, document_id: str, document: DocumentUpdate, file_path: str = None) -> dict:
+        try:
+            update_data = {k: v for k, v in document.dict().items() if v is not None}
+            if file_path:
+                update_data["file_path"] = file_path
+            
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.documents.update_one(
+                    {"_id": ObjectId(document_id)}, {"$set": update_data}
+                )
+            return await self.get_document(document_id)
+        except Exception as e:
+            raise e
+
+    async def delete_document(self, document_id: str) -> bool:
+        try:
+            result = await self.documents.delete_one({"_id": ObjectId(document_id)})
             return result.deleted_count > 0
         except Exception as e:
             raise e
