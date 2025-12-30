@@ -10,7 +10,8 @@ from app.models import (
     ProjectCreate, ProjectUpdate,
     HolidayCreate, HolidayUpdate,
     AssetCategoryCreate, AssetCategoryUpdate,
-    AssetCreate, AssetUpdate
+    AssetCreate, AssetUpdate,
+    BlogCreate, BlogUpdate
 )
 from app.utils import normalize, get_password_hash
 from bson import ObjectId
@@ -35,6 +36,7 @@ class Repository:
         self.holidays = self.db["holidays"]
         self.asset_categories = self.db["asset_categories"]
         self.assets = self.db["assets"]
+        self.blogs = self.db["blogs"]
 
     async def create_employee(self, employee: EmployeeCreate, profile_picture_path: str = None, document_proof_path: str = None) -> dict:
         try:
@@ -718,6 +720,93 @@ class Repository:
         try:
             result = await self.assets.delete_one({"_id": ObjectId(asset_id)})
             return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+    # Blog CRUD Operations
+    async def create_blog(self, blog: BlogCreate) -> dict:
+        try:
+            blog_data = blog.dict()
+            blog_data["created_at"] = datetime.utcnow()
+            blog_data["deleted"] = False
+            result = await self.blogs.insert_one(blog_data)
+            blog_data["id"] = str(result.inserted_id)
+            return normalize(blog_data)
+        except Exception as e:
+            raise e
+
+    async def get_blogs(self, page: int = 1, limit: int = 10, search: str = None) -> dict:
+        try:
+            query = {"deleted": False}
+            if search:
+                query["title"] = {"$regex": search, "$options": "i"}
+
+            total = await self.blogs.count_documents(query)
+            cursor = self.blogs.find(query).sort("created_at", -1).skip((page - 1) * limit).limit(limit)
+            blogs_list = await cursor.to_list(length=limit)
+            
+            data = [normalize(b) for b in blogs_list]
+            return {
+                "data": data,
+                "meta": {
+                    "current_page": page,
+                    "last_page": (total + limit - 1) // limit if limit > 0 else 0,
+                    "per_page": limit,
+                    "total": total
+                }
+            }
+        except Exception as e:
+            raise e
+
+    async def get_blog(self, blog_id: str) -> dict:
+        try:
+            query = {"deleted": False}
+            if ObjectId.is_valid(blog_id):
+                query["_id"] = ObjectId(blog_id)
+            else:
+                query["slug"] = blog_id
+                 
+            blog = await self.blogs.find_one(query)
+            if not blog:
+                return None
+            
+            blog_norm = normalize(blog)
+            
+            # Recommendations Logic (like in pilot)
+            recommendations = []
+            if blog_norm.get("category"):
+                rec_query = {
+                    "deleted": False,
+                    "category": blog_norm["category"],
+                    "_id": {"$ne": ObjectId(blog_norm["id"])}
+                }
+                cursor = self.blogs.find(rec_query).sort("created_at", -1).limit(3)
+                recs = await cursor.to_list(length=3)
+                recommendations = [normalize(r) for r in recs]
+            
+            blog_norm["recommendations"] = recommendations
+            return blog_norm
+        except Exception as e:
+            raise e
+
+    async def update_blog(self, blog_id: str, blog: BlogUpdate) -> dict:
+        try:
+            update_data = {k: v for k, v in blog.dict().items() if v is not None}
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.blogs.update_one(
+                    {"_id": ObjectId(blog_id)}, {"$set": update_data}
+                )
+            return await self.get_blog(blog_id)
+        except Exception as e:
+            raise e
+
+    async def delete_blog(self, blog_id: str) -> bool:
+        try:
+            result = await self.blogs.update_one(
+                {"_id": ObjectId(blog_id)}, {"$set": {"deleted": True, "deleted_at": datetime.utcnow()}}
+            )
+            return result.modified_count > 0
         except Exception as e:
             raise e
 

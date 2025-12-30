@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, Union, List
+from datetime import datetime
 
 
 class UserBase(BaseModel):
@@ -363,6 +364,38 @@ class AssetUpdate(BaseModel):
 
 class AssetResponse(AssetBase):
     id: str
+
+    class Config:
+        from_attributes = True
+
+class BlogBase(BaseModel):
+    title: str
+    slug: str
+    excerpt: str
+    content: str
+    category: str
+    tags: List[str] = []
+    is_published: bool = True
+    cover_image: Optional[str] = None
+
+class BlogCreate(BlogBase):
+    pass
+
+class BlogUpdate(BaseModel):
+    title: Optional[str] = None
+    slug: Optional[str] = None
+    excerpt: Optional[str] = None
+    content: Optional[str] = None
+    category: Optional[str] = None
+    tags: Optional[List[str]] = None
+    is_published: Optional[bool] = None
+    cover_image: Optional[str] = None
+
+class BlogResponse(BlogBase):
+    id: str
+    author: Optional[dict] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
