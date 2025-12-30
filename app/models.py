@@ -118,3 +118,47 @@ class EmployeeResponse(EmployeeBase):
 
     class Config:
         from_attributes = True
+
+class ExpenseCategoryBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    parent_id: Optional[Union[str, int]] = None
+
+class ExpenseCategoryCreate(ExpenseCategoryBase):
+    pass
+
+class ExpenseCategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    parent_id: Optional[Union[str, int]] = None
+
+class ExpenseCategoryResponse(ExpenseCategoryBase):
+    id: str
+
+    class Config:
+        from_attributes = True
+
+class ExpenseBase(BaseModel):
+    expense_category_id: str
+    amount: float
+    purpose: str
+    payment_mode: str
+    date: str
+    attachment: Optional[str] = None
+
+class ExpenseCreate(ExpenseBase):
+    pass
+
+class ExpenseUpdate(BaseModel):
+    expense_category_id: Optional[str] = None
+    amount: Optional[float] = None
+    purpose: Optional[str] = None
+    payment_mode: Optional[str] = None
+    date: Optional[str] = None
+    attachment: Optional[str] = None
+
+class ExpenseResponse(ExpenseBase):
+    id: str
+
+    class Config:
+        from_attributes = True

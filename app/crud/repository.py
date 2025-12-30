@@ -1,5 +1,5 @@
 from app.database import db
-from app.models import DepartmentCreate, DepartmentUpdate, EmployeeCreate, EmployeeUpdate
+from app.models import DepartmentCreate, DepartmentUpdate, EmployeeCreate, EmployeeUpdate, ExpenseCategoryCreate, ExpenseCategoryUpdate, ExpenseCreate, ExpenseUpdate
 from app.utils import normalize, get_password_hash
 from bson import ObjectId
 from datetime import datetime
@@ -14,6 +14,8 @@ class Repository:
         self.departments = self.db["departments"]
         self.employees = self.db["employees"]
         self.users = self.db["users"]
+        self.expense_categories = self.db["expense_categories"]
+        self.expenses = self.db["expenses"]
 
     async def create_employee(self, employee: EmployeeCreate, profile_picture_path: str = None, document_proof_path: str = None) -> dict:
         try:
@@ -183,4 +185,99 @@ class Repository:
         except Exception as e:
             raise e
 
+
+    async def create_expense_category(self, category: ExpenseCategoryCreate) -> dict:
+        try:
+            category_data = category.dict()
+            category_data["created_at"] = datetime.utcnow()
+            result = await self.expense_categories.insert_one(category_data)
+            category_data["id"] = str(result.inserted_id)
+            return normalize(category_data)
+        except Exception as e:
+            raise e
+
+    async def get_expense_categories(self) -> List[dict]:
+        try:
+            categories = await self.expense_categories.find().to_list(length=None)
+            return [normalize(cat) for cat in categories]
+        except Exception as e:
+            raise e
+
+    async def get_expense_category(self, category_id: str) -> dict:
+        try:
+            category = await self.expense_categories.find_one({"_id": ObjectId(category_id)})
+            return normalize(category)
+        except Exception as e:
+            raise e
+
+    async def update_expense_category(self, category_id: str, category: ExpenseCategoryUpdate) -> dict:
+        try:
+            update_data = {k: v for k, v in category.dict().items() if v is not None}
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.expense_categories.update_one(
+                    {"_id": ObjectId(category_id)}, {"$set": update_data}
+                )
+            return await self.get_expense_category(category_id)
+        except Exception as e:
+            raise e
+
+    async def delete_expense_category(self, category_id: str) -> bool:
+        try:
+            result = await self.expense_categories.delete_one({"_id": ObjectId(category_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+
+    async def create_expense(self, expense: ExpenseCreate, attachment_path: str = None) -> dict:
+        try:
+            expense_data = expense.dict()
+            if attachment_path:
+                expense_data["attachment"] = attachment_path
+            
+            expense_data["created_at"] = datetime.utcnow()
+            result = await self.expenses.insert_one(expense_data)
+            expense_data["id"] = str(result.inserted_id)
+            return normalize(expense_data)
+        except Exception as e:
+            raise e
+
+    async def get_expenses(self) -> List[dict]:
+        try:
+            expenses = await self.expenses.find().to_list(length=None)
+            # Normalize and potentially fetch category name if needed, but basic normalize for now
+            return [normalize(exp) for exp in expenses]
+        except Exception as e:
+            raise e
+
+    async def get_expense(self, expense_id: str) -> dict:
+        try:
+            expense = await self.expenses.find_one({"_id": ObjectId(expense_id)})
+            return normalize(expense)
+        except Exception as e:
+            raise e
+
+    async def update_expense(self, expense_id: str, expense: ExpenseUpdate, attachment_path: str = None) -> dict:
+        try:
+            update_data = {k: v for k, v in expense.dict().items() if v is not None}
+            if attachment_path:
+                update_data["attachment"] = attachment_path
+            
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.expenses.update_one(
+                    {"_id": ObjectId(expense_id)}, {"$set": update_data}
+                )
+            return await self.get_expense(expense_id)
+        except Exception as e:
+            raise e
+
+    async def delete_expense(self, expense_id: str) -> bool:
+        try:
+            result = await self.expenses.delete_one({"_id": ObjectId(expense_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+ 
 repository = Repository()
