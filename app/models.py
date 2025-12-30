@@ -23,3 +23,22 @@ class UserResponse(UserBase):
 
     class Config:
         from_attributes = True
+
+class RoleBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    permissions: list[str] = []
+
+class RoleCreate(RoleBase):
+    pass
+
+class RoleUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    permissions: Optional[list[str]] = None
+
+class RoleResponse(RoleBase):
+    id: str
+
+    class Config:
+        from_attributes = True
