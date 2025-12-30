@@ -6,7 +6,8 @@ from app.models import (
     ExpenseCreate, ExpenseUpdate,
     DocumentCategoryCreate, DocumentCategoryUpdate,
     DocumentCreate, DocumentUpdate,
-    ClientCreate, ClientUpdate
+    ClientCreate, ClientUpdate,
+    ProjectCreate, ProjectUpdate
 )
 from app.utils import normalize, get_password_hash
 from bson import ObjectId
@@ -27,6 +28,7 @@ class Repository:
         self.document_categories = self.db["document_categories"]
         self.documents = self.db["documents"]
         self.clients = self.db["clients"]
+        self.projects = self.db["projects"]
 
     async def create_employee(self, employee: EmployeeCreate, profile_picture_path: str = None, document_proof_path: str = None) -> dict:
         try:
@@ -435,4 +437,114 @@ class Repository:
         except Exception as e:
             raise e
  
+    # Project CRUD
+    async def create_project(self, project: ProjectCreate, logo_path: str = None) -> dict:
+        try:
+            project_data = project.dict()
+            if logo_path:
+                project_data["logo"] = logo_path
+            
+            project_data["created_at"] = datetime.utcnow()
+            result = await self.projects.insert_one(project_data)
+            project_data["id"] = str(result.inserted_id)
+            return normalize(project_data)
+        except Exception as e:
+            raise e
+
+    async def get_projects(self) -> List[dict]:
+        try:
+            projects = await self.projects.find().to_list(length=None)
+            
+            # Fetch all clients and employees for mapping
+            clients = await self.clients.find().to_list(length=None)
+            employees = await self.employees.find().to_list(length=None)
+            
+            client_map = {str(c["_id"]): normalize(c) for c in clients}
+            
+            # Prepare employee map with sensitive fields removed
+            employee_map = {}
+            for e in employees:
+                emp_norm = normalize(e)
+                if "hashed_password" in emp_norm: del emp_norm["hashed_password"]
+                if "password" in emp_norm: del emp_norm["password"]
+                employee_map[emp_norm["id"]] = emp_norm
+            
+            result = []
+            for p in projects:
+                p_norm = normalize(p)
+                p_norm["client"] = client_map.get(str(p_norm.get("client_id")))
+                
+                # Fetch members details
+                p_norm["project_managers"] = [employee_map.get(eid) for eid in p_norm.get("project_manager_ids", []) if eid in employee_map]
+                p_norm["team_leaders"] = [employee_map.get(eid) for eid in p_norm.get("team_leader_ids", []) if eid in employee_map]
+                p_norm["team_members"] = [employee_map.get(eid) for eid in p_norm.get("team_member_ids", []) if eid in employee_map]
+                
+                result.append(p_norm)
+            
+            return result
+        except Exception as e:
+            raise e
+
+    async def get_project(self, project_id: str) -> dict:
+        try:
+            project = await self.projects.find_one({"_id": ObjectId(project_id)})
+            if not project:
+                return None
+            
+            p_norm = normalize(project)
+            
+            # Fetch client
+            client = await self.clients.find_one({"_id": ObjectId(p_norm.get("client_id"))})
+            p_norm["client"] = normalize(client) if client else None
+            
+            # Fetch members
+            all_emp_ids = set()
+            all_emp_ids.update(p_norm.get("project_manager_ids", []))
+            all_emp_ids.update(p_norm.get("team_leader_ids", []))
+            all_emp_ids.update(p_norm.get("team_member_ids", []))
+            
+            # Convert string IDs to ObjectIds for query
+            obj_ids = []
+            for eid in all_emp_ids:
+                try:
+                    obj_ids.append(ObjectId(eid))
+                except: continue
+                
+            employees = await self.employees.find({"_id": {"$in": obj_ids}}).to_list(length=None)
+            employee_map = {}
+            for e in employees:
+                emp_norm = normalize(e)
+                if "hashed_password" in emp_norm: del emp_norm["hashed_password"]
+                if "password" in emp_norm: del emp_norm["password"]
+                employee_map[emp_norm["id"]] = emp_norm
+                
+            p_norm["project_managers"] = [employee_map.get(eid) for eid in p_norm.get("project_manager_ids", []) if eid in employee_map]
+            p_norm["team_leaders"] = [employee_map.get(eid) for eid in p_norm.get("team_leader_ids", []) if eid in employee_map]
+            p_norm["team_members"] = [employee_map.get(eid) for eid in p_norm.get("team_member_ids", []) if eid in employee_map]
+            
+            return p_norm
+        except Exception as e:
+            raise e
+
+    async def update_project(self, project_id: str, project: ProjectUpdate, logo_path: str = None) -> dict:
+        try:
+            update_data = {k: v for k, v in project.dict().items() if v is not None}
+            if logo_path:
+                update_data["logo"] = logo_path
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.projects.update_one(
+                    {"_id": ObjectId(project_id)}, {"$set": update_data}
+                )
+            return await self.get_project(project_id)
+        except Exception as e:
+            raise e
+
+    async def delete_project(self, project_id: str) -> bool:
+        try:
+            result = await self.projects.delete_one({"_id": ObjectId(project_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
 repository = Repository()
