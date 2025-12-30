@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 from app.crud.repository import repository as repo
 from app.models import ExpenseCreate, ExpenseUpdate
-from app.helper.file_handler import save_file, delete_file
+from app.helper.file_handler import file_handler
 from typing import List, Optional
 import json
 
@@ -20,7 +20,8 @@ async def create_expense(
     try:
         attachment_path = None
         if attachment:
-            attachment_path = await save_file(attachment, "attachments")
+            uploaded = await file_handler.upload_file(attachment)
+            attachment_path = uploaded["url"]
 
         expense_data = ExpenseCreate(
             expense_category_id=expense_category_id,
@@ -87,7 +88,8 @@ async def update_expense(
     try:
         attachment_path = None
         if attachment:
-            attachment_path = await save_file(attachment, "attachments")
+            uploaded = await file_handler.upload_file(attachment)
+            attachment_path = uploaded["url"]
 
         expense_update_data = ExpenseUpdate(
             expense_category_id=expense_category_id,
