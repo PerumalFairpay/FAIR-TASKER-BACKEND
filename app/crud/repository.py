@@ -5,7 +5,8 @@ from app.models import (
     ExpenseCategoryCreate, ExpenseCategoryUpdate, 
     ExpenseCreate, ExpenseUpdate,
     DocumentCategoryCreate, DocumentCategoryUpdate,
-    DocumentCreate, DocumentUpdate
+    DocumentCreate, DocumentUpdate,
+    ClientCreate, ClientUpdate
 )
 from app.utils import normalize, get_password_hash
 from bson import ObjectId
@@ -25,6 +26,7 @@ class Repository:
         self.expenses = self.db["expenses"]
         self.document_categories = self.db["document_categories"]
         self.documents = self.db["documents"]
+        self.clients = self.db["clients"]
 
     async def create_employee(self, employee: EmployeeCreate, profile_picture_path: str = None, document_proof_path: str = None) -> dict:
         try:
@@ -379,6 +381,56 @@ class Repository:
     async def delete_document(self, document_id: str) -> bool:
         try:
             result = await self.documents.delete_one({"_id": ObjectId(document_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+    # Client CRUD
+    async def create_client(self, client: ClientCreate, logo_path: str = None) -> dict:
+        try:
+            client_data = client.dict()
+            if logo_path:
+                client_data["logo"] = logo_path
+            
+            client_data["created_at"] = datetime.utcnow()
+            result = await self.clients.insert_one(client_data)
+            client_data["id"] = str(result.inserted_id)
+            return normalize(client_data)
+        except Exception as e:
+            raise e
+
+    async def get_clients(self) -> List[dict]:
+        try:
+            clients = await self.clients.find().to_list(length=None)
+            return [normalize(c) for c in clients]
+        except Exception as e:
+            raise e
+
+    async def get_client(self, client_id: str) -> dict:
+        try:
+            client = await self.clients.find_one({"_id": ObjectId(client_id)})
+            return normalize(client)
+        except Exception as e:
+            raise e
+
+    async def update_client(self, client_id: str, client: ClientUpdate, logo_path: str = None) -> dict:
+        try:
+            update_data = {k: v for k, v in client.dict().items() if v is not None}
+            if logo_path:
+                update_data["logo"] = logo_path
+            
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.clients.update_one(
+                    {"_id": ObjectId(client_id)}, {"$set": update_data}
+                )
+            return await self.get_client(client_id)
+        except Exception as e:
+            raise e
+
+    async def delete_client(self, client_id: str) -> bool:
+        try:
+            result = await self.clients.delete_one({"_id": ObjectId(client_id)})
             return result.deleted_count > 0
         except Exception as e:
             raise e
