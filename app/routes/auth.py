@@ -36,4 +36,16 @@ async def login(user: UserLogin):
     if not user_record or not verify_password(user.password, user_record["hashed_password"]):
         raise HTTPException(status_code=400, detail="Invalid email or password")
     
-    return {"message": "Login successful", "user_id": str(user_record["_id"])}
+    return {
+        "message": "Login successful",
+        "success": True,
+        "data": {
+            "id": str(user_record["_id"]),
+            "employee_id": user_record.get("employee_id"),
+            "attendance_id": user_record.get("attendance_id"),
+            "name": user_record.get("name"),
+            "email": user_record.get("email"),
+            "mobile": user_record.get("mobile")
+        }
+    }
+
