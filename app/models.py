@@ -59,3 +59,62 @@ class DepartmentResponse(DepartmentBase):
 
     class Config:
         from_attributes = True
+
+class EmployeeBase(BaseModel):
+    first_name: str
+    last_name: str
+    name: str  # Display name
+    email: EmailStr
+    mobile: str
+    date_of_birth: Optional[str] = None
+    gender: Optional[str] = None
+    emergency_contact_name: Optional[str] = None
+    emergency_contact_number: Optional[str] = None
+    parent_name: Optional[str] = None
+    marital_status: Optional[str] = None
+    employee_type: Optional[str] = None
+    employee_no_id: str
+    department: Optional[str] = None
+    designation: Optional[str] = None
+    role: Optional[str] = None
+    status: Optional[str] = "Active"
+    date_of_joining: Optional[str] = None
+    confirmation_date: Optional[str] = None
+    notice_period: Optional[str] = None
+    document_name: Optional[str] = None
+
+class EmployeeCreate(EmployeeBase):
+    password: str
+
+class EmployeeUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    mobile: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    gender: Optional[str] = None
+    emergency_contact_name: Optional[str] = None
+    emergency_contact_number: Optional[str] = None
+    parent_name: Optional[str] = None
+    profile_picture: Optional[str] = None
+    marital_status: Optional[str] = None
+    employee_type: Optional[str] = None
+    employee_no_id: Optional[str] = None
+    department: Optional[str] = None
+    designation: Optional[str] = None
+    role: Optional[str] = None
+    status: Optional[str] = None
+    date_of_joining: Optional[str] = None
+    confirmation_date: Optional[str] = None
+    notice_period: Optional[str] = None
+    document_name: Optional[str] = None
+    document_proof: Optional[str] = None
+
+class EmployeeResponse(EmployeeBase):
+    id: str
+    profile_picture: Optional[str] = None
+    document_proof: Optional[str] = None
+
+    class Config:
+        from_attributes = True
