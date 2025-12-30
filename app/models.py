@@ -2,12 +2,11 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 
 class UserBase(BaseModel):
-    first_name: str
-    last_name: str
-    phone: str
+    employee_id: str
+    attendance_id: str
+    name: str
     email: EmailStr
-    department: str
-    hrm_id: str
+    mobile: str
 
 class UserCreate(UserBase):
     password: str
