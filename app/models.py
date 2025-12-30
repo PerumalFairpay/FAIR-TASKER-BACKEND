@@ -279,3 +279,90 @@ class ProjectResponse(ProjectBase):
 
     class Config:
         from_attributes = True
+
+class HolidayBase(BaseModel):
+    name: str
+    date: str  # Format: "YYYY-MM-DD"
+    description: Optional[str] = None
+    holiday_type: str = "Public"  # e.g., Public, Mandatory, Optional/Restricted
+    is_restricted: bool = False   # True if it's an optional/restricted holiday
+    status: str = "Active"        # Active or Inactive
+
+class HolidayCreate(HolidayBase):
+    pass
+
+class HolidayUpdate(BaseModel):
+    name: Optional[str] = None
+    date: Optional[str] = None
+    description: Optional[str] = None
+    holiday_type: Optional[str] = None
+    is_restricted: Optional[bool] = None
+    status: Optional[str] = None
+
+class HolidayResponse(HolidayBase):
+    id: str
+
+    class Config:
+        from_attributes = True
+
+class AssetCategoryBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    parent_id: Optional[Union[str, int]] = None
+
+class AssetCategoryCreate(AssetCategoryBase):
+    pass
+
+class AssetCategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    parent_id: Optional[Union[str, int]] = None
+
+class AssetCategoryResponse(AssetCategoryBase):
+    id: str
+
+    class Config:
+        from_attributes = True
+
+class AssetBase(BaseModel):
+    asset_name: str
+    asset_category_id: str
+    manufacturer: Optional[str] = None
+    supplier: Optional[str] = None
+    purchase_from: Optional[str] = None
+    model_no: Optional[str] = None
+    serial_no: Optional[str] = None
+    purchase_date: Optional[str] = None
+    purchase_cost: Optional[float] = 0.0
+    warranty_expiry: Optional[str] = None
+    condition: Optional[str] = None
+    status: Optional[str] = "Available"
+    assigned_to: Optional[str] = None
+    description: Optional[str] = None
+    images: List[str] = []
+
+class AssetCreate(AssetBase):
+    pass
+
+class AssetUpdate(BaseModel):
+    asset_name: Optional[str] = None
+    asset_category_id: Optional[str] = None
+    manufacturer: Optional[str] = None
+    supplier: Optional[str] = None
+    purchase_from: Optional[str] = None
+    model_no: Optional[str] = None
+    serial_no: Optional[str] = None
+    purchase_date: Optional[str] = None
+    purchase_cost: Optional[float] = None
+    warranty_expiry: Optional[str] = None
+    condition: Optional[str] = None
+    status: Optional[str] = None
+    assigned_to: Optional[str] = None
+    description: Optional[str] = None
+    images: Optional[List[str]] = None
+
+class AssetResponse(AssetBase):
+    id: str
+
+    class Config:
+        from_attributes = True

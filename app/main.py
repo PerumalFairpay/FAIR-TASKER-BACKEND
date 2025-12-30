@@ -5,7 +5,8 @@ from app.routes import (
     auth, roles, departments, employees, 
     expense_categories, expenses,
     document_categories, documents,
-    clients, projects
+    clients, projects, holidays,
+    asset_categories, assets
 )
 
 app = FastAPI(title="Fair Tasker Backend")
@@ -30,6 +31,9 @@ app.include_router(document_categories.router)
 app.include_router(documents.router)
 app.include_router(clients.router)
 app.include_router(projects.router)
+app.include_router(holidays.router)
+app.include_router(asset_categories.router)
+app.include_router(assets.router)
 
 @app.get("/")
 def read_root():

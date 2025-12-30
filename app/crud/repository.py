@@ -7,7 +7,10 @@ from app.models import (
     DocumentCategoryCreate, DocumentCategoryUpdate,
     DocumentCreate, DocumentUpdate,
     ClientCreate, ClientUpdate,
-    ProjectCreate, ProjectUpdate
+    ProjectCreate, ProjectUpdate,
+    HolidayCreate, HolidayUpdate,
+    AssetCategoryCreate, AssetCategoryUpdate,
+    AssetCreate, AssetUpdate
 )
 from app.utils import normalize, get_password_hash
 from bson import ObjectId
@@ -29,6 +32,9 @@ class Repository:
         self.documents = self.db["documents"]
         self.clients = self.db["clients"]
         self.projects = self.db["projects"]
+        self.holidays = self.db["holidays"]
+        self.asset_categories = self.db["asset_categories"]
+        self.assets = self.db["assets"]
 
     async def create_employee(self, employee: EmployeeCreate, profile_picture_path: str = None, document_proof_path: str = None) -> dict:
         try:
@@ -543,6 +549,174 @@ class Repository:
     async def delete_project(self, project_id: str) -> bool:
         try:
             result = await self.projects.delete_one({"_id": ObjectId(project_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+    # Holiday CRUD
+    async def create_holiday(self, holiday: HolidayCreate) -> dict:
+        try:
+            holiday_data = holiday.dict()
+            holiday_data["created_at"] = datetime.utcnow()
+            result = await self.holidays.insert_one(holiday_data)
+            holiday_data["id"] = str(result.inserted_id)
+            return normalize(holiday_data)
+        except Exception as e:
+            raise e
+
+    async def get_holidays(self) -> List[dict]:
+        try:
+            holidays = await self.holidays.find().to_list(length=None)
+            return [normalize(h) for h in holidays]
+        except Exception as e:
+            raise e
+
+    async def get_holiday(self, holiday_id: str) -> dict:
+        try:
+            holiday = await self.holidays.find_one({"_id": ObjectId(holiday_id)})
+            return normalize(holiday) if holiday else None
+        except Exception as e:
+            raise e
+
+    async def update_holiday(self, holiday_id: str, holiday: HolidayUpdate) -> dict:
+        try:
+            update_data = {k: v for k, v in holiday.dict().items() if v is not None}
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.holidays.update_one(
+                    {"_id": ObjectId(holiday_id)}, {"$set": update_data}
+                )
+            return await self.get_holiday(holiday_id)
+        except Exception as e:
+            raise e
+
+    async def delete_holiday(self, holiday_id: str) -> bool:
+        try:
+            result = await self.holidays.delete_one({"_id": ObjectId(holiday_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+    # Asset Category CRUD
+    async def create_asset_category(self, category: AssetCategoryCreate) -> dict:
+        try:
+            category_data = category.dict()
+            category_data["created_at"] = datetime.utcnow()
+            result = await self.asset_categories.insert_one(category_data)
+            category_data["id"] = str(result.inserted_id)
+            return normalize(category_data)
+        except Exception as e:
+            raise e
+
+    async def get_asset_categories(self) -> List[dict]:
+        try:
+            categories = await self.asset_categories.find().to_list(length=None)
+            return [normalize(cat) for cat in categories]
+        except Exception as e:
+            raise e
+
+    async def get_asset_category(self, category_id: str) -> dict:
+        try:
+            category = await self.asset_categories.find_one({"_id": ObjectId(category_id)})
+            return normalize(category) if category else None
+        except Exception as e:
+            raise e
+
+    async def update_asset_category(self, category_id: str, category: AssetCategoryUpdate) -> dict:
+        try:
+            update_data = {k: v for k, v in category.dict().items() if v is not None}
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.asset_categories.update_one(
+                    {"_id": ObjectId(category_id)}, {"$set": update_data}
+                )
+            return await self.get_asset_category(category_id)
+        except Exception as e:
+            raise e
+
+    async def delete_asset_category(self, category_id: str) -> bool:
+        try:
+            result = await self.asset_categories.delete_one({"_id": ObjectId(category_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+    # Asset CRUD
+    async def create_asset(self, asset: AssetCreate, images: List[str] = []) -> dict:
+        try:
+            asset_data = asset.dict()
+            if images:
+                asset_data["images"] = images
+            
+            asset_data["created_at"] = datetime.utcnow()
+            result = await self.assets.insert_one(asset_data)
+            asset_data["id"] = str(result.inserted_id)
+            return normalize(asset_data)
+        except Exception as e:
+            raise e
+
+    async def get_assets(self) -> List[dict]:
+        try:
+            assets = await self.assets.find().to_list(length=None)
+            
+            # Map categories and employees
+            categories = await self.asset_categories.find().to_list(length=None)
+            employees = await self.employees.find().to_list(length=None)
+            
+            cat_map = {str(c["_id"]): normalize(c) for c in categories}
+            emp_map = {str(e["employee_no_id"]): normalize(e) for e in employees} # Mapping by employee_no_id as per assigned_to field
+            
+            result = []
+            for a in assets:
+                a_norm = normalize(a)
+                a_norm["category"] = cat_map.get(str(a_norm.get("asset_category_id")))
+                a_norm["assigned_to_details"] = emp_map.get(str(a_norm.get("assigned_to")))
+                result.append(a_norm)
+                
+            return result
+        except Exception as e:
+            raise e
+
+    async def get_asset(self, asset_id: str) -> dict:
+        try:
+            asset = await self.assets.find_one({"_id": ObjectId(asset_id)})
+            if not asset:
+                return None
+            
+            a_norm = normalize(asset)
+            
+            # Category
+            category = await self.asset_categories.find_one({"_id": ObjectId(a_norm.get("asset_category_id"))})
+            a_norm["category"] = normalize(category) if category else None
+            
+            # Employee
+            assigned_to = a_norm.get("assigned_to")
+            if assigned_to:
+                employee = await self.employees.find_one({"employee_no_id": assigned_to})
+                a_norm["assigned_to_details"] = normalize(employee) if employee else None
+            
+            return a_norm
+        except Exception as e:
+            raise e
+
+    async def update_asset(self, asset_id: str, asset: AssetUpdate, images: List[str] = []) -> dict:
+        try:
+            update_data = {k: v for k, v in asset.dict().items() if v is not None}
+            if images:
+                update_data["images"] = images
+                
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.assets.update_one(
+                    {"_id": ObjectId(asset_id)}, {"$set": update_data}
+                )
+            return await self.get_asset(asset_id)
+        except Exception as e:
+            raise e
+
+    async def delete_asset(self, asset_id: str) -> bool:
+        try:
+            result = await self.assets.delete_one({"_id": ObjectId(asset_id)})
             return result.deleted_count > 0
         except Exception as e:
             raise e
