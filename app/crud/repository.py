@@ -12,7 +12,8 @@ from app.models import (
     AssetCategoryCreate, AssetCategoryUpdate,
     AssetCreate, AssetUpdate,
     BlogCreate, BlogUpdate,
-    LeaveTypeCreate, LeaveTypeUpdate
+    LeaveTypeCreate, LeaveTypeUpdate,
+    LeaveRequestCreate, LeaveRequestUpdate
 )
 from app.utils import normalize, get_password_hash
 from bson import ObjectId
@@ -39,6 +40,7 @@ class Repository:
         self.assets = self.db["assets"]
         self.blogs = self.db["blogs"]
         self.leave_types = self.db["leave_types"]
+        self.leave_requests = self.db["leave_requests"]
 
     async def create_employee(self, employee: EmployeeCreate, profile_picture_path: str = None, document_proof_path: str = None) -> dict:
         try:
@@ -852,6 +854,88 @@ class Repository:
     async def delete_leave_type(self, leave_type_id: str) -> bool:
         try:
             result = await self.leave_types.delete_one({"_id": ObjectId(leave_type_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+    # Leave Request CRUD operations
+    async def create_leave_request(self, leave_request: LeaveRequestCreate, attachment_path: str = None) -> dict:
+        try:
+            leave_request_data = leave_request.dict()
+            if attachment_path:
+                leave_request_data["attachment"] = attachment_path
+            
+            leave_request_data["created_at"] = datetime.utcnow()
+            result = await self.leave_requests.insert_one(leave_request_data)
+            leave_request_id = str(result.inserted_id)
+            return await self.get_leave_request(leave_request_id)
+        except Exception as e:
+            raise e
+
+    async def get_leave_requests(self, employee_id: str = None) -> List[dict]:
+        try:
+            query = {}
+            if employee_id:
+                query["employee_id"] = employee_id
+
+            requests = await self.leave_requests.find(query).to_list(length=None)
+            
+            # Map details
+            employees = await self.employees.find().to_list(length=None)
+            leave_types = await self.leave_types.find().to_list(length=None)
+            
+            emp_map = {str(e["_id"]): normalize(e) for e in employees}
+            lt_map = {str(lt["_id"]): normalize(lt) for lt in leave_types}
+            
+            result = []
+            for r in requests:
+                r_norm = normalize(r)
+                r_norm["employee_details"] = emp_map.get(str(r_norm.get("employee_id")))
+                r_norm["leave_type_details"] = lt_map.get(str(r_norm.get("leave_type_id")))
+                result.append(r_norm)
+                
+            return result
+        except Exception as e:
+            raise e
+
+    async def get_leave_request(self, leave_request_id: str) -> dict:
+        try:
+            request = await self.leave_requests.find_one({"_id": ObjectId(leave_request_id)})
+            if not request:
+                return None
+            
+            r_norm = normalize(request)
+            
+            # Fetch Employee
+            employee = await self.employees.find_one({"_id": ObjectId(r_norm.get("employee_id"))})
+            r_norm["employee_details"] = normalize(employee) if employee else None
+            
+            # Fetch Leave Type
+            leave_type = await self.leave_types.find_one({"_id": ObjectId(r_norm.get("leave_type_id"))})
+            r_norm["leave_type_details"] = normalize(leave_type) if leave_type else None
+            
+            return r_norm
+        except Exception as e:
+            raise e
+
+    async def update_leave_request(self, leave_request_id: str, leave_request: LeaveRequestUpdate, attachment_path: str = None) -> dict:
+        try:
+            update_data = {k: v for k, v in leave_request.dict().items() if v is not None}
+            if attachment_path:
+                update_data["attachment"] = attachment_path
+                
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.leave_requests.update_one(
+                    {"_id": ObjectId(leave_request_id)}, {"$set": update_data}
+                )
+            return await self.get_leave_request(leave_request_id)
+        except Exception as e:
+            raise e
+
+    async def delete_leave_request(self, leave_request_id: str) -> bool:
+        try:
+            result = await self.leave_requests.delete_one({"_id": ObjectId(leave_request_id)})
             return result.deleted_count > 0
         except Exception as e:
             raise e

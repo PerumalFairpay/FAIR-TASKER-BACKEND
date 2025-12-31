@@ -428,3 +428,46 @@ class LeaveTypeResponse(LeaveTypeBase):
 
     class Config:
         from_attributes = True
+
+
+class LeaveRequestBase(BaseModel):
+    employee_id: str
+    leave_type_id: str
+    leave_duration_type: str  # "Single", "Multiple", "Half Day"
+    start_date: str
+    end_date: str
+    half_day_session: Optional[str] = None  # "First Half", "Second Half"
+    total_days: float
+    reason: str
+    attachment: Optional[str] = None
+    status: str = "Pending"
+
+
+class LeaveRequestCreate(LeaveRequestBase):
+    pass
+
+
+class LeaveRequestUpdate(BaseModel):
+    employee_id: Optional[str] = None
+    leave_type_id: Optional[str] = None
+    leave_duration_type: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    half_day_session: Optional[str] = None
+    total_days: Optional[float] = None
+    reason: Optional[str] = None
+    attachment: Optional[str] = None
+    status: Optional[str] = None
+
+
+class LeaveRequestStatusUpdate(BaseModel):
+    status: str
+
+
+class LeaveRequestResponse(LeaveRequestBase):
+    id: str
+    employee_details: Optional[dict] = None
+    leave_type_details: Optional[dict] = None
+
+    class Config:
+        from_attributes = True

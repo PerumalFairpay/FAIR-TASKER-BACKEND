@@ -32,3 +32,14 @@ class FileHandler:
         return f"/{file_path}" if file_path else None
 
 file_handler = FileHandler()
+
+async def save_upload_file(file: UploadFile, folder: str = None) -> str:
+    "Helper to save a file using the FileHandler instance"
+    if not file:
+        return None
+    
+    # If folder is specified, we can optionally use it, 
+    # but the current FileHandler uses a fixed upload_dir.
+    # For now, let's keep it simple and just use the existing method.
+    result = await file_handler.upload_file(file)
+    return result["url"]
