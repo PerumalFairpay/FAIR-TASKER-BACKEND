@@ -9,6 +9,7 @@ class UserBase(BaseModel):
     name: str
     email: EmailStr
     mobile: str
+    role: Optional[str] = "employee"
 
 class UserCreate(UserBase):
     password: str

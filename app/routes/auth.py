@@ -42,7 +42,8 @@ async def register(user: UserCreate, response: Response):
         attendance_id=created_user["attendance_id"],
         name=created_user["name"],
         email=created_user["email"],
-        mobile=created_user["mobile"]
+        mobile=created_user["mobile"],
+        role=created_user.get("role", "employee")
     )
 
 @router.post("/login")
@@ -72,7 +73,8 @@ async def login(user: UserLogin, response: Response):
             "attendance_id": user_record.get("attendance_id"),
             "name": user_record.get("name"),
             "email": user_record.get("email"),
-            "mobile": user_record.get("mobile")
+            "mobile": user_record.get("mobile"),
+            "role": user_record.get("role", "employee")
         }
     }
 
