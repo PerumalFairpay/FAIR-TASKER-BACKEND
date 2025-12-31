@@ -5,3 +5,4 @@ client = AsyncIOMotorClient(DATABASE_URL)
 db = client[DATABASE_NAME]
 users_collection = db["users"]
 roles_collection = db["roles"]
+tasks_collection = db["tasks"]

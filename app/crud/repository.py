@@ -13,7 +13,8 @@ from app.models import (
     AssetCreate, AssetUpdate,
     BlogCreate, BlogUpdate,
     LeaveTypeCreate, LeaveTypeUpdate,
-    LeaveRequestCreate, LeaveRequestUpdate
+    LeaveRequestCreate, LeaveRequestUpdate,
+    TaskCreate, TaskUpdate, EODReportItem
 )
 from app.utils import normalize, get_password_hash
 from bson import ObjectId
@@ -41,6 +42,7 @@ class Repository:
         self.blogs = self.db["blogs"]
         self.leave_types = self.db["leave_types"]
         self.leave_requests = self.db["leave_requests"]
+        self.tasks = self.db["tasks"]
 
     async def create_employee(self, employee: EmployeeCreate, profile_picture_path: str = None, document_proof_path: str = None) -> dict:
         try:
@@ -936,6 +938,130 @@ class Repository:
     async def delete_leave_request(self, leave_request_id: str) -> bool:
         try:
             result = await self.leave_requests.delete_one({"_id": ObjectId(leave_request_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+    # Task CRUD
+    async def create_task(self, task: TaskCreate) -> dict:
+        try:
+            task_data = task.dict()
+            task_data["created_at"] = datetime.utcnow()
+            task_data["eod_history"] = []
+            result = await self.tasks.insert_one(task_data)
+            task_data["id"] = str(result.inserted_id)
+            return normalize(task_data)
+        except Exception as e:
+            raise e
+
+    async def get_tasks(self, project_id: Optional[str] = None, assigned_to: Optional[str] = None, start_date: Optional[str] = None) -> List[dict]:
+        try:
+            query = {}
+            if project_id:
+                query["project_id"] = project_id
+            if assigned_to:
+                # Matches if employee ID is in the list
+                query["assigned_to"] = assigned_to 
+            if start_date:
+                query["start_date"] = start_date
+            
+            tasks = await self.tasks.find(query).to_list(length=None)
+            return [normalize(t) for t in tasks]
+        except Exception as e:
+            raise e
+
+    async def get_task(self, task_id: str) -> dict:
+        try:
+            task = await self.tasks.find_one({"_id": ObjectId(task_id)})
+            return normalize(task) if task else None
+        except Exception as e:
+            raise e
+
+    async def update_task(self, task_id: str, task: TaskUpdate) -> dict:
+        try:
+            update_data = {k: v for k, v in task.dict().items() if v is not None}
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.tasks.update_one(
+                    {"_id": ObjectId(task_id)}, {"$set": update_data}
+                )
+            return await self.get_task(task_id)
+        except Exception as e:
+            raise e
+
+    async def process_eod_report(self, items: List[EODReportItem]) -> List[dict]:
+        results = []
+        for item in items:
+            task_id = item.task_id
+            existing_task = await self.get_task(task_id)
+            if not existing_task:
+                continue
+
+            # Update existing task history and status
+            eod_entry = {
+                "date": datetime.utcnow().strftime("%Y-%m-%d"),
+                "status": item.status,
+                "progress": item.progress,
+                "summary": item.eod_summary,
+                "timestamp": datetime.utcnow()
+            }
+            
+            update_fields = {
+                "status": "Moved" if item.move_to_tomorrow else item.status,
+                "progress": item.progress,
+                "updated_at": datetime.utcnow()
+            }
+
+            # Add to history
+            await self.tasks.update_one(
+                {"_id": ObjectId(task_id)},
+                {
+                    "$set": update_fields,
+                    "$push": {"eod_history": eod_entry},
+                    "$addToSet": {"attachments": {"$each": item.new_attachments}}
+                }
+            )
+
+            # Check if we need to move to tomorrow
+            if item.move_to_tomorrow:
+                # Calculate tomorrow's date
+                from datetime import timedelta
+                try:
+                    current_end_dt = datetime.strptime(existing_task["end_date"], "%Y-%m-%d")
+                    tomorrow_dt = current_end_dt + timedelta(days=1)
+                    tomorrow_str = tomorrow_dt.strftime("%Y-%m-%d")
+                except:
+                    # Fallback to today + 1 if format is weird
+                    tomorrow_str = (datetime.utcnow() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+                new_task_data = {
+                    "project_id": existing_task["project_id"],
+                    "task_name": existing_task["task_name"],
+                    "description": existing_task["description"],
+                    "start_date": tomorrow_str,
+                    "end_date": tomorrow_str,
+                    "priority": existing_task.get("priority", "Medium"),
+                    "assigned_to": existing_task.get("assigned_to", []),
+                    "attachments": existing_task.get("attachments", []) + item.new_attachments,
+                    "tags": existing_task.get("tags", []),
+                    "status": "Todo",
+                    "progress": item.progress, # Carrying forward the progress
+                    "parent_task_id": task_id,
+                    "eod_history": [],
+                    "created_at": datetime.utcnow()
+                }
+                result = await self.tasks.insert_one(new_task_data)
+                new_task_data["id"] = str(result.inserted_id)
+                results.append(normalize(new_task_data))
+            else:
+                updated_task = await self.get_task(task_id)
+                results.append(updated_task)
+        
+        return results
+
+    async def delete_task(self, task_id: str) -> bool:
+        try:
+            result = await self.tasks.delete_one({"_id": ObjectId(task_id)})
             return result.deleted_count > 0
         except Exception as e:
             raise e
