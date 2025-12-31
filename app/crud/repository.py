@@ -1027,22 +1027,26 @@ class Repository:
                 # Calculate tomorrow's date
                 from datetime import timedelta
                 try:
-                    current_end_dt = datetime.strptime(existing_task["end_date"], "%Y-%m-%d")
-                    tomorrow_dt = current_end_dt + timedelta(days=1)
+                    end_date_str = existing_task.get("end_date")
+                    if end_date_str:
+                        current_end_dt = datetime.strptime(end_date_str, "%Y-%m-%d")
+                        tomorrow_dt = current_end_dt + timedelta(days=1)
+                    else:
+                        tomorrow_dt = datetime.utcnow() + timedelta(days=1)
                     tomorrow_str = tomorrow_dt.strftime("%Y-%m-%d")
                 except:
-                    # Fallback to today + 1 if format is weird
+                    # Fallback to today + 1 if format is weird or missing
                     tomorrow_str = (datetime.utcnow() + timedelta(days=1)).strftime("%Y-%m-%d")
 
                 new_task_data = {
-                    "project_id": existing_task["project_id"],
-                    "task_name": existing_task["task_name"],
-                    "description": existing_task["description"],
+                    "project_id": existing_task.get("project_id"),
+                    "task_name": existing_task.get("task_name") or existing_task.get("name") or "Untitled Task",
+                    "description": existing_task.get("description"),
                     "start_date": tomorrow_str,
                     "end_date": tomorrow_str,
                     "priority": existing_task.get("priority", "Medium"),
                     "assigned_to": existing_task.get("assigned_to", []),
-                    "attachments": existing_task.get("attachments", []) + item.new_attachments,
+                    "attachments": existing_task.get("attachments", []) + (item.new_attachments or []),
                     "tags": existing_task.get("tags", []),
                     "status": "Todo",
                     "progress": item.progress, # Carrying forward the progress

@@ -12,22 +12,27 @@ def get_password_hash(password):
 from bson import ObjectId
 from datetime import datetime
 
-def normalize(doc: dict) -> dict:
-    """Converts _id and any ObjectId fields to str so Pydantic/JSON can serialize them."""
-    if not doc:
-        return doc
-    new_doc = {}
-    for k, v in doc.items():
-        if isinstance(v, ObjectId):
-            new_doc[k] = str(v)
-        elif isinstance(v, list):
-            new_doc[k] = [str(x) if isinstance(x, ObjectId) else x for x in v]
-        elif isinstance(v, dict):
-            new_doc[k] = normalize(v)
-        elif isinstance(v, datetime):
-            new_doc[k] = v.isoformat()
-        else:
-            new_doc[k] = v
-    if "_id" in new_doc:
-        new_doc["id"] = new_doc.pop("_id")
-    return new_doc
+def normalize(data):
+    """
+    Recursively converts _id to id, ObjectId to str, and datetime to isoformat 
+    so that the data can be JSON serialized.
+    """
+    if isinstance(data, list):
+        return [normalize(item) for item in data]
+    
+    if isinstance(data, dict):
+        new_dict = {}
+        # Special handling for _id -> id at the top level of the dict
+        # but also handles nested _id if they exist
+        for k, v in data.items():
+            key = "id" if k == "_id" else k
+            new_dict[key] = normalize(v)
+        return new_dict
+    
+    if isinstance(data, ObjectId):
+        return str(data)
+    
+    if isinstance(data, datetime):
+        return data.isoformat()
+    
+    return data
