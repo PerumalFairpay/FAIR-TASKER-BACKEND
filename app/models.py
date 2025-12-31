@@ -399,3 +399,32 @@ class BlogResponse(BlogBase):
 
     class Config:
         from_attributes = True
+
+
+class LeaveTypeBase(BaseModel):
+    name: str
+    type: str
+    code: str
+    status: str = "Active"
+    number_of_days: int
+    monthly_allowed: int
+
+
+class LeaveTypeCreate(LeaveTypeBase):
+    pass
+
+
+class LeaveTypeUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    code: Optional[str] = None
+    status: Optional[str] = None
+    number_of_days: Optional[int] = None
+    monthly_allowed: Optional[int] = None
+
+
+class LeaveTypeResponse(LeaveTypeBase):
+    id: str
+
+    class Config:
+        from_attributes = True

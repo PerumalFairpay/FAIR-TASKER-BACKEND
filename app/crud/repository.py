@@ -11,7 +11,8 @@ from app.models import (
     HolidayCreate, HolidayUpdate,
     AssetCategoryCreate, AssetCategoryUpdate,
     AssetCreate, AssetUpdate,
-    BlogCreate, BlogUpdate
+    BlogCreate, BlogUpdate,
+    LeaveTypeCreate, LeaveTypeUpdate
 )
 from app.utils import normalize, get_password_hash
 from bson import ObjectId
@@ -37,6 +38,7 @@ class Repository:
         self.asset_categories = self.db["asset_categories"]
         self.assets = self.db["assets"]
         self.blogs = self.db["blogs"]
+        self.leave_types = self.db["leave_types"]
 
     async def create_employee(self, employee: EmployeeCreate, profile_picture_path: str = None, document_proof_path: str = None) -> dict:
         try:
@@ -807,6 +809,50 @@ class Repository:
                 {"_id": ObjectId(blog_id)}, {"$set": {"deleted": True, "deleted_at": datetime.utcnow()}}
             )
             return result.modified_count > 0
+        except Exception as e:
+            raise e
+
+    # Leave Type CRUD operations
+    async def create_leave_type(self, leave_type: LeaveTypeCreate) -> dict:
+        try:
+            leave_type_data = leave_type.dict()
+            leave_type_data["created_at"] = datetime.utcnow()
+            result = await self.leave_types.insert_one(leave_type_data)
+            leave_type_data["id"] = str(result.inserted_id)
+            return normalize(leave_type_data)
+        except Exception as e:
+            raise e
+
+    async def get_leave_types(self) -> List[dict]:
+        try:
+            leave_types = await self.leave_types.find().to_list(length=None)
+            return [normalize(lt) for lt in leave_types]
+        except Exception as e:
+            raise e
+
+    async def get_leave_type(self, leave_type_id: str) -> dict:
+        try:
+            leave_type = await self.leave_types.find_one({"_id": ObjectId(leave_type_id)})
+            return normalize(leave_type) if leave_type else None
+        except Exception as e:
+            raise e
+
+    async def update_leave_type(self, leave_type_id: str, leave_type: LeaveTypeUpdate) -> dict:
+        try:
+            update_data = {k: v for k, v in leave_type.dict().items() if v is not None}
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.leave_types.update_one(
+                    {"_id": ObjectId(leave_type_id)}, {"$set": update_data}
+                )
+            return await self.get_leave_type(leave_type_id)
+        except Exception as e:
+            raise e
+
+    async def delete_leave_type(self, leave_type_id: str) -> bool:
+        try:
+            result = await self.leave_types.delete_one({"_id": ObjectId(leave_type_id)})
+            return result.deleted_count > 0
         except Exception as e:
             raise e
 
