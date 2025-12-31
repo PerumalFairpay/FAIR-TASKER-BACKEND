@@ -39,6 +39,38 @@ async def get_tasks(
             content={"message": f"Failed to fetch tasks: {str(e)}", "success": False}
         )
 
+@router.post("/eod-report")
+async def process_eod_report(payload: EODReportRequest):
+    try:
+        results = await repo.process_eod_report(payload.reports)
+        return JSONResponse(
+            status_code=200,
+            content={"message": "EOD report processed successfully", "success": True, "data": results}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"Failed to process EOD report: {str(e)}", "success": False}
+        )
+
+@router.get("/eod-reports")
+async def get_eod_reports(
+    project_id: Optional[str] = None, 
+    assigned_to: Optional[str] = None, 
+    date: Optional[str] = None
+):
+    try:
+        reports = await repo.get_eod_reports(project_id, assigned_to, date)
+        return JSONResponse(
+            status_code=200,
+            content={"message": "EOD reports fetched successfully", "success": True, "data": reports}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"Failed to fetch EOD reports: {str(e)}", "success": False}
+        )
+
 @router.get("/{task_id}")
 async def get_task(task_id: str):
     try:
@@ -77,19 +109,7 @@ async def update_task(task_id: str, task: TaskUpdate):
             content={"message": f"Failed to update task: {str(e)}", "success": False}
         )
 
-@router.post("/eod-report")
-async def process_eod_report(payload: EODReportRequest):
-    try:
-        results = await repo.process_eod_report(payload.reports)
-        return JSONResponse(
-            status_code=200,
-            content={"message": "EOD report processed successfully", "success": True, "data": results}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to process EOD report: {str(e)}", "success": False}
-        )
+
 
 @router.delete("/{task_id}")
 async def delete_task(task_id: str):

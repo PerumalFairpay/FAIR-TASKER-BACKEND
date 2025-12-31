@@ -1063,6 +1063,54 @@ class Repository:
         
         return results
 
+    async def get_eod_reports(self, project_id: Optional[str] = None, assigned_to: Optional[str] = None, date: Optional[str] = None) -> List[dict]:
+        try:
+            query = {"eod_history": {"$exists": True, "$not": {"$size": 0}}}
+            if project_id:
+                query["project_id"] = project_id
+            if assigned_to:
+                query["assigned_to"] = assigned_to
+            
+            tasks = await self.tasks.find(query).to_list(length=None)
+            
+            # Fetch all employees and projects for naming
+            employees = await self.employees.find().to_list(length=None)
+            projects = await self.projects.find().to_list(length=None)
+            
+            emp_map = {str(e.get("employee_no_id")): e.get("name") for e in employees if e.get("employee_no_id")}
+            id_to_name_map = {str(e.get("_id")): e.get("name") for e in employees}
+            proj_map = {str(p.get("_id")): p.get("name") for p in projects}
+
+            reports = []
+            for task in tasks:
+                task_norm = normalize(task)
+                proj_name = proj_map.get(task_norm.get("project_id"), "Unknown Project")
+                
+                # assigned_to is a list of IDs. We'll take the first one or join them
+                assigned_ids = task_norm.get("assigned_to", [])
+                assigned_names = [emp_map.get(eid) or id_to_name_map.get(eid) or eid for eid in assigned_ids]
+                employee_display = ", ".join(filter(None, assigned_names))
+
+                for entry in task_norm.get("eod_history", []):
+                    if date and entry.get("date") != date:
+                        continue
+                        
+                    report_entry = {
+                        "task_id": task_norm["id"],
+                        "task_name": task_norm.get("task_name") or task_norm.get("name") or "Untitled Task",
+                        "project_id": task_norm.get("project_id"),
+                        "project_name": proj_name,
+                        "assigned_to": task_norm.get("assigned_to", []),
+                        "employee_name": employee_display,
+                        **entry
+                    }
+                    reports.append(report_entry)
+            
+            reports.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+            return reports
+        except Exception as e:
+            raise e
+
     async def delete_task(self, task_id: str) -> bool:
         try:
             result = await self.tasks.delete_one({"_id": ObjectId(task_id)})
