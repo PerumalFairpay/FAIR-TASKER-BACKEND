@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
 from fastapi import HTTPException, Cookie, Depends
-from app.config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
+from app.core.config import JWT_SECRET, JWT_ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 from typing import Optional
 from app.database import users_collection
 from bson import ObjectId
@@ -23,12 +23,12 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
             
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
-    encoded = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded = jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
     return encoded
 
 def decode_token(token: str) -> Optional[dict]:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         return payload
     except JWTError:
         return None

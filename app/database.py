@@ -1,7 +1,7 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-from app.config import MONGO_URL, DB_NAME
+from app.core.config import DATABASE_URL, DATABASE_NAME
 
-client = AsyncIOMotorClient(MONGO_URL)
-db = client[DB_NAME]
+client = AsyncIOMotorClient(DATABASE_URL)
+db = client[DATABASE_NAME]
 users_collection = db["users"]
 roles_collection = db["roles"]
