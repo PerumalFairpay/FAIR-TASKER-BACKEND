@@ -6,7 +6,9 @@ from typing import List, Optional
 import os
 from app.helper.file_handler import save_upload_file
 
-router = APIRouter(prefix="/leave-requests", tags=["leave-requests"])
+from app.auth import verify_token
+
+router = APIRouter(prefix="/leave-requests", tags=["leave-requests"], dependencies=[Depends(verify_token)])
 
 @router.post("/create")
 async def create_leave_request(

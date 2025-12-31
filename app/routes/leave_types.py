@@ -4,7 +4,9 @@ from app.crud.repository import repository as repo
 from app.models import LeaveTypeCreate, LeaveTypeUpdate
 from typing import List
 
-router = APIRouter(prefix="/leave-types", tags=["leave-types"])
+from app.auth import verify_token
+
+router = APIRouter(prefix="/leave-types", tags=["leave-types"], dependencies=[Depends(verify_token)])
 
 @router.post("/create")
 async def create_leave_type(leave_type: LeaveTypeCreate):

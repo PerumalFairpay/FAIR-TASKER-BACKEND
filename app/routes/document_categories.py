@@ -4,7 +4,9 @@ from app.crud.repository import repository as repo
 from app.models import DocumentCategoryCreate, DocumentCategoryUpdate
 from typing import List, Optional
 
-router = APIRouter(prefix="/document-categories", tags=["document-categories"])
+from app.auth import verify_token
+
+router = APIRouter(prefix="/document-categories", tags=["document-categories"], dependencies=[Depends(verify_token)])
 
 @router.post("/create")
 async def create_document_category(category: DocumentCategoryCreate):

@@ -6,7 +6,9 @@ from app.helper.file_handler import file_handler
 from typing import List, Optional
 import json
 
-router = APIRouter(prefix="/documents", tags=["documents"])
+from app.auth import verify_token
+
+router = APIRouter(prefix="/documents", tags=["documents"], dependencies=[Depends(verify_token)])
 
 @router.post("/create")
 async def create_document(

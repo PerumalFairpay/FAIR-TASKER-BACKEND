@@ -5,8 +5,9 @@ from app.models import EmployeeCreate, EmployeeUpdate
 from app.helper.file_handler import file_handler
 from typing import Optional
 import json
+from app.auth import verify_token
 
-router = APIRouter(prefix="/employees", tags=["employees"])
+router = APIRouter(prefix="/employees", tags=["employees"], dependencies=[Depends(verify_token)])
 
 @router.post("/create")
 async def create_employee(

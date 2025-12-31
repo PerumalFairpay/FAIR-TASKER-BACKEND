@@ -4,7 +4,9 @@ from app.crud.repository import repository as repo
 from app.models import HolidayCreate, HolidayUpdate
 from typing import List
 
-router = APIRouter(prefix="/holidays", tags=["holidays"])
+from app.auth import verify_token
+
+router = APIRouter(prefix="/holidays", tags=["holidays"], dependencies=[Depends(verify_token)])
 
 @router.post("/create")
 async def create_holiday(holiday: HolidayCreate):

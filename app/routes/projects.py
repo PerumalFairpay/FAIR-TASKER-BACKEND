@@ -6,7 +6,9 @@ from app.helper.file_handler import file_handler
 from typing import List, Optional
 import json
 
-router = APIRouter(prefix="/projects", tags=["projects"])
+from app.auth import verify_token
+
+router = APIRouter(prefix="/projects", tags=["projects"], dependencies=[Depends(verify_token)])
 
 @router.post("/create")
 async def create_project(

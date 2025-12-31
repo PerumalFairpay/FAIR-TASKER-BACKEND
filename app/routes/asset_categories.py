@@ -3,7 +3,9 @@ from app.models import AssetCategoryCreate, AssetCategoryUpdate, AssetCategoryRe
 from app.crud.repository import repository
 from typing import List
 
-router = APIRouter(prefix="/asset-categories", tags=["asset-categories"])
+from app.auth import verify_token
+
+router = APIRouter(prefix="/asset-categories", tags=["asset-categories"], dependencies=[Depends(verify_token)])
 
 @router.post("/", response_model=AssetCategoryResponse)
 async def create_asset_category(category: AssetCategoryCreate):

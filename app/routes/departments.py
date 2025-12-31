@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Depends
 from fastapi.responses import JSONResponse
 from app.crud.repository import repository as repo
 from app.models import DepartmentCreate, DepartmentUpdate
 from typing import List
+from app.auth import verify_token
 
-router = APIRouter(prefix="/departments", tags=["departments"])
+router = APIRouter(prefix="/departments", tags=["departments"], dependencies=[Depends(verify_token)])
 
 @router.post("/create")
 async def create_department(department: DepartmentCreate):

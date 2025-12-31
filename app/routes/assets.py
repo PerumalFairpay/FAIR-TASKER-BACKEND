@@ -6,7 +6,9 @@ import os
 import shutil
 import uuid
 
-router = APIRouter(prefix="/assets", tags=["assets"])
+from app.auth import verify_token
+
+router = APIRouter(prefix="/assets", tags=["assets"], dependencies=[Depends(verify_token)])
 
 UPLOAD_DIR = "static/assets"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
