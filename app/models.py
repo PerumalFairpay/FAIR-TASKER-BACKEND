@@ -533,3 +533,52 @@ class TaskResponse(TaskBase):
 
     class Config:
         from_attributes = True
+
+
+class AttendanceBase(BaseModel):
+    employee_id: str
+    date: str  # Format: "YYYY-MM-DD"
+    clock_in: str  # ISO 8601 timestamp
+    
+    # New Field
+    device_type: str = "Web"  # Options: "Web", "Mobile", "Biometric", "Manual"
+    
+    clock_out: Optional[str] = None
+    break_start: Optional[str] = None
+    break_end: Optional[str] = None
+    total_break_hours: float = 0.0
+    total_work_hours: float = 0.0
+    status: str = "Present"
+    overtime_hours: float = 0.0
+    is_late: bool = False
+    notes: Optional[str] = None
+    ip_address: Optional[str] = None
+    location: Optional[str] = None
+
+
+class AttendanceCreate(BaseModel):
+    """Payload for Clock In"""
+    date: str
+    clock_in: str
+    device_type: str = "Web"  # Default to Web if not specified
+    ip_address: Optional[str] = None
+    location: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class AttendanceUpdate(BaseModel):
+    """Payload for Clock Out"""
+    clock_out: Optional[str] = None
+    break_start: Optional[str] = None
+    break_end: Optional[str] = None
+    device_type: Optional[str] = None
+    notes: Optional[str] = None
+    status: Optional[str] = None
+
+
+class AttendanceResponse(AttendanceBase):
+    id: str
+    employee_details: Optional[dict] = None
+
+    class Config:
+        from_attributes = True

@@ -14,7 +14,8 @@ from app.models import (
     BlogCreate, BlogUpdate,
     LeaveTypeCreate, LeaveTypeUpdate,
     LeaveRequestCreate, LeaveRequestUpdate,
-    TaskCreate, TaskUpdate, EODReportItem
+    TaskCreate, TaskUpdate, EODReportItem,
+    AttendanceCreate, AttendanceUpdate
 )
 from app.utils import normalize, get_password_hash
 from bson import ObjectId
@@ -43,6 +44,8 @@ class Repository:
         self.leave_types = self.db["leave_types"]
         self.leave_requests = self.db["leave_requests"]
         self.tasks = self.db["tasks"]
+        self.attendance = self.db["attendance"]
+
 
     async def create_employee(self, employee: EmployeeCreate, profile_picture_path: str = None, document_proof_path: str = None) -> dict:
         try:
@@ -1118,4 +1121,101 @@ class Repository:
         except Exception as e:
             raise e
 
+    
+    # Attendance CRUD
+    async def clock_in(self, attendance: AttendanceCreate, employee_id: str) -> dict:
+        try:
+            # Check if already clocked in for this date
+            existing = await self.attendance.find_one({
+                "employee_id": employee_id,
+                "date": attendance.date
+            })
+            if existing:
+                raise ValueError("Already clocked in for this date")
+
+            attendance_data = attendance.dict()
+            attendance_data["employee_id"] = employee_id
+            attendance_data["created_at"] = datetime.utcnow()
+            attendance_data["status"] = "Present"
+            
+            result = await self.attendance.insert_one(attendance_data)
+            attendance_data["id"] = str(result.inserted_id)
+            return normalize(attendance_data)
+        except Exception as e:
+            raise e
+
+    async def clock_out(self, attendance: AttendanceUpdate, employee_id: str, date: str) -> dict:
+        try:
+            existing = await self.attendance.find_one({
+                "employee_id": employee_id,
+                "date": date
+            })
+            if not existing:
+                raise ValueError("No clock-in record found for this date")
+            
+            update_data = {k: v for k, v in attendance.dict().items() if v is not None}
+            
+            # Calculate work hours logic could be added here or in frontend. 
+            # Simple duration calc if formats allow. 
+            # Ideally calculation happens here.
+            
+            start_str = existing.get("clock_in")
+            end_str = update_data.get("clock_out")
+            
+            if start_str and end_str:
+                try:
+                     # Attempt generic ISO parsing
+                     start_dt = datetime.fromisoformat(start_str.replace('Z', '+00:00'))
+                     end_dt = datetime.fromisoformat(end_str.replace('Z', '+00:00'))
+                     duration = (end_dt - start_dt).total_seconds() / 3600
+                     update_data["total_work_hours"] = round(duration, 2)
+                except:
+                     pass # Fallback or skip if format issues
+            
+            update_data["updated_at"] = datetime.utcnow()
+            
+            await self.attendance.update_one(
+                {"_id": existing["_id"]},
+                {"$set": update_data}
+            )
+            
+            updated_record = await self.attendance.find_one({"_id": existing["_id"]})
+            return normalize(updated_record)
+        except Exception as e:
+            raise e
+
+    async def get_employee_attendance(self, employee_id: str) -> List[dict]:
+        try:
+            records = await self.attendance.find({"employee_id": employee_id}).sort("date", -1).to_list(length=None)
+            return [normalize(r) for r in records]
+        except Exception as e:
+            raise e
+
+    async def get_all_attendance(self, date: str = None) -> List[dict]:
+        try:
+            query = {}
+            if date:
+                query["date"] = date
+                
+            records = await self.attendance.find(query).sort("date", -1).to_list(length=None)
+            
+            # Fetch employee details for mapping
+            employees = await self.employees.find().to_list(length=None)
+            emp_map = {str(e["employee_no_id"]): normalize(e) for e in employees}
+            
+            result = []
+            for r in records:
+                r_norm = normalize(r)
+                emp_details = emp_map.get(r_norm.get("employee_id"))
+                if emp_details:
+                    if "hashed_password" in emp_details: del emp_details["hashed_password"]
+                    if "password" in emp_details: del emp_details["password"]
+                r_norm["employee_details"] = emp_details
+                result.append(r_norm)
+                
+            return result
+        except Exception as e:
+            raise e
+
 repository = Repository()
+

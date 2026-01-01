@@ -6,3 +6,5 @@ db = client[DATABASE_NAME]
 users_collection = db["users"]
 roles_collection = db["roles"]
 tasks_collection = db["tasks"]
+attendance_collection = db["attendance"]
+
