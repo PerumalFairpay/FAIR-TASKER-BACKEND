@@ -59,9 +59,15 @@ async def get_my_history(current_user: dict = Depends(get_current_user)):
         return JSONResponse(status_code=500, content={"message": f"Server Error: {str(e)}", "success": False})
 
 @router.get("/")
-async def get_all_attendance(date: Optional[str] = None):
+async def get_all_attendance(
+    date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    employee_id: Optional[str] = None,
+    status: Optional[str] = None
+):
     try:
-        data = await repo.get_all_attendance(date)
+        data = await repo.get_all_attendance(date, start_date, end_date, employee_id, status)
         return JSONResponse(
             status_code=200,
             content={"message": "Attendance records fetched", "success": True, "data": data}

@@ -1191,11 +1191,21 @@ class Repository:
         except Exception as e:
             raise e
 
-    async def get_all_attendance(self, date: str = None) -> List[dict]:
+    async def get_all_attendance(self, date: str = None, start_date: str = None, end_date: str = None, employee_id: str = None, status: str = None) -> List[dict]:
         try:
             query = {}
             if date:
                 query["date"] = date
+            elif start_date and end_date:
+                query["date"] = {"$gte": start_date, "$lte": end_date}
+            elif start_date:
+                query["date"] = {"$gte": start_date}
+                
+            if employee_id:
+                query["employee_id"] = employee_id
+                
+            if status:
+                query["status"] = status
                 
             records = await self.attendance.find(query).sort("date", -1).to_list(length=None)
             
