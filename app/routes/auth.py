@@ -88,6 +88,7 @@ async def logout(response: Response):
 
 @router.get("/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
+    current_user.pop("hashed_password", None)
     return {
         "message": "Success",
         "success": True,
