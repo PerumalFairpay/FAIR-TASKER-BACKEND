@@ -3,7 +3,7 @@ from jose import jwt, JWTError
 from fastapi import HTTPException, Cookie, Depends
 from app.core.config import JWT_SECRET, JWT_ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 from typing import Optional
-from app.database import users_collection, roles_collection
+from app.database import users_collection, roles_collection, permissions_collection
 from bson import ObjectId
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
