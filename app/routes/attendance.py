@@ -50,10 +50,10 @@ async def clock_out(attendance: AttendanceUpdate, current_user: dict = Depends(g
 async def get_my_history(current_user: dict = Depends(get_current_user)):
     try:
         employee_id = current_user.get("employee_id") or current_user.get("id")
-        history = await repo.get_employee_attendance(employee_id)
+        result = await repo.get_employee_attendance(employee_id)
         return JSONResponse(
             status_code=200,
-            content={"message": "History fetched", "success": True, "data": history}
+            content={"message": "History fetched", "success": True, **result}
         )
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": f"Server Error: {str(e)}", "success": False})
@@ -67,10 +67,10 @@ async def get_all_attendance(
     status: Optional[str] = None
 ):
     try:
-        data = await repo.get_all_attendance(date, start_date, end_date, employee_id, status)
+        result = await repo.get_all_attendance(date, start_date, end_date, employee_id, status)
         return JSONResponse(
             status_code=200,
-            content={"message": "Attendance records fetched", "success": True, "data": data}
+            content={"message": "Attendance records fetched", "success": True, **result}
         )
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": f"Server Error: {str(e)}", "success": False})

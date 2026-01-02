@@ -1184,14 +1184,25 @@ class Repository:
         except Exception as e:
             raise e
 
-    async def get_employee_attendance(self, employee_id: str) -> List[dict]:
+    async def get_employee_attendance(self, employee_id: str) -> dict:
         try:
             records = await self.attendance.find({"employee_id": employee_id}).sort("date", -1).to_list(length=None)
-            return [normalize(r) for r in records]
+            result = [normalize(r) for r in records]
+            
+            metrics = {
+                "total_records": len(result),
+                "present": len([r for r in result if r.get("status") == "Present"]),
+                "late": len([r for r in result if r.get("status") == "Late"]),
+                "overtime": len([r for r in result if r.get("status") == "Overtime"]),
+                "total_work_hours": round(sum([float(r.get("total_work_hours") or 0) for r in result]), 2),
+            }
+            metrics["avg_work_hours"] = round(metrics["total_work_hours"] / metrics["present"], 2) if metrics["present"] > 0 else 0
+            
+            return {"data": result, "metrics": metrics}
         except Exception as e:
             raise e
 
-    async def get_all_attendance(self, date: str = None, start_date: str = None, end_date: str = None, employee_id: str = None, status: str = None) -> List[dict]:
+    async def get_all_attendance(self, date: str = None, start_date: str = None, end_date: str = None, employee_id: str = None, status: str = None) -> dict:
         try:
             query = {}
             if date:
@@ -1227,10 +1238,13 @@ class Repository:
                 while curr <= e_dt:
                     target_dates.append(curr.strftime("%Y-%m-%d"))
                     curr += timedelta(days=1)
+            else:
+                # Default to today if no date filter is applied
+                target_dates = [datetime.utcnow().strftime("%Y-%m-%d")]
             
             # If we are looking for specific virtual statuses or no status filter, 
             # we need to consider holidays and leaves.
-            include_virtual = status is None or status in ["Holiday", "Leave", "Absent"]
+            include_virtual = not status or status in ["Holiday", "Leave", "Absent"]
 
             result = []
             attendance_map = {} # (employee_id, date)
@@ -1312,7 +1326,21 @@ class Repository:
                             })
             
             result.sort(key=lambda x: (x.get("date", ""), (x.get("employee_details") or {}).get("name", "")), reverse=True)
-            return result
+            
+            # Calculate metrics
+            metrics = {
+                "total_records": len(result),
+                "present": len([r for r in result if r.get("status") == "Present"]),
+                "absent": len([r for r in result if r.get("status") == "Absent"]),
+                "leave": len([r for r in result if r.get("status") == "Leave"]),
+                "holiday": len([r for r in result if r.get("status") == "Holiday"]),
+                "late": len([r for r in result if r.get("status") == "Late"]),
+                "overtime": len([r for r in result if r.get("status") == "Overtime"]),
+                "total_work_hours": round(sum([float(r.get("total_work_hours") or 0) for r in result]), 2),
+            }
+            metrics["avg_work_hours"] = round(metrics["total_work_hours"] / metrics["present"], 2) if metrics["present"] > 0 else 0
+            
+            return {"data": result, "metrics": metrics}
         except Exception as e:
             raise e
 
