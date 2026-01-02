@@ -19,7 +19,7 @@ from app.models import (
 )
 from app.utils import normalize, get_password_hash
 from bson import ObjectId
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 class Repository:
@@ -1204,16 +1204,37 @@ class Repository:
             if employee_id:
                 query["employee_id"] = employee_id
                 
-            if status:
-                query["status"] = status
+            # Internal status check for the attendance collection
+            db_status = status if status in ["Present", "Late", "Overtime"] else None
+            if db_status:
+                query["status"] = db_status
                 
             records = await self.attendance.find(query).sort("date", -1).to_list(length=None)
             
             # Fetch employee details for mapping
             employees = await self.employees.find().to_list(length=None)
-            emp_map = {str(e["employee_no_id"]): normalize(e) for e in employees}
+            emp_map = {str(e.get("employee_no_id")): normalize(e) for e in employees if e.get("employee_no_id")}
+            id_to_emp_map = {str(e["_id"]): normalize(e) for e in employees}
             
+            # Identify target date range for virtual record generation
+            target_dates = []
+            if date:
+                target_dates = [date]
+            elif start_date and end_date:
+                s_dt = datetime.strptime(start_date, "%Y-%m-%d")
+                e_dt = datetime.strptime(end_date, "%Y-%m-%d")
+                curr = s_dt
+                while curr <= e_dt:
+                    target_dates.append(curr.strftime("%Y-%m-%d"))
+                    curr += timedelta(days=1)
+            
+            # If we are looking for specific virtual statuses or no status filter, 
+            # we need to consider holidays and leaves.
+            include_virtual = status is None or status in ["Holiday", "Leave", "Absent"]
+
             result = []
+            attendance_map = {} # (employee_id, date)
+            
             for r in records:
                 r_norm = normalize(r)
                 emp_details = emp_map.get(r_norm.get("employee_id"))
@@ -1222,7 +1243,75 @@ class Repository:
                     if "password" in emp_details: del emp_details["password"]
                 r_norm["employee_details"] = emp_details
                 result.append(r_norm)
+                attendance_map[(r_norm.get("employee_id"), r_norm.get("date"))] = r_norm
+
+            if target_dates and include_virtual:
+                # Fetch holidays and leaves for the target range
+                holidays = await self.holidays.find({"date": {"$in": target_dates}}).to_list(length=None)
+                holiday_map = {h["date"]: h["name"] for h in holidays}
                 
+                leave_query = {"status": "Approved"}
+                # Leaves overlap if start_date <= target_date <= end_date
+                # We fetch all approved leaves that could possibly overlap
+                approved_leaves = await self.leave_requests.find(leave_query).to_list(length=None)
+                
+                today_str = datetime.utcnow().strftime("%Y-%m-%d")
+                
+                # Determine which employees to check
+                employees_to_check = []
+                if employee_id:
+                    emp = emp_map.get(employee_id)
+                    if emp: employees_to_check = [emp]
+                else:
+                    employees_to_check = list(emp_map.values())
+
+                for dt in target_dates:
+                    h_name = holiday_map.get(dt)
+                    for emp in employees_to_check:
+                        emp_no_id = emp.get("employee_no_id")
+                        if (emp_no_id, dt) in attendance_map:
+                            continue
+                        
+                        virt_status = None
+                        notes = None
+                        
+                        if h_name:
+                            virt_status = "Holiday"
+                            notes = h_name
+                        else:
+                            # Check if employee has an approved leave for this date
+                            for leaf in approved_leaves:
+                                if str(leaf.get("employee_id")) == str(emp.get("id")):
+                                    if leaf.get("start_date") <= dt <= leaf.get("end_date"):
+                                        virt_status = "Leave"
+                                        notes = leaf.get("reason")
+                                        break
+                            
+                            if not virt_status and dt <= today_str:
+                                # It's a past/current date with no attendance, holiday, or leave.
+                                # Check if it's a weekend (optional but helpful)
+                                dt_parsed = datetime.strptime(dt, "%Y-%m-%d")
+                                if dt_parsed.weekday() < 5: # Mon-Fri
+                                    virt_status = "Absent"
+                        
+                        if virt_status:
+                            # If status filter is active, only include if it matches
+                            if status and status != virt_status:
+                                continue
+                            
+                            result.append({
+                                "id": f"v_{emp_no_id}_{dt}",
+                                "employee_id": emp_no_id,
+                                "date": dt,
+                                "status": virt_status,
+                                "notes": notes,
+                                "employee_details": emp,
+                                "clock_in": None,
+                                "clock_out": None,
+                                "total_work_hours": 0.0
+                            })
+            
+            result.sort(key=lambda x: (x.get("date", ""), (x.get("employee_details") or {}).get("name", "")), reverse=True)
             return result
         except Exception as e:
             raise e
