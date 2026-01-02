@@ -56,6 +56,7 @@ async def get_current_user(token: dict = Depends(verify_token)):
     
     # Fetch role permissions
     role_name = user.get("role", "employee")
+    user["role"] = role_name
     role_data = await roles_collection.find_one({"name": role_name})
     
     permissions = []
