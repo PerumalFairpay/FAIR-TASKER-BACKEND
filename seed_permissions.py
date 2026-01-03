@@ -75,7 +75,7 @@ async def seed_permissions():
     collection = db["permissions"]
     
     print(f"Connecting to {DATABASE_URL}...")
-    
+
     for perm in permissions_data:
         # Update if exists (by slug), insert if not
         result = await collection.update_one(
