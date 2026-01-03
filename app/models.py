@@ -30,7 +30,7 @@ class UserResponse(UserBase):
 class RoleBase(BaseModel):
     name: str
     description: Optional[str] = None
-    permissions: list[str] = []
+    permissions: List[str] = [] # List of Permission IDs
 
 class RoleCreate(RoleBase):
     pass
@@ -38,9 +38,30 @@ class RoleCreate(RoleBase):
 class RoleUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    permissions: Optional[list[str]] = None
+    permissions: Optional[List[str]] = None
 
 class RoleResponse(RoleBase):
+    id: str
+
+    class Config:
+        from_attributes = True
+
+class PermissionBase(BaseModel):
+    name: str
+    slug: str
+    description: Optional[str] = None
+    module: Optional[str] = None
+
+class PermissionCreate(PermissionBase):
+    pass
+
+class PermissionUpdate(BaseModel):
+    name: Optional[str] = None
+    slug: Optional[str] = None
+    description: Optional[str] = None
+    module: Optional[str] = None
+
+class PermissionResponse(PermissionBase):
     id: str
 
     class Config:
