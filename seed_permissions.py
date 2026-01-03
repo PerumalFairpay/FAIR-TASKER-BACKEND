@@ -8,7 +8,9 @@ load_dotenv()
 
 # Database Config
 DATABASE_URL = os.getenv("DATABASE_URL", "mongodb://localhost:27017")
-if "mongodb://db:" in DATABASE_URL:
+
+# Only replace 'db' with 'localhost' if we are NOT running inside a docker container
+if not os.path.exists('/.dockerenv') and "mongodb://db:" in DATABASE_URL:
     DATABASE_URL = DATABASE_URL.replace("mongodb://db:", "mongodb://localhost:")
     
 DATABASE_NAME = os.getenv("DATABASE_NAME", "fair_tasker_db")

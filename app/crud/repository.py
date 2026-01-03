@@ -1123,6 +1123,44 @@ class Repository:
             raise e
 
     
+    async def bulk_import_attendance(self, records: List[dict]) -> dict:
+        try:
+            if not records:
+                return {"success": True, "count": 0}
+
+            # To avoid duplicates, we can check for existing (employee_id, date)
+            # For simplicity in import, we might want to either skip or overwrite.
+            # User request says "import from excel", usually this implies sync or overwrite.
+            # Let's perform upserts.
+            
+            operations = []
+            from pymongo import UpdateOne
+            
+            for rec in records:
+                # Ensure date is string
+                dt = rec.get("date")
+                emp_id = rec.get("employee_id")
+                
+                if dt and emp_id:
+                    operations.append(UpdateOne(
+                        {"employee_id": emp_id, "date": dt},
+                        {"$set": {**rec, "updated_at": datetime.utcnow()}},
+                        upsert=True
+                    ))
+            
+            if operations:
+                result = await self.attendance.bulk_write(operations)
+                return {
+                    "success": True, 
+                    "matched": result.matched_count,
+                    "upserted": result.upserted_count,
+                    "modified": result.modified_count
+                }
+            
+            return {"success": True, "count": 0}
+        except Exception as e:
+            raise e
+
     # Attendance CRUD
     async def clock_in(self, attendance: AttendanceCreate, employee_id: str) -> dict:
         try:

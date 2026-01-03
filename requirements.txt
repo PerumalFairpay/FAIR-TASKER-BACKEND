@@ -8,3 +8,5 @@ python-dotenv
 python-multipart
 python-jose[cryptography]
 boto3
+pandas
+openpyxl
