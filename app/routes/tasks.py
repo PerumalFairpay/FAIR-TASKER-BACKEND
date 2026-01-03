@@ -25,10 +25,11 @@ async def create_task(task: TaskCreate):
 async def get_tasks(
     project_id: Optional[str] = None, 
     assigned_to: Optional[str] = None, 
-    start_date: Optional[str] = None
+    start_date: Optional[str] = None,
+    date: Optional[str] = None
 ):
     try:
-        tasks = await repo.get_tasks(project_id, assigned_to, start_date)
+        tasks = await repo.get_tasks(project_id, assigned_to, start_date, date)
         return JSONResponse(
             status_code=200,
             content={"message": "Tasks fetched successfully", "success": True, "data": tasks}

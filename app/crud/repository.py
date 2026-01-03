@@ -957,7 +957,7 @@ class Repository:
         except Exception as e:
             raise e
 
-    async def get_tasks(self, project_id: Optional[str] = None, assigned_to: Optional[str] = None, start_date: Optional[str] = None) -> List[dict]:
+    async def get_tasks(self, project_id: Optional[str] = None, assigned_to: Optional[str] = None, start_date: Optional[str] = None, date: Optional[str] = None) -> List[dict]:
         try:
             query = {}
             if project_id:
@@ -965,7 +965,21 @@ class Repository:
             if assigned_to:
                 # Matches if employee ID is in the list
                 query["assigned_to"] = assigned_to 
-            if start_date:
+            
+            if date:
+                # Active tasks on this specific date
+                # start_date <= date AND (end_date >= date OR end_date is None)
+                query["$and"] = [
+                    {"start_date": {"$lte": date}},
+                    {"$or": [
+                        {"end_date": {"$gte": date}},
+                        {"end_date": None},
+                        {"end_date": ""},
+                        {"end_date": {"$exists": False}}
+                    ]}
+                ]
+            elif start_date:
+                # Fallback to exact start date match if no specific 'date' view requested
                 query["start_date"] = start_date
             
             tasks = await self.tasks.find(query).to_list(length=None)
