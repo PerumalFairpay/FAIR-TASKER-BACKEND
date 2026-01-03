@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
-from fastapi.responses import JSONResponse
+from app.helper.response_helper import success_response, error_response
 from app.crud.repository import repository as repo
 from app.models import EmployeeCreate, EmployeeUpdate
 from app.helper.file_handler import file_handler
@@ -74,38 +74,39 @@ async def create_employee(
 
         new_employee = await repo.create_employee(employee_data, profile_pic_path, doc_proof_path)
         
-        return JSONResponse(
+        return success_response(
+            message="Employee created successfully",
             status_code=201,
-            content={"message": "Employee created successfully", "success": True, "data": new_employee}
+            data=new_employee
         )
     except ValueError as ve:
-        return JSONResponse(status_code=400, content={"message": str(ve), "success": False})
+        return error_response(message=str(ve), status_code=400)
     except Exception as e:
-        return JSONResponse(status_code=500, content={"message": f"Failed to create employee: {str(e)}", "success": False})
+        return error_response(message=f"Failed to create employee: {str(e)}", status_code=500)
 
 @router.get("/all")
 async def get_employees():
     try:
         employees = await repo.get_employees()
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Employees fetched successfully", "success": True, "data": employees}
+        return success_response(
+            message="Employees fetched successfully",
+            data=employees
         )
     except Exception as e:
-        return JSONResponse(status_code=500, content={"message": str(e), "success": False})
+        return error_response(message=str(e), status_code=500)
 
 @router.get("/{employee_id}")
 async def get_employee(employee_id: str):
     try:
         employee = await repo.get_employee(employee_id)
         if not employee:
-             return JSONResponse(status_code=404, content={"message": "Employee not found", "success": False})
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Employee fetched successfully", "success": True, "data": employee}
+             return error_response(message="Employee not found", status_code=404)
+        return success_response(
+            message="Employee fetched successfully",
+            data=employee
         )
     except Exception as e:
-        return JSONResponse(status_code=500, content={"message": str(e), "success": False})
+        return error_response(message=str(e), status_code=500)
 
 @router.put("/update/{employee_id}")
 async def update_employee(
@@ -172,24 +173,23 @@ async def update_employee(
         updated_employee = await repo.update_employee(employee_id, update_data, profile_pic_path, doc_proof_path)
         
         if not updated_employee:
-            return JSONResponse(status_code=404, content={"message": "Employee not found", "success": False})
+            return error_response(message="Employee not found", status_code=404)
 
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Employee updated successfully", "success": True, "data": updated_employee}
+        return success_response(
+            message="Employee updated successfully",
+            data=updated_employee
         )
     except Exception as e:
-        return JSONResponse(status_code=500, content={"message": str(e), "success": False})
+        return error_response(message=str(e), status_code=500)
 
 @router.delete("/delete/{employee_id}")
 async def delete_employee(employee_id: str):
     try:
         success = await repo.delete_employee(employee_id)
         if not success:
-            return JSONResponse(status_code=404, content={"message": "Employee not found", "success": False})
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Employee deleted successfully", "success": True}
+            return error_response(message="Employee not found", status_code=404)
+        return success_response(
+            message="Employee deleted successfully"
         )
     except Exception as e:
-        return JSONResponse(status_code=500, content={"message": str(e), "success": False})
+        return error_response(message=str(e), status_code=500)

@@ -50,7 +50,10 @@ async def register(user: UserCreate, response: Response):
 async def login(user: UserLogin, response: Response):
     user_record = await users_collection.find_one({"email": user.email})
     if not user_record or not verify_password(user.password, user_record["hashed_password"]):
-        raise HTTPException(status_code=400, detail="Invalid email or password")
+        raise HTTPException(
+            status_code=400, 
+            detail="We couldn't log you in. Please check your credentials or contact support if your account is inactive."
+        )
     
     # Create token and set cookie
     token = create_access_token(user_record)
