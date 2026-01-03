@@ -1065,13 +1065,15 @@ class Repository:
         
         return results
 
-    async def get_eod_reports(self, project_id: Optional[str] = None, assigned_to: Optional[str] = None, date: Optional[str] = None) -> List[dict]:
+    async def get_eod_reports(self, project_id: Optional[str] = None, assigned_to: Optional[str] = None, date: Optional[str] = None, priority: Optional[str] = None) -> List[dict]:
         try:
             query = {"eod_history": {"$exists": True, "$not": {"$size": 0}}}
             if project_id:
                 query["project_id"] = project_id
             if assigned_to:
                 query["assigned_to"] = assigned_to
+            if priority:
+                query["priority"] = priority
             
             tasks = await self.tasks.find(query).to_list(length=None)
             
