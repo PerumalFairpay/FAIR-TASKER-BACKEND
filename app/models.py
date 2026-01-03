@@ -509,6 +509,7 @@ class TaskBase(BaseModel):
     tags: List[str] = []
     status: str = "Todo"
     progress: float = 0.0
+    last_rollover_date: Optional[str] = None
 
 
 class TaskCreate(TaskBase):

@@ -1029,14 +1029,23 @@ class Repository:
             }
 
             if item.move_to_tomorrow:
-                # Calculate tomorrow's date
+                # Visual Rollover: Mark as rolled over today
+                today_str = datetime.utcnow().strftime("%Y-%m-%d")
+                update_fields["last_rollover_date"] = today_str
+                
+                # Smart Rollover: Preserve future deadlines
+                # Only update end_date if the current deadline is BEFORE tomorrow
                 from datetime import timedelta
                 tomorrow_dt = datetime.utcnow() + timedelta(days=1)
                 tomorrow_str = tomorrow_dt.strftime("%Y-%m-%d")
                 
-                # Update end_date to tomorrow and ensure status is active (In Progress)
-                update_fields["end_date"] = tomorrow_str
-                # If the task was Todo or In Progress, we keep it In Progress since it's being carried over
+                existing_end_date = existing_task.get("end_date")
+                
+                # If no end date or end date is earlier than tomorrow, extend it to tomorrow
+                if not existing_end_date or existing_end_date < tomorrow_str:
+                    update_fields["end_date"] = tomorrow_str
+                
+                # Always keep status as "In Progress" for rollover
                 update_fields["status"] = "In Progress"
             else:
                 update_fields["status"] = item.status
