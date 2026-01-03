@@ -56,14 +56,25 @@ async def get_current_user(token: dict = Depends(verify_token)):
     
     # Fetch role permissions
     role_name = user.get("role", "employee")
+    if role_name:
+        role_name = str(role_name).lower()
+    else:
+        role_name = "employee"
+        
     user["role"] = role_name
-    role_data = await roles_collection.find_one({"name": role_name})
+    role_data = await roles_collection.find_one({"name": {"$regex": f"^{role_name}$", "$options": "i"}})
     
     permissions = []
     if role_data and "permissions" in role_data:
         perm_ids = role_data["permissions"]
         # Convert string IDs to ObjectIds if they are valid
-        valid_ids = [ObjectId(pid) for pid in perm_ids if ObjectId.is_valid(pid)]
+        valid_ids = []
+        for pid in perm_ids:
+            if isinstance(pid, ObjectId):
+                valid_ids.append(pid)
+            elif ObjectId.is_valid(str(pid)):
+                valid_ids.append(ObjectId(str(pid)))
+                
         if valid_ids:
             async for p in permissions_collection.find({"_id": {"$in": valid_ids}}):
                 permissions.append(p.get("slug"))

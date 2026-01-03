@@ -90,7 +90,52 @@ async def seed_permissions():
         else:
             print(f"Updated: {perm['slug']}")
             
-    print("\nSeeding completed successfully!")
+    print("\nPermissions seeding completed.")
+
+    # Seed Roles
+    roles_collection = db["roles"]
+    
+    # Get all permission slugs to IDs mapping
+    cursor = collection.find({})
+    perm_map = {}
+    async for p in cursor:
+        perm_map[p["slug"]] = str(p["_id"])
+
+    roles_data = [
+        {
+            "name": "admin",
+            "description": "Full system access",
+            "permissions": list(perm_map.values()) # Admin gets everything
+        },
+        {
+            "name": "employee",
+            "description": "Standard employee access",
+            "permissions": [
+                perm_map.get("dashboard:view"),
+                perm_map.get("attendance:view_self"),
+                perm_map.get("leave:apply"),
+                perm_map.get("task:view"),
+                perm_map.get("project:view"),
+                perm_map.get("expense:submit"),
+                perm_map.get("asset:view"),
+                perm_map.get("employee:view"), # Often employees can see the directory
+            ]
+        }
+    ]
+
+    # Filter out None values from permissions
+    for role in roles_data:
+        role["permissions"] = [p for p in role["permissions"] if p]
+
+    for role in roles_data:
+        await roles_collection.update_one(
+            {"name": role["name"]},
+            {"$set": role},
+            upsert=True
+        )
+        print(f"Role seeded/updated: {role['name']}")
+            
+    print("\nAll seeding completed successfully!")
     client.close()
 
 if __name__ == "__main__":
