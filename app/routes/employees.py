@@ -5,11 +5,11 @@ from app.models import EmployeeCreate, EmployeeUpdate
 from app.helper.file_handler import file_handler
 from typing import Optional
 import json
-from app.auth import verify_token
+from app.auth import verify_token, require_permission
 
 router = APIRouter(prefix="/employees", tags=["employees"], dependencies=[Depends(verify_token)])
 
-@router.post("/create")
+@router.post("/create", dependencies=[Depends(require_permission("employee:create"))])
 async def create_employee(
     first_name: str = Form(...),
     last_name: str = Form(...),
@@ -84,7 +84,7 @@ async def create_employee(
     except Exception as e:
         return error_response(message=f"Failed to create employee: {str(e)}", status_code=500)
 
-@router.get("/all")
+@router.get("/all", dependencies=[Depends(require_permission("employee:view"))])
 async def get_employees():
     try:
         employees = await repo.get_employees()
@@ -95,7 +95,7 @@ async def get_employees():
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
-@router.get("/{employee_id}")
+@router.get("/{employee_id}", dependencies=[Depends(require_permission("employee:view"))])
 async def get_employee(employee_id: str):
     try:
         employee = await repo.get_employee(employee_id)
@@ -108,7 +108,7 @@ async def get_employee(employee_id: str):
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
-@router.put("/update/{employee_id}")
+@router.put("/update/{employee_id}", dependencies=[Depends(require_permission("employee:edit"))])
 async def update_employee(
     employee_id: str,
     first_name: Optional[str] = Form(None),
@@ -182,7 +182,7 @@ async def update_employee(
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
-@router.delete("/delete/{employee_id}")
+@router.delete("/delete/{employee_id}", dependencies=[Depends(require_permission("employee:delete"))])
 async def delete_employee(employee_id: str):
     try:
         success = await repo.delete_employee(employee_id)

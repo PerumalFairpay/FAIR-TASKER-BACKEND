@@ -3,7 +3,7 @@ from jose import jwt, JWTError
 from fastapi import HTTPException, Cookie, Depends
 from app.core.config import JWT_SECRET, JWT_ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 from typing import Optional
-from app.database import users_collection
+from app.database import users_collection, roles_collection
 from bson import ObjectId
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -54,5 +54,24 @@ async def get_current_user(token: dict = Depends(verify_token)):
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     
+    # Fetch role permissions
+    role_name = user.get("role", "employee")
+    role_data = await roles_collection.find_one({"name": role_name})
+    user["permissions"] = role_data.get("permissions", []) if role_data else []
+    
     user["id"] = str(user.pop("_id"))
     return user
+
+def require_permission(permission: str):
+    async def _has_permission(current_user: dict = Depends(get_current_user)):
+        # Admin has all permissions
+        if current_user.get("role") == "admin":
+            return current_user
+            
+        if permission not in current_user.get("permissions", []):
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Missing required permission: {permission}"
+            )
+        return current_user
+    return _has_permission
