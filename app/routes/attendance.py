@@ -47,10 +47,14 @@ async def clock_out(attendance: AttendanceUpdate, current_user: dict = Depends(g
         return JSONResponse(status_code=500, content={"message": f"Server Error: {str(e)}", "success": False})
 
 @router.get("/my-history")
-async def get_my_history(current_user: dict = Depends(get_current_user)):
+async def get_my_history(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
     try:
         employee_id = current_user.get("employee_id") or current_user.get("id")
-        result = await repo.get_employee_attendance(employee_id)
+        result = await repo.get_employee_attendance(employee_id, start_date, end_date)
         return JSONResponse(
             status_code=200,
             content={"message": "History fetched", "success": True, **result}

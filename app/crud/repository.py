@@ -1184,17 +1184,18 @@ class Repository:
         except Exception as e:
             raise e
 
-    async def get_employee_attendance(self, employee_id: str) -> dict:
+    async def get_employee_attendance(self, employee_id: str, start_date: str = None, end_date: str = None) -> dict:
         try:
-            # We use get_all_attendance logic but for this specific employee
-            # To get full history with virtual records, we'd need a wide range.
-            # For now, let's just use the current year as a default range if we want virtuals,
-            # or just calculate metrics from existing records.
-            # However, virtual records (Absent, Leave, Holiday) are important.
-            
-            # Let's define a range for "history" - maybe last 3 months?
-            end_date = datetime.utcnow().strftime("%Y-%m-%d")
-            start_date = (datetime.utcnow() - timedelta(days=90)).strftime("%Y-%m-%d")
+            # If no dates provided, default to current month
+            if not start_date or not end_date:
+                now = datetime.utcnow()
+                start_date = now.replace(day=1).strftime("%Y-%m-%d")
+                # Last day of month
+                if now.month == 12:
+                    last_day = now.replace(year=now.year + 1, month=1, day=1) - timedelta(days=1)
+                else:
+                    last_day = now.replace(month=now.month + 1, day=1) - timedelta(days=1)
+                end_date = last_day.strftime("%Y-%m-%d")
             
             return await self.get_all_attendance(start_date=start_date, end_date=end_date, employee_id=employee_id)
         except Exception as e:
