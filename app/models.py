@@ -501,6 +501,8 @@ class TaskBase(BaseModel):
     description: Optional[str] = None
     start_date: str
     end_date: str
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
     priority: str = "Medium"
     assigned_to: List[str] = []
     attachments: List[str] = []
@@ -519,6 +521,8 @@ class TaskUpdate(BaseModel):
     description: Optional[str] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
     priority: Optional[str] = None
     assigned_to: Optional[List[str]] = None
     attachments: Optional[List[str]] = None
@@ -551,6 +555,8 @@ class TaskResponse(TaskBase):
     eod_history: List[dict] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
 
     class Config:
         from_attributes = True
