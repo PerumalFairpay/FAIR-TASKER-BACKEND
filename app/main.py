@@ -9,7 +9,7 @@ from app.routes import (
     expense_categories, expenses,
     document_categories, documents,
     clients, projects, holidays,
-    asset_categories, assets, blogs, leave_types, leave_requests, tasks, attendance, permissions, dashboard, files
+    asset_categories, assets, blogs, leave_types, leave_requests, tasks, attendance, permissions, dashboard, files, profile
 )
 
 app = FastAPI(title="Fair Tasker Backend")
@@ -50,6 +50,7 @@ app.include_router(attendance.router)
 app.include_router(permissions.router)
 app.include_router(dashboard.router)
 app.include_router(files.router)
+app.include_router(profile.router)
  
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
