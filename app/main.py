@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from app.helper.response_helper import error_response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -9,7 +9,7 @@ from app.routes import (
     expense_categories, expenses,
     document_categories, documents,
     clients, projects, holidays,
-    asset_categories, assets, blogs, leave_types, leave_requests, tasks, attendance, permissions, dashboard
+    asset_categories, assets, blogs, leave_types, leave_requests, tasks, attendance, permissions, dashboard, files
 )
 
 app = FastAPI(title="Fair Tasker Backend")
@@ -49,6 +49,7 @@ app.include_router(tasks.router)
 app.include_router(attendance.router)
 app.include_router(permissions.router)
 app.include_router(dashboard.router)
+app.include_router(files.router)
  
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
