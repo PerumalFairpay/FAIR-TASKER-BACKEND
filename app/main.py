@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, APIRouter
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.helper.response_helper import error_response
@@ -12,7 +12,7 @@ from app.routes import (
     asset_categories, assets, blogs, leave_types, leave_requests, tasks, attendance, permissions, dashboard, files, profile
 )
 
-app = FastAPI(title="Fair Tasker Backend")
+app = FastAPI(title="Fair Tasker Backend", version="1.0.0", docs_url="/api/docs", redoc_url="/api/redoc")
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -29,28 +29,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix="/auth", tags=["auth"])
-app.include_router(roles.router, prefix="/roles", tags=["roles"])
-app.include_router(departments.router)
-app.include_router(employees.router)
-app.include_router(expense_categories.router)
-app.include_router(expenses.router)
-app.include_router(document_categories.router)
-app.include_router(documents.router)
-app.include_router(clients.router)
-app.include_router(projects.router)
-app.include_router(holidays.router)
-app.include_router(asset_categories.router)
-app.include_router(assets.router)
-app.include_router(blogs.router)
-app.include_router(leave_types.router)
-app.include_router(leave_requests.router)
-app.include_router(tasks.router)
-app.include_router(attendance.router)
-app.include_router(permissions.router)
-app.include_router(dashboard.router)
-app.include_router(files.router)
-app.include_router(profile.router)
+api_router = APIRouter()
+
+api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
+api_router.include_router(departments.router)
+api_router.include_router(employees.router)
+api_router.include_router(expense_categories.router)
+api_router.include_router(expenses.router)
+api_router.include_router(document_categories.router)
+api_router.include_router(documents.router)
+api_router.include_router(clients.router)
+api_router.include_router(projects.router)
+api_router.include_router(holidays.router)
+api_router.include_router(asset_categories.router)
+api_router.include_router(assets.router)
+api_router.include_router(blogs.router)
+api_router.include_router(leave_types.router)
+api_router.include_router(leave_requests.router)
+api_router.include_router(tasks.router)
+api_router.include_router(attendance.router)
+api_router.include_router(permissions.router)
+api_router.include_router(dashboard.router)
+api_router.include_router(files.router)
+api_router.include_router(profile.router)
+
+app.include_router(api_router, prefix="/api")
  
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
