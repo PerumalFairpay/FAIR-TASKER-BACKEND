@@ -5,6 +5,7 @@ from app.crud.repository import repository as repo
 from app.auth import get_current_user, verify_token
 from typing import List, Optional
 from datetime import datetime, timedelta
+import random
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"], dependencies=[Depends(verify_token)])
 
@@ -163,29 +164,127 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             # --- EMPLOYEE DASHBOARD ---
             employee_id = current_user.get("employee_id")
             if not employee_id:
-                # Fallback if no linked employee profile
                 return JSONResponse(status_code=400, content={"success": False, "message": "No employee profile linked"})
 
             # 1. Profile
-            # Get employee details
             emp_doc = await repo.employees.find_one({"employee_no_id": employee_id})
             if not emp_doc:
                  return JSONResponse(status_code=404, content={"success": False, "message": "Employee profile not found"})
             
             from app.utils import normalize
             emp_profile = normalize(emp_doc)
-            if "hashed_password" in emp_profile: del emp_profile["hashed_password"]
-            if "password" in emp_profile: del emp_profile["password"]
+            # Remove sensitive fields
+            for k in ["hashed_password", "password"]:
+                emp_profile.pop(k, None)
 
-            # 2. Attendance Summary (Current Month)
-            attendance_data = await repo.get_employee_attendance(employee_id)
-            att_metrics = attendance_data.get("metrics", {})
+            # 2. Greeting Logic
+            # IST Offset approx +5.5 hours, or use simple hour check
+            hour = (datetime.utcnow().hour + 5) % 24 
+            
+            greeting_text = "Good Morning"
+            period = "Morning"
+            if 12 <= hour < 17:
+                greeting_text = "Good Afternoon"
+                period = "Afternoon"
+            elif hour >= 17:
+                greeting_text = "Good Evening"
+                period = "Evening"
+            
+            first_name = emp_profile.get("first_name", emp_profile.get("name", "there"))
+            greeting_text = f"{greeting_text}, {first_name}"
 
-            # 3. Leave Balance
+            motivational_quotes = {
+                "Morning": [
+                    "Let's make today count!",
+                    "Ready to achieve great things?",
+                    "Rise and shine!",
+                    "Today is a fresh start."
+                ],
+                "Afternoon": [
+                    "Hope your day is going well.",
+                    "Keep up the great momentum!",
+                    "You're doing great.",
+                    "Halfway through the day!"
+                ],
+                "Evening": [
+                    "Time to unwind soon.",
+                    "Great work today!",
+                    "Rest and recharge.",
+                    "Have a wonderful evening."
+                ]
+            }
+            
+            message = random.choice(motivational_quotes.get(period, ["Have a great day!"]))
+
+            greeting_obj = {
+                "greeting_text": greeting_text,
+                "message": message
+            }
+
+            # 3. Work Hours & Attendance Metrics
+            # Fetch all attendance for this month for accurate calc
+            start_of_month = datetime.utcnow().replace(day=1).strftime("%Y-%m-%d")
+            # Calculate start of week (Monday)
+            today_dt = datetime.utcnow()
+            start_of_week = (today_dt - timedelta(days=today_dt.weekday())).strftime("%Y-%m-%d")
+            
+            attendance_cursor = repo.attendance.find({
+                "employee_id": employee_id,
+                "date": {"$gte": start_of_month}
+            })
+            month_attendance = await attendance_cursor.to_list(length=None)
+            
+            hours_today = 0.0
+            hours_week = 0.0
+            hours_month = 0.0
+            
+            present_days = 0
+            absent_days = 0
+            late_days = 0
+            
+            for att in month_attendance:
+                d = att.get("date")
+                wh = float(att.get("total_work_hours", 0))
+                
+                # Metrics
+                status = att.get("status", "Present")
+                if status == "Present": present_days += 1
+                elif status == "Absent": absent_days += 1
+                
+                if att.get("is_late"): late_days += 1
+                
+                # Hours
+                if d == today_str:
+                    hours_today += wh
+                
+                if d >= start_of_week:
+                    hours_week += wh
+                    
+                if d >= start_of_month:
+                    hours_month += wh
+
+            work_hours = {
+                "today": round(hours_today, 1),
+                "this_week": round(hours_week, 1),
+                "this_month": round(hours_month, 1)
+            }
+            
+            attendance_metrics = {
+                "present_days": present_days,
+                "absent_days": absent_days,
+                "late_days": late_days,
+                "half_days": 0, 
+                "total_working_days": len(month_attendance)
+            }
+
+            # 4. Leave Details
             leave_types = await repo.get_leave_types()
             my_leaves = await repo.get_leave_requests(str(emp_doc.get("_id"))) 
             
             leave_balance = []
+            total_allowed_all = 0
+            total_taken_all = 0
+            
             for lt in leave_types:
                 total_allowed = lt.get("number_of_days", 0)
                 used = 0
@@ -193,16 +292,50 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                     if l.get("leave_type_id") == lt.get("id") and l.get("status") == "Approved":
                          used += float(l.get("total_days", 0))
                 
+                total_allowed_all += total_allowed
+                total_taken_all += used
+                
                 leave_balance.append({
                     "type": lt.get("name"),
                     "balance": total_allowed - used,
                     "total": total_allowed,
                     "used": used
                 })
+            
+            pending_leaves_count = len([l for l in my_leaves if l.get("status") == "Pending"])
+            
+            # Recent Leaves
+            sorted_leaves = sorted(my_leaves, key=lambda x: x.get("created_at", ""), reverse=True)
+            recent_requests_status = []
+            for l in sorted_leaves[:3]:
+                lt_name = "Leave"
+                # Find type name
+                for lt in leave_types:
+                    if lt.get("id") == l.get("leave_type_id"):
+                        lt_name = lt.get("name")
+                        break
+                
+                recent_requests_status.append({
+                    "type": lt_name,
+                    "status": l.get("status"),
+                    "date": l.get("start_date")
+                })
 
-            # 4. My Tasks
+            leave_details = {
+                "summary": {
+                    "total_allowed": total_allowed_all,
+                    "total_taken": total_taken_all,
+                    "total_remaining": total_allowed_all - total_taken_all,
+                    "pending_requests": pending_leaves_count
+                },
+                "balance": leave_balance,
+                "recent_requests_status": recent_requests_status
+            }
+
+            # 5. Task Metrics & Recent Tasks
             my_tasks = await repo.get_tasks(assigned_to=employee_id) 
-            task_overview = {
+            
+            task_metric_counts = {
                 "total_assigned": len(my_tasks),
                 "pending": 0,
                 "in_progress": 0,
@@ -212,21 +345,24 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             
             for t in my_tasks:
                 status = t.get("status")
-                if status == "Completed":
-                    task_overview["completed"] += 1
-                else:
-                    task_overview["pending"] += 1
-                    if status == "In Progress":
-                        task_overview["in_progress"] += 1
-                    
-                    if t.get("end_date") and t.get("end_date") < today_str:
-                        task_overview["overdue"] += 1
+                if status == "Completed": task_metric_counts["completed"] += 1
+                elif status == "In Progress": task_metric_counts["in_progress"] += 1
+                else: task_metric_counts["pending"] += 1 
+                
+                if t.get("end_date") and t.get("end_date") < today_str and status != "Completed":
+                    task_metric_counts["overdue"] += 1
 
-            # Recent Tasks
             sorted_tasks = sorted(my_tasks, key=lambda x: x.get("created_at") or "", reverse=True)
-            recent_tasks = sorted_tasks[:5]
+            recent_tasks_list = []
+            for t in sorted_tasks[:5]:
+                recent_tasks_list.append({
+                    "task_name": t.get("task_name"),
+                    "priority": t.get("priority"),
+                    "status": t.get("status"),
+                    "due_date": t.get("end_date")
+                })
 
-            # 5. My Projects
+            # 6. Projects
             all_projects = await repo.get_projects()
             emp_oid = str(emp_doc["_id"])
             my_projects = []
@@ -242,36 +378,76 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                 
                 if role:
                     my_projects.append({
-                        "id": p.get("id"),
                         "name": p.get("name"),
-                        "status": p.get("status"),
                         "role": role,
-                        "end_date": p.get("end_date")
+                        "status": p.get("status"),
+                        "deadline": p.get("end_date")
                     })
-            
-            # 6. Recent Leaves
-            sorted_leaves = sorted(my_leaves, key=lambda x: x.get("created_at", ""), reverse=True)
-            recent_leaves = sorted_leaves[:5]
 
+            # 7. Recent Activity (Mashup)
+            recent_activity = []
+            # Add tasks
+            for t in sorted_tasks[:3]:
+                msg = f"Task '{t.get('task_name')}' is {t.get('status')}"
+                if t.get("status") == "Completed": msg = f"You completed task '{t.get('task_name')}'"
+                recent_activity.append({
+                    "type": "task",
+                    "message": msg,
+                    "time": t.get("updated_at") or t.get("created_at")
+                })
+            # Add leaves
+            for l in sorted_leaves[:3]:
+                recent_activity.append({
+                    "type": "leave",
+                    "message": f"Leave request {l.get('status')}",
+                    "time": l.get("updated_at") or l.get("created_at")
+                })
+            
+            # Sort combined
+            recent_activity.sort(key=lambda x: str(x.get("time")), reverse=True)
+            recent_activity = recent_activity[:5]
+
+            # 8. Birthdays
+            all_employees = await repo.get_employees()
+            birthdays = []
+            today_date = datetime.utcnow()
+            for e in all_employees:
+                dob_str = e.get("date_of_birth")
+                if dob_str:
+                    try:
+                        # Parse date, assuming YYYY-MM-DD
+                        dob = datetime.strptime(dob_str, "%Y-%m-%d")
+                        # Check if birthday is in next 30 days
+                        this_year_bday = dob.replace(year=today_date.year)
+                        if this_year_bday < today_date:
+                            this_year_bday = dob.replace(year=today_date.year + 1)
+                        
+                        days_diff = (this_year_bday - today_date).days
+                        if 0 <= days_diff <= 30:
+                            birthdays.append({
+                                "name": e.get("name"),
+                                "date": this_year_bday.strftime("%b %d"),
+                                "profile_picture": e.get("profile_picture")
+                            })
+                    except:
+                        pass 
+            
+            birthdays.sort(key=lambda x: x.get("date"))
+
+            # 9. Response
             data = {
                 "type": "employee",
+                "greeting": greeting_obj,
                 "profile": emp_profile,
-                "attendance_summary": {
-                    "present_days": att_metrics.get("present", 0),
-                    "absent_days": att_metrics.get("absent", 0),
-                    "late_days": att_metrics.get("late", 0),
-                    "half_days": 0, # Metric not standardly calc'd yet
-                    "total_working_days": att_metrics.get("total_records", 0), # Approx
-                    "average_work_hours": att_metrics.get("avg_work_hours", 0)
-                },
-                "leave_balance": leave_balance,
-                "my_tasks": {
-                    "overview": task_overview,
-                    "recent_tasks": recent_tasks
-                },
-                "my_projects": my_projects,
-                "recent_leaves": recent_leaves,
-                "upcoming_holidays": upcoming_holidays
+                "work_hours": work_hours,
+                "attendance_metrics": attendance_metrics,
+                "leave_details": leave_details,
+                "projects": my_projects,
+                "task_metrics": task_metric_counts,
+                "recent_tasks": recent_tasks_list,
+                "recent_activity": recent_activity,
+                "upcoming_holidays": upcoming_holidays,
+                "birthdays": birthdays
             }
             
             return JSONResponse(status_code=200, content={"success": True, "data": data})
