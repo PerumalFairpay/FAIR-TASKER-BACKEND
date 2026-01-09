@@ -452,6 +452,7 @@ class LeaveTypeResponse(LeaveTypeBase):
         from_attributes = True
 
 
+
 class LeaveRequestBase(BaseModel):
     employee_id: str
     leave_type_id: str
@@ -463,6 +464,7 @@ class LeaveRequestBase(BaseModel):
     reason: str
     attachment: Optional[str] = None
     status: str = "Pending"
+    rejection_reason: Optional[str] = None
 
 
 class LeaveRequestCreate(LeaveRequestBase):
@@ -480,10 +482,12 @@ class LeaveRequestUpdate(BaseModel):
     reason: Optional[str] = None
     attachment: Optional[str] = None
     status: Optional[str] = None
+    rejection_reason: Optional[str] = None
 
 
 class LeaveRequestStatusUpdate(BaseModel):
     status: str
+    rejection_reason: Optional[str] = None
 
 
 class LeaveRequestResponse(LeaveRequestBase):

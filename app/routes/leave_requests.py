@@ -133,7 +133,10 @@ async def update_leave_request(
 @router.patch("/status/{leave_request_id}")
 async def update_leave_status(leave_request_id: str, status_update: LeaveRequestStatusUpdate):
     try:
-        update_data = LeaveRequestUpdate(status=status_update.status)
+        update_data = LeaveRequestUpdate(
+            status=status_update.status,
+            rejection_reason=status_update.rejection_reason
+        )
         updated_request = await repo.update_leave_request(leave_request_id, update_data)
         if not updated_request:
             return JSONResponse(
