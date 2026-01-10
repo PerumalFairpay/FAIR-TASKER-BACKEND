@@ -221,11 +221,10 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                 "message": message
             }
 
-            # 3. Work Hours & Attendance Metrics
-            # Fetch all attendance for this month for accurate calc
+            # 3. Work Hours & Attendance Metrics (Enhanced)
             start_of_month = datetime.utcnow().replace(day=1).strftime("%Y-%m-%d")
-            # Calculate start of week (Monday)
             today_dt = datetime.utcnow()
+            today_str = today_dt.strftime("%Y-%m-%d")
             start_of_week = (today_dt - timedelta(days=today_dt.weekday())).strftime("%Y-%m-%d")
             
             attendance_cursor = repo.attendance.find({
@@ -233,35 +232,86 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                 "date": {"$gte": start_of_month}
             })
             month_attendance = await attendance_cursor.to_list(length=None)
-            
+            att_map = {a.get("date"): a for a in month_attendance}
+
+            # Helper for date range
+            def daterange(start_date, end_date):
+                for n in range(int((end_date - start_date).days) + 1):
+                    yield start_date + timedelta(n)
+
+            start_date_obj = datetime.strptime(start_of_month, "%Y-%m-%d")
+            current_date_obj = datetime.strptime(today_str, "%Y-%m-%d")
+
+            present_days = 0
+            absent_days = 0
+            late_days = 0
             hours_today = 0.0
             hours_week = 0.0
             hours_month = 0.0
             
-            present_days = 0
-            absent_days = 0
-            late_days = 0
+            # Leave Days Calculation (Sum of approved leaves in this month)
+            leave_types = await repo.get_leave_types()
+            my_leaves = await repo.get_leave_requests(str(emp_doc.get("_id"))) 
             
-            for att in month_attendance:
-                d = att.get("date")
-                wh = float(att.get("total_work_hours", 0))
+            leaves_this_month = 0.0
+            leave_date_map = {} # Map date -> status for quick lookup in loop
+            for l in my_leaves:
+                if l.get("status") == "Approved":
+                     # Add to sum
+                     if l.get("start_date") >= start_of_month:
+                         leaves_this_month += float(l.get("total_days", 0))
+                     
+                     # Add to map
+                     l_start = datetime.strptime(l.get("start_date"), "%Y-%m-%d")
+                     l_end = datetime.strptime(l.get("end_date"), "%Y-%m-%d")
+                     for d in daterange(l_start, l_end):
+                         leave_date_map[d.strftime("%Y-%m-%d")] = "Leave"
+
+            # Filter Holidays for this month
+            month_holidays = set()
+            for h in all_holidays:
+                 h_date = h.get("date")
+                 if h_date >= start_of_month and h_date <= today_str and h.get("status") == "Active":
+                     month_holidays.add(h_date)
+
+            # Loop through every day of month until today
+            total_working_days_elapsed = 0
+            
+            for single_date in daterange(start_date_obj, current_date_obj):
+                d_str = single_date.strftime("%Y-%m-%d")
+                is_sunday = single_date.weekday() == 6
+                is_holiday = d_str in month_holidays
                 
-                # Metrics
-                status = att.get("status", "Present")
-                if status == "Present": present_days += 1
-                elif status == "Absent": absent_days += 1
-                
-                if att.get("is_late"): late_days += 1
-                
-                # Hours
-                if d == today_str:
-                    hours_today += wh
-                
-                if d >= start_of_week:
-                    hours_week += wh
+                # Check metrics if it's a working day (Include Saturdays, Exclude Sundays/Holidays)
+                if not is_sunday and not is_holiday:
+                    total_working_days_elapsed += 1
                     
-                if d >= start_of_month:
-                    hours_month += wh
+                    att_record = att_map.get(d_str)
+                    if att_record:
+                        # Record Exists
+                        status = att_record.get("status", "Present")
+                        if status == "Present": present_days += 1
+                        elif status == "Absent": absent_days += 1
+                        
+                        if att_record.get("is_late"): late_days += 1
+                        
+                        # Hours
+                        wh = float(att_record.get("total_work_hours", 0))
+                        hours_month += wh
+                        if d_str == today_str: hours_today += wh
+                        if d_str >= start_of_week: hours_week += wh
+                        
+                    elif leave_date_map.get(d_str) == "Leave":
+                        pass # Covered by Leave
+                    else:
+                        # No Record, No Leave, Working Day => Absent
+                        # Exclude Today if logic requires user to clock in by end of day
+                        # But for dashboard, if no clock-in yet, it's pending/absent
+                        if d_str != today_str: # Don't mark today as absent yet? Or do so? Usually strictly Absent if not in.
+                            absent_days += 1
+                        elif d_str == today_str:
+                             # For today, maybe don't count as absent instantly?
+                             pass
 
             work_hours = {
                 "today": round(hours_today, 1),
@@ -274,12 +324,10 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                 "absent_days": absent_days,
                 "late_days": late_days,
                 "half_days": 0, 
-                "total_working_days": len(month_attendance)
+                "leave_days": leaves_this_month,
+                "total_working_days": current_date_obj.day # Return total calendar days elapsed (11) as per UI expectation
+                # Or total_working_days_elapsed for strict working days
             }
-
-            # 4. Leave Details
-            leave_types = await repo.get_leave_types()
-            my_leaves = await repo.get_leave_requests(str(emp_doc.get("_id"))) 
             
             leave_balance = []
             total_allowed_all = 0
