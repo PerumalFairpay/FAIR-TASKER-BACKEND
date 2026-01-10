@@ -284,9 +284,21 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                 
                 # Check metrics if it's a working day (Include Saturdays, Exclude Sundays/Holidays)
                 if not is_sunday and not is_holiday:
-                    total_working_days_elapsed += 1
                     
                     att_record = att_map.get(d_str)
+                    is_leave = leave_date_map.get(d_str) == "Leave"
+                    
+                    # Only count "Today" in total if a status exists (Present/Leave) or if we decide to mark it Absent
+                    # To match user expectation (Total = Present + Absent + Leave):
+                    # If we skip Absent for Today, we should skip Total for Today if no record.
+                    
+                    increment_total = True
+                    if d_str == today_str and not att_record and not is_leave:
+                        increment_total = False
+                    
+                    if increment_total:
+                        total_working_days_elapsed += 1
+                    
                     if att_record:
                         # Record Exists
                         status = att_record.get("status", "Present")
@@ -301,17 +313,12 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                         if d_str == today_str: hours_today += wh
                         if d_str >= start_of_week: hours_week += wh
                         
-                    elif leave_date_map.get(d_str) == "Leave":
+                    elif is_leave:
                         pass # Covered by Leave
                     else:
                         # No Record, No Leave, Working Day => Absent
-                        # Exclude Today if logic requires user to clock in by end of day
-                        # But for dashboard, if no clock-in yet, it's pending/absent
-                        if d_str != today_str: # Don't mark today as absent yet? Or do so? Usually strictly Absent if not in.
+                        if d_str != today_str: 
                             absent_days += 1
-                        elif d_str == today_str:
-                             # For today, maybe don't count as absent instantly?
-                             pass
 
             work_hours = {
                 "today": round(hours_today, 1),
@@ -325,8 +332,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                 "late_days": late_days,
                 "half_days": 0, 
                 "leave_days": leaves_this_month,
-                "total_working_days": current_date_obj.day # Return total calendar days elapsed (11) as per UI expectation
-                # Or total_working_days_elapsed for strict working days
+                "total_working_days": total_working_days_elapsed
             }
             
             leave_balance = []
