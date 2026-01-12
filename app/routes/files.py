@@ -4,7 +4,7 @@ from app.helper.file_handler import file_handler as handler
 
 router = APIRouter()
 
-@router.get("/api/view/{file_id}")
+@router.get("/view/{file_id}")
 async def view_file(file_id: str):
     try:
         result = handler.get_file(file_id)
