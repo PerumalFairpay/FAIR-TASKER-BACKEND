@@ -105,6 +105,7 @@ class EmployeeBase(BaseModel):
     date_of_joining: Optional[str] = None
     confirmation_date: Optional[str] = None
     notice_period: Optional[str] = None
+    work_mode: Optional[str] = "Office"
     document_name: Optional[str] = None
 
 class EmployeeCreate(EmployeeBase):
@@ -132,6 +133,7 @@ class EmployeeUpdate(BaseModel):
     date_of_joining: Optional[str] = None
     confirmation_date: Optional[str] = None
     notice_period: Optional[str] = None
+    work_mode: Optional[str] = None
     document_name: Optional[str] = None
     document_proof: Optional[str] = None
 

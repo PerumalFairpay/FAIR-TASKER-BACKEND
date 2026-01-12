@@ -32,6 +32,8 @@ async def create_employee(
     date_of_joining: Optional[str] = Form(None),
     confirmation_date: Optional[str] = Form(None),
     notice_period: Optional[str] = Form(None),
+
+    work_mode: Optional[str] = Form("Office"),
     document_name: Optional[str] = Form(None),
     profile_picture: Optional[UploadFile] = File(None),
     document_proof: Optional[UploadFile] = File(None)
@@ -69,6 +71,8 @@ async def create_employee(
             date_of_joining=date_of_joining,
             confirmation_date=confirmation_date,
             notice_period=notice_period,
+
+            work_mode=work_mode,
             document_name=document_name
         )
 
@@ -131,6 +135,8 @@ async def update_employee(
     date_of_joining: Optional[str] = Form(None),
     confirmation_date: Optional[str] = Form(None),
     notice_period: Optional[str] = Form(None),
+
+    work_mode: Optional[str] = Form(None),
     document_name: Optional[str] = Form(None),
     profile_picture: Optional[UploadFile] = File(None),
     document_proof: Optional[UploadFile] = File(None)
@@ -167,6 +173,8 @@ async def update_employee(
             date_of_joining=date_of_joining,
             confirmation_date=confirmation_date,
             notice_period=notice_period,
+
+            work_mode=work_mode,
             document_name=document_name
         )
         
