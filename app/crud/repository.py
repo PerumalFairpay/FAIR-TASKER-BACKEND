@@ -879,11 +879,13 @@ class Repository:
         except Exception as e:
             raise e
 
-    async def get_leave_requests(self, employee_id: str = None) -> List[dict]:
+    async def get_leave_requests(self, employee_id: str = None, status: str = None) -> List[dict]:
         try:
             query = {}
             if employee_id:
                 query["employee_id"] = employee_id
+            if status and status != "All":
+                query["status"] = status
 
             requests = await self.leave_requests.find(query).to_list(length=None)
             

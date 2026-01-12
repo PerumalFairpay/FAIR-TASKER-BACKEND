@@ -51,9 +51,9 @@ async def create_leave_request(
         )
 
 @router.get("/all")
-async def get_leave_requests(employee_id: Optional[str] = None):
+async def get_leave_requests(id: Optional[str] = None, status: Optional[str] = None):
     try:
-        requests = await repo.get_leave_requests(employee_id)
+        requests = await repo.get_leave_requests(id, status)
         return JSONResponse(
             status_code=200,
             content={"message": "Leave requests fetched successfully", "success": True, "data": requests}
