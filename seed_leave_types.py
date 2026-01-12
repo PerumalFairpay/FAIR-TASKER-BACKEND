@@ -71,6 +71,14 @@ leave_types_data = [
         "status": "Active",
         "number_of_days": 0, # Usually accrued
         "monthly_allowed": 0
+    },
+    {
+        "name": "Permission",
+        "type": "Paid",
+        "code": "PER",
+        "status": "Active",
+        "number_of_days": 12,
+        "monthly_allowed": 2
     }
 ]
 
