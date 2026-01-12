@@ -6,7 +6,7 @@ from typing import List, Optional
 import os
 from app.helper.file_handler import save_upload_file
 
-from app.auth import verify_token
+from app.auth import verify_token, get_current_user
 
 router = APIRouter(prefix="/leave-requests", tags=["leave-requests"], dependencies=[Depends(verify_token)])
 
@@ -51,12 +51,45 @@ async def create_leave_request(
         )
 
 @router.get("/all")
-async def get_leave_requests(id: Optional[str] = None, status: Optional[str] = None):
+async def get_leave_requests(
+    id: Optional[str] = None, 
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
     try:
+        # Check user role
+        user_role = current_user.get("role", "").lower()
+        
+        # If user is an employee, enforce filtering by their own ID
+        if user_role == "employee":
+            emp_no_id = current_user.get("employee_id")
+            if emp_no_id:
+                # Find the employee mongo ID using the employee_no_id from user record
+                employee = await repo.employees.find_one({"employee_no_id": emp_no_id})
+                if employee:
+                    id = str(employee["_id"])
+                else:
+                    # If no employee record found, return empty
+                    return JSONResponse(
+                        status_code=200,
+                        content={"message": "Leave requests fetched successfully", "success": True, "data": []}
+                    )
+            
         requests = await repo.get_leave_requests(id, status)
+
+        response_data = {
+            "message": "Leave requests fetched successfully", 
+            "success": True, 
+            "data": requests
+        }
+
+        if user_role == "employee" and id:
+            balances = await repo.get_employee_leave_balances(id)
+            response_data["metrics"] = balances
+
         return JSONResponse(
             status_code=200,
-            content={"message": "Leave requests fetched successfully", "success": True, "data": requests}
+            content=response_data
         )
     except Exception as e:
         return JSONResponse(

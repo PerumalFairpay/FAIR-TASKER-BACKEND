@@ -879,6 +879,33 @@ class Repository:
         except Exception as e:
             raise e
 
+    async def get_employee_leave_balances(self, employee_id: str) -> List[dict]:
+        try:
+            leave_types = await self.leave_types.find({"status": "Active"}).to_list(length=None)
+            current_year = str(datetime.utcnow().year)
+            requests = await self.leave_requests.find({
+                "employee_id": employee_id,
+                "status": "Approved", 
+                "start_date": {"$regex": f"^{current_year}"}
+            }).to_list(length=None)
+            
+            balances = []
+            for lt in leave_types:
+                lt_id = str(lt["_id"])
+                used = sum([float(r.get("total_days", 0)) for r in requests if r.get("leave_type_id") == lt_id])
+                total_allowed = lt.get("number_of_days", 0)
+                balances.append({
+                    "leave_type": lt.get("name"),
+                    "code": lt.get("code"),
+                    "total_allowed": total_allowed,
+                    "used": used,
+                    "available": max(0, total_allowed - used)
+                })
+            return balances
+        except Exception as e:
+            print(f"Error calculating leave balances: {str(e)}")
+            return []
+
     async def get_leave_requests(self, employee_id: str = None, status: str = None) -> List[dict]:
         try:
             query = {}
