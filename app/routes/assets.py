@@ -5,6 +5,7 @@ from typing import List, Optional
 import os
 import shutil
 import uuid
+from app.helper.file_handler import file_handler
 
 from app.auth import verify_token
 
@@ -32,15 +33,17 @@ async def create_asset(
     images: List[UploadFile] = File(None)
 ):
     image_paths = []
+    file_type = None
     if images:
         for image in images:
             if image.filename:
-                file_extension = os.path.splitext(image.filename)[1]
-                file_name = f"{uuid.uuid4()}{file_extension}"
-                file_path = os.path.join(UPLOAD_DIR, file_name)
-                with open(file_path, "wb") as buffer:
-                    shutil.copyfileobj(image.file, buffer)
-                image_paths.append(file_path.replace("\\", "/"))
+                # Use centralized file handler
+                uploaded_file = await file_handler.upload_file(image)
+                image_paths.append(uploaded_file["url"])
+                
+                # Capture content type of the first image/file
+                if not file_type:
+                    file_type = image.content_type
 
     asset_data = AssetCreate(
         asset_name=asset_name,
@@ -57,7 +60,8 @@ async def create_asset(
         status=status,
         assigned_to=assigned_to,
         description=description,
-        images=image_paths
+        images=image_paths,
+        file_type=file_type
     )
     
     return await repository.create_asset(asset_data, image_paths)
@@ -93,15 +97,17 @@ async def update_asset(
     images: List[UploadFile] = File(None)
 ):
     image_paths = []
+    file_type = None
     if images:
         for image in images:
             if image.filename:
-                file_extension = os.path.splitext(image.filename)[1]
-                file_name = f"{uuid.uuid4()}{file_extension}"
-                file_path = os.path.join(UPLOAD_DIR, file_name)
-                with open(file_path, "wb") as buffer:
-                    shutil.copyfileobj(image.file, buffer)
-                image_paths.append(file_path.replace("\\", "/"))
+                # Use centralized file handler
+                uploaded_file = await file_handler.upload_file(image)
+                image_paths.append(uploaded_file["url"])
+                
+                # Capture content type of the first image/file
+                if not file_type:
+                    file_type = image.content_type
 
     update_data = AssetUpdate(
         asset_name=asset_name,
@@ -118,7 +124,8 @@ async def update_asset(
         status=status,
         assigned_to=assigned_to,
         description=description,
-        images=image_paths if image_paths else None
+        images=image_paths if image_paths else None,
+        file_type=file_type
     )
     
     updated_asset = await repository.update_asset(asset_id, update_data, image_paths if image_paths else [])

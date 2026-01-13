@@ -45,9 +45,11 @@ async def create_employee(
             profile_pic_path = uploaded["url"]
 
         doc_proof_path = None
+        file_type = None
         if document_proof:
             uploaded_doc = await file_handler.upload_file(document_proof)
             doc_proof_path = uploaded_doc["url"]
+            file_type = document_proof.content_type
 
         employee_data = EmployeeCreate(
             first_name=first_name,
@@ -73,7 +75,8 @@ async def create_employee(
             notice_period=notice_period,
 
             work_mode=work_mode,
-            document_name=document_name
+            document_name=document_name,
+            file_type=file_type
         )
 
         new_employee = await repo.create_employee(employee_data, profile_pic_path, doc_proof_path)
@@ -148,9 +151,11 @@ async def update_employee(
             profile_pic_path = uploaded["url"]
 
         doc_proof_path = None
+        file_type = None
         if document_proof:
             uploaded_doc = await file_handler.upload_file(document_proof)
             doc_proof_path = uploaded_doc["url"]
+            file_type = document_proof.content_type
             
         update_data = EmployeeUpdate(
             first_name=first_name,
@@ -175,7 +180,8 @@ async def update_employee(
             notice_period=notice_period,
 
             work_mode=work_mode,
-            document_name=document_name
+            document_name=document_name,
+            file_type=file_type
         )
         
         updated_employee = await repo.update_employee(employee_id, update_data, profile_pic_path, doc_proof_path)

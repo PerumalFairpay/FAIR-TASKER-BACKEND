@@ -107,6 +107,7 @@ class EmployeeBase(BaseModel):
     notice_period: Optional[str] = None
     work_mode: Optional[str] = "Office"
     document_name: Optional[str] = None
+    file_type: Optional[str] = None
 
 class EmployeeCreate(EmployeeBase):
     password: str
@@ -136,11 +137,13 @@ class EmployeeUpdate(BaseModel):
     work_mode: Optional[str] = None
     document_name: Optional[str] = None
     document_proof: Optional[str] = None
+    file_type: Optional[str] = None
 
 class EmployeeResponse(EmployeeBase):
     id: str
     profile_picture: Optional[str] = None
     document_proof: Optional[str] = None
+    file_type: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -369,6 +372,7 @@ class AssetBase(BaseModel):
     assigned_to: Optional[str] = None
     description: Optional[str] = None
     images: List[str] = []
+    file_type: Optional[str] = None
 
 class AssetCreate(AssetBase):
     pass
@@ -389,6 +393,7 @@ class AssetUpdate(BaseModel):
     assigned_to: Optional[str] = None
     description: Optional[str] = None
     images: Optional[List[str]] = None
+    file_type: Optional[str] = None
 
 class AssetResponse(AssetBase):
     id: str
