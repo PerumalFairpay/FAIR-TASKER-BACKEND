@@ -21,16 +21,19 @@ async def create_document(
 ):
     try:
         file_path = None
+        file_type = None
         if file:
             uploaded = await file_handler.upload_file(file)
             file_path = uploaded["url"]
+            file_type = file.content_type
 
         document_data = DocumentCreate(
             name=name,
             document_category_id=document_category_id,
             description=description,
             expiry_date=expiry_date,
-            status=status
+            status=status,
+            file_type=file_type
         )
 
         new_document = await repo.create_document(document_data, file_path)
@@ -89,16 +92,19 @@ async def update_document(
 ):
     try:
         file_path = None
+        file_type = None
         if file:
             uploaded = await file_handler.upload_file(file)
             file_path = uploaded["url"]
+            file_type = file.content_type
 
         document_update_data = DocumentUpdate(
             name=name,
             document_category_id=document_category_id,
             description=description,
             expiry_date=expiry_date,
-            status=status
+            status=status,
+            file_type=file_type
         )
 
         updated_document = await repo.update_document(document_id, document_update_data, file_path)

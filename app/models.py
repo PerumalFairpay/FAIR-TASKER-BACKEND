@@ -215,6 +215,7 @@ class DocumentBase(BaseModel):
     expiry_date: Optional[str] = None
     status: Optional[str] = "Active"
     file_path: Optional[str] = None
+    file_type: Optional[str] = None
 
 class DocumentCreate(DocumentBase):
     pass
@@ -226,6 +227,7 @@ class DocumentUpdate(BaseModel):
     expiry_date: Optional[str] = None
     status: Optional[str] = None
     file_path: Optional[str] = None
+    file_type: Optional[str] = None
 
 class DocumentResponse(DocumentBase):
     id: str
