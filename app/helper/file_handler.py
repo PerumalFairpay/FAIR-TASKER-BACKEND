@@ -49,11 +49,15 @@ class FileHandler:
             try:
                 file_name = f"dev-uploads/{file_name}"
                 file_bytes = await file.read()   # <-- async
+                extra_args = {"ServerSideEncryption": "AES256"}
+                if file.content_type:
+                    extra_args["ContentType"] = file.content_type
+                
                 self.s3_client.upload_fileobj(
                         io.BytesIO(file_bytes),
                         self.aws_bucket,
                         file_name,
-                        ExtraArgs={"ServerSideEncryption": "AES256"},
+                        ExtraArgs=extra_args,
                     )
                 # file_url = f"https://{self.aws_bucket}.s3.{self.aws_region}.amazonaws.com/{file_name}"
                 file_url = self.get_file_api_url(file_id)

@@ -21,16 +21,19 @@ async def create_expense(
 ):
     try:
         attachment_path = None
+        file_type = None
         if attachment:
             uploaded = await file_handler.upload_file(attachment)
             attachment_path = uploaded["url"]
+            file_type = attachment.content_type
 
         expense_data = ExpenseCreate(
             expense_category_id=expense_category_id,
             amount=amount,
             purpose=purpose,
             payment_mode=payment_mode,
-            date=date
+            date=date,
+            file_type=file_type
         )
 
         new_expense = await repo.create_expense(expense_data, attachment_path)
@@ -89,16 +92,19 @@ async def update_expense(
 ):
     try:
         attachment_path = None
+        file_type = None
         if attachment:
             uploaded = await file_handler.upload_file(attachment)
             attachment_path = uploaded["url"]
+            file_type = attachment.content_type
 
         expense_update_data = ExpenseUpdate(
             expense_category_id=expense_category_id,
             amount=amount,
             purpose=purpose,
             payment_mode=payment_mode,
-            date=date
+            date=date,
+            file_type=file_type
         )
 
         updated_expense = await repo.update_expense(expense_id, expense_update_data, attachment_path)

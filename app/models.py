@@ -171,6 +171,7 @@ class ExpenseBase(BaseModel):
     payment_mode: str
     date: str
     attachment: Optional[str] = None
+    file_type: Optional[str] = None
 
 class ExpenseCreate(ExpenseBase):
     pass
@@ -182,6 +183,7 @@ class ExpenseUpdate(BaseModel):
     payment_mode: Optional[str] = None
     date: Optional[str] = None
     attachment: Optional[str] = None
+    file_type: Optional[str] = None
 
 class ExpenseResponse(ExpenseBase):
     id: str

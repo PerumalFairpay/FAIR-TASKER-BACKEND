@@ -5,7 +5,7 @@ from app.helper.file_handler import file_handler as handler
 router = APIRouter()
 
 @router.get("/view/{file_id}")
-async def view_file(file_id: str, filename: str = None):
+async def view_file(file_id: str, filename: str = None, content_type: str = None):
     try:
         result = handler.get_file(file_id)
         if not result:
@@ -32,9 +32,12 @@ async def view_file(file_id: str, filename: str = None):
                 else:
                     final_filename = filename
 
+        # Use provided content_type or fallback to stored content type
+        final_media_type = content_type or result.get("ContentType", "application/octet-stream")
+
         return StreamingResponse(
             result.get("Body"), 
-            media_type=result.get("ContentType", "application/octet-stream"), 
+            media_type=final_media_type, 
             headers={"Content-Disposition": f'inline; filename="{final_filename}"'}
         )
     except Exception as e:
