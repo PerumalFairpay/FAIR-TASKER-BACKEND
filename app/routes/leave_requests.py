@@ -24,8 +24,10 @@ async def create_leave_request(
 ):
     try:
         attachment_path = None
+        file_type = None
         if attachment:
             attachment_path = await save_upload_file(attachment, "leave_attachments")
+            file_type = attachment.content_type
             
         leave_request = LeaveRequestCreate(
             employee_id=employee_id,
@@ -36,7 +38,9 @@ async def create_leave_request(
             total_days=total_days,
             reason=reason,
             half_day_session=half_day_session,
-            status="Pending"
+            status="Pending",
+            attachment=attachment_path,
+            file_type=file_type
         )
         
         new_request = await repo.create_leave_request(leave_request, attachment_path)
@@ -132,8 +136,10 @@ async def update_leave_request(
 ):
     try:
         attachment_path = None
+        file_type = None
         if attachment:
             attachment_path = await save_upload_file(attachment, "leave_attachments")
+            file_type = attachment.content_type
             
         update_data = LeaveRequestUpdate(
             employee_id=employee_id,
@@ -144,7 +150,9 @@ async def update_leave_request(
             total_days=total_days,
             reason=reason,
             status=status,
-            half_day_session=half_day_session
+            half_day_session=half_day_session,
+            attachment=attachment_path,
+            file_type=file_type
         )
         
         updated_request = await repo.update_leave_request(leave_request_id, update_data, attachment_path)

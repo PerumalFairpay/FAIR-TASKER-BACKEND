@@ -474,6 +474,7 @@ class LeaveRequestBase(BaseModel):
     total_days: float
     reason: str
     attachment: Optional[str] = None
+    file_type: Optional[str] = None
     status: str = "Pending"
     rejection_reason: Optional[str] = None
 
@@ -492,6 +493,7 @@ class LeaveRequestUpdate(BaseModel):
     total_days: Optional[float] = None
     reason: Optional[str] = None
     attachment: Optional[str] = None
+    file_type: Optional[str] = None
     status: Optional[str] = None
     rejection_reason: Optional[str] = None
 
@@ -505,6 +507,7 @@ class LeaveRequestResponse(LeaveRequestBase):
     id: str
     employee_details: Optional[dict] = None
     leave_type_details: Optional[dict] = None
+    file_type: Optional[str] = None
 
     class Config:
         from_attributes = True
