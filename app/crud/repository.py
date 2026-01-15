@@ -47,7 +47,7 @@ class Repository:
         self.attendance = self.db["attendance"]
 
 
-    async def create_employee(self, employee: EmployeeCreate, profile_picture_path: str = None, document_proof_path: str = None) -> dict:
+    async def create_employee(self, employee: EmployeeCreate, profile_picture_path: str = None) -> dict:
         try:
             # Check if user already exists
             existing_user = await self.users.find_one({
@@ -67,8 +67,9 @@ class Repository:
             
             if profile_picture_path:
                 employee_data["profile_picture"] = profile_picture_path
-            if document_proof_path:
-                employee_data["document_proof"] = document_proof_path
+
+            if "documents" in employee_data and employee_data["documents"]:
+                 employee_data["documents"] = [doc if isinstance(doc, dict) else doc.dict() for doc in employee_data["documents"]]
             
             employee_data["created_at"] = datetime.utcnow()
             
@@ -123,13 +124,14 @@ class Repository:
         except Exception as e:
             raise e
 
-    async def update_employee(self, employee_id: str, employee: EmployeeUpdate, profile_picture_path: str = None, document_proof_path: str = None) -> dict:
+    async def update_employee(self, employee_id: str, employee: EmployeeUpdate, profile_picture_path: str = None) -> dict:
         try:
             update_data = {k: v for k, v in employee.dict().items() if v is not None}
             if profile_picture_path:
                 update_data["profile_picture"] = profile_picture_path
-            if document_proof_path:
-                update_data["document_proof"] = document_proof_path
+
+            if "documents" in update_data and update_data["documents"]:
+                 update_data["documents"] = [doc if isinstance(doc, dict) else doc.dict() for doc in update_data["documents"]]
                 
             if update_data:
                 update_data["updated_at"] = datetime.utcnow()

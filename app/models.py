@@ -84,6 +84,11 @@ class DepartmentResponse(DepartmentBase):
     class Config:
         from_attributes = True
 
+class EmployeeDocument(BaseModel):
+    document_name: str
+    document_proof: str
+    file_type: Optional[str] = None
+
 class EmployeeBase(BaseModel):
     first_name: str
     last_name: str
@@ -106,8 +111,7 @@ class EmployeeBase(BaseModel):
     confirmation_date: Optional[str] = None
     notice_period: Optional[str] = None
     work_mode: Optional[str] = "Office"
-    document_name: Optional[str] = None
-    file_type: Optional[str] = None
+    documents: List[EmployeeDocument] = []
 
 class EmployeeCreate(EmployeeBase):
     password: str
@@ -135,15 +139,11 @@ class EmployeeUpdate(BaseModel):
     confirmation_date: Optional[str] = None
     notice_period: Optional[str] = None
     work_mode: Optional[str] = None
-    document_name: Optional[str] = None
-    document_proof: Optional[str] = None
-    file_type: Optional[str] = None
+    documents: Optional[List[EmployeeDocument]] = None
 
 class EmployeeResponse(EmployeeBase):
     id: str
     profile_picture: Optional[str] = None
-    document_proof: Optional[str] = None
-    file_type: Optional[str] = None
 
     class Config:
         from_attributes = True

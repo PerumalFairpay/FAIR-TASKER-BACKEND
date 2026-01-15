@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from app.helper.response_helper import success_response, error_response
 from app.crud.repository import repository as repo
-from app.models import EmployeeCreate, EmployeeUpdate
+from app.models import EmployeeCreate, EmployeeUpdate, EmployeeDocument
 from app.helper.file_handler import file_handler
-from typing import Optional
+from typing import Optional, List
 import json
 from app.auth import verify_token, require_permission
 
@@ -34,9 +34,9 @@ async def create_employee(
     notice_period: Optional[str] = Form(None),
 
     work_mode: Optional[str] = Form("Office"),
-    document_name: Optional[str] = Form(None),
+    document_names: List[str] = Form([]),
     profile_picture: Optional[UploadFile] = File(None),
-    document_proof: Optional[UploadFile] = File(None)
+    document_proofs: List[UploadFile] = File([]) 
 ):
     try:
         profile_pic_path = None
@@ -44,12 +44,19 @@ async def create_employee(
             uploaded = await file_handler.upload_file(profile_picture)
             profile_pic_path = uploaded["url"]
 
-        doc_proof_path = None
-        file_type = None
-        if document_proof:
-            uploaded_doc = await file_handler.upload_file(document_proof)
-            doc_proof_path = uploaded_doc["url"]
-            file_type = document_proof.content_type
+        documents_list = []
+        if document_proofs:
+            for i, doc_file in enumerate(document_proofs):
+                uploaded_doc = await file_handler.upload_file(doc_file)
+                doc_path = uploaded_doc["url"]
+                # Use provided name or filename fallback
+                doc_name = document_names[i] if i < len(document_names) else doc_file.filename
+                
+                documents_list.append(EmployeeDocument(
+                    document_name=doc_name,
+                    document_proof=doc_path,
+                    file_type=doc_file.content_type
+                ))
 
         employee_data = EmployeeCreate(
             first_name=first_name,
@@ -75,11 +82,14 @@ async def create_employee(
             notice_period=notice_period,
 
             work_mode=work_mode,
-            document_name=document_name,
-            file_type=file_type
+            documents=documents_list
         )
 
-        new_employee = await repo.create_employee(employee_data, profile_pic_path, doc_proof_path)
+        # Call repository. Note: repo signature change pending. passing profile_pic_path.
+        # If repo not updated yet, I might need to pass `document_proof_path=None` if strictly required as separate arg.
+        # But python allows kwargs or defaults. The old signature had default None. 
+        # So invoking with 2 args works if I removed the 3rd or if 3rd has default.
+        new_employee = await repo.create_employee(employee_data, profile_picture_path=profile_pic_path)
         
         return success_response(
             message="Employee created successfully",
@@ -140,9 +150,9 @@ async def update_employee(
     notice_period: Optional[str] = Form(None),
 
     work_mode: Optional[str] = Form(None),
-    document_name: Optional[str] = Form(None),
+    document_names: List[str] = Form([]),
     profile_picture: Optional[UploadFile] = File(None),
-    document_proof: Optional[UploadFile] = File(None)
+    document_proofs: List[UploadFile] = File([]) 
 ):
     try:
         profile_pic_path = None
@@ -150,12 +160,18 @@ async def update_employee(
             uploaded = await file_handler.upload_file(profile_picture)
             profile_pic_path = uploaded["url"]
 
-        doc_proof_path = None
-        file_type = None
-        if document_proof:
-            uploaded_doc = await file_handler.upload_file(document_proof)
-            doc_proof_path = uploaded_doc["url"]
-            file_type = document_proof.content_type
+        documents_list = []
+        if document_proofs:
+            for i, doc_file in enumerate(document_proofs):
+                uploaded_doc = await file_handler.upload_file(doc_file)
+                doc_path = uploaded_doc["url"]
+                doc_name = document_names[i] if i < len(document_names) else doc_file.filename
+                
+                documents_list.append(EmployeeDocument(
+                    document_name=doc_name,
+                    document_proof=doc_path,
+                    file_type=doc_file.content_type
+                ))
             
         update_data = EmployeeUpdate(
             first_name=first_name,
@@ -180,11 +196,10 @@ async def update_employee(
             notice_period=notice_period,
 
             work_mode=work_mode,
-            document_name=document_name,
-            file_type=file_type
+            documents=documents_list if documents_list else None
         )
         
-        updated_employee = await repo.update_employee(employee_id, update_data, profile_pic_path, doc_proof_path)
+        updated_employee = await repo.update_employee(employee_id, update_data, profile_pic_path)
         
         if not updated_employee:
             return error_response(message="Employee not found", status_code=404)

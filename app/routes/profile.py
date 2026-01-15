@@ -78,10 +78,16 @@ async def update_profile(
             uploaded = await file_handler.upload_file(profile_picture)
             profile_pic_path = uploaded["url"]
 
-        doc_proof_path = None
+        documents_list = []
         if document_proof:
             uploaded_doc = await file_handler.upload_file(document_proof)
-            doc_proof_path = uploaded_doc["url"]
+            doc_path = uploaded_doc["url"]
+            # For profile update, simple backward compatibility: add as a document
+            documents_list.append({
+                "document_name": document_proof.filename,
+                "document_proof": doc_path,
+                "file_type": document_proof.content_type
+            })
             
         update_data = EmployeeUpdate(
             first_name=first_name,
@@ -94,10 +100,11 @@ async def update_profile(
             emergency_contact_name=emergency_contact_name,
             emergency_contact_number=emergency_contact_number,
             parent_name=parent_name,
-            marital_status=marital_status
+            marital_status=marital_status,
+            documents=documents_list if documents_list else None
         )
         
-        updated_employee = await repo.update_employee(db_id, update_data, profile_pic_path, doc_proof_path)
+        updated_employee = await repo.update_employee(db_id, update_data, profile_pic_path)
         
         return success_response(message="Profile updated successfully", data=updated_employee)
     except Exception as e:
