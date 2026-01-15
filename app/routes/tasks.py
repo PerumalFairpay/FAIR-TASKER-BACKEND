@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Body
+from fastapi import APIRouter, HTTPException, Depends, Body, Form, File, UploadFile
 from fastapi.responses import JSONResponse
 from app.crud.repository import repository as repo
 from app.models import TaskCreate, TaskUpdate, EODReportRequest, TaskResponse
@@ -8,8 +8,35 @@ from app.auth import verify_token
 router = APIRouter(prefix="/tasks", tags=["tasks"], dependencies=[Depends(verify_token)])
 
 @router.post("/")
-async def create_task(task: TaskCreate):
+async def create_task(
+    project_id: str = Form(...),
+    task_name: str = Form(...),
+    start_date: str = Form(...),
+    end_date: str = Form(...),
+    description: Optional[str] = Form(None),
+    start_time: Optional[str] = Form(None),
+    end_time: Optional[str] = Form(None),
+    priority: str = Form("Medium"),
+    assigned_to: List[str] = Form([], alias="assigned_to[]"),
+    tags: List[str] = Form([], alias="tags[]"),
+    status: str = Form("Todo"),
+    progress: float = Form(0.0)
+):
     try:
+        task = TaskCreate(
+            project_id=project_id,
+            task_name=task_name,
+            description=description,
+            start_date=start_date,
+            end_date=end_date,
+            start_time=start_time,
+            end_time=end_time,
+            priority=priority,
+            assigned_to=assigned_to,
+            tags=tags,
+            status=status,
+            progress=progress
+        )
         new_task = await repo.create_task(task)
         return JSONResponse(
             status_code=201,
@@ -93,8 +120,36 @@ async def get_task(task_id: str):
         )
 
 @router.put("/{task_id}")
-async def update_task(task_id: str, task: TaskUpdate):
+async def update_task(
+    task_id: str,
+    project_id: Optional[str] = Form(None),
+    task_name: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    start_date: Optional[str] = Form(None),
+    end_date: Optional[str] = Form(None),
+    start_time: Optional[str] = Form(None),
+    end_time: Optional[str] = Form(None),
+    priority: Optional[str] = Form(None),
+    assigned_to: Optional[List[str]] = Form(None, alias="assigned_to[]"),
+    tags: Optional[List[str]] = Form(None, alias="tags[]"),
+    status: Optional[str] = Form(None),
+    progress: Optional[float] = Form(None)
+):
     try:
+        task = TaskUpdate(
+            project_id=project_id,
+            task_name=task_name,
+            description=description,
+            start_date=start_date,
+            end_date=end_date,
+            start_time=start_time,
+            end_time=end_time,
+            priority=priority,
+            assigned_to=assigned_to,
+            tags=tags,
+            status=status,
+            progress=progress
+        )
         updated_task = await repo.update_task(task_id, task)
         if not updated_task:
             return JSONResponse(
