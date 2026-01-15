@@ -78,11 +78,12 @@ async def update_profile(
             uploaded = await file_handler.upload_file(profile_picture)
             profile_pic_path = uploaded["url"]
 
-        documents_list = []
+        documents_list = None
         if document_proof:
+            documents_list = employee.get("documents", []) or []
             uploaded_doc = await file_handler.upload_file(document_proof)
             doc_path = uploaded_doc["url"]
-            # For profile update, simple backward compatibility: add as a document
+            # Append new document to existing list
             documents_list.append({
                 "document_name": document_proof.filename,
                 "document_proof": doc_path,
@@ -101,7 +102,7 @@ async def update_profile(
             emergency_contact_number=emergency_contact_number,
             parent_name=parent_name,
             marital_status=marital_status,
-            documents=documents_list if documents_list else None
+            documents=documents_list
         )
         
         updated_employee = await repo.update_employee(db_id, update_data, profile_pic_path)

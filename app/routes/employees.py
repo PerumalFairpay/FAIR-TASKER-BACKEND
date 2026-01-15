@@ -162,6 +162,11 @@ async def update_employee(
 
         documents_list = []
         if document_proofs:
+            # Fetch existing employee to get current documents
+            current_emp = await repo.get_employee(employee_id)
+            if current_emp and "documents" in current_emp:
+                 documents_list = current_emp["documents"]
+            
             for i, doc_file in enumerate(document_proofs):
                 uploaded_doc = await file_handler.upload_file(doc_file)
                 doc_path = uploaded_doc["url"]
