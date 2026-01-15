@@ -1,12 +1,11 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-import os
-from dotenv import load_dotenv
+from app.core.config import DATABASE_URL, DATABASE_NAME
 
-load_dotenv()
-
-MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
-DB_NAME = os.getenv("DB_NAME", "fair_tasker_db")
-
-client = AsyncIOMotorClient(MONGO_URL)
-db = client[DB_NAME]
+client = AsyncIOMotorClient(DATABASE_URL)
+db = client[DATABASE_NAME]
 users_collection = db["users"]
+roles_collection = db["roles"]
+permissions_collection = db["permissions"]
+tasks_collection = db["tasks"]
+attendance_collection = db["attendance"]
+

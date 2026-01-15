@@ -7,3 +7,6 @@ bcrypt==3.2.0
 python-dotenv
 python-multipart
 python-jose[cryptography]
+boto3
+pandas
+openpyxl
