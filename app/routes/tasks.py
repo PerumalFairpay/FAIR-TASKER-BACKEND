@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException, Depends, Body, Form, File, UploadFile
 from fastapi.responses import JSONResponse
 from app.crud.repository import repository as repo
-from app.models import TaskCreate, TaskUpdate, EODReportRequest, TaskResponse
+from app.models import TaskCreate, TaskUpdate, EODReportRequest, TaskResponse, TaskAttachment
 from typing import List, Optional
 from app.auth import verify_token
+from app.helper.file_handler import file_handler
 
 router = APIRouter(prefix="/tasks", tags=["tasks"], dependencies=[Depends(verify_token)])
 
@@ -20,9 +21,20 @@ async def create_task(
     assigned_to: List[str] = Form([], alias="assigned_to[]"),
     tags: List[str] = Form([], alias="tags[]"),
     status: str = Form("Todo"),
-    progress: float = Form(0.0)
+    progress: float = Form(0.0),
+    attachments: List[UploadFile] = File([])
 ):
     try:
+        task_attachments = []
+        if attachments:
+            for file in attachments:
+                uploaded = await file_handler.upload_file(file)
+                task_attachments.append(TaskAttachment(
+                    file_name=file.filename,
+                    file_url=uploaded["url"],
+                    file_type=file.content_type
+                ))
+
         task = TaskCreate(
             project_id=project_id,
             task_name=task_name,
@@ -35,7 +47,8 @@ async def create_task(
             assigned_to=assigned_to,
             tags=tags,
             status=status,
-            progress=progress
+            progress=progress,
+            attachments=task_attachments
         )
         new_task = await repo.create_task(task)
         return JSONResponse(
@@ -133,9 +146,29 @@ async def update_task(
     assigned_to: Optional[List[str]] = Form(None, alias="assigned_to[]"),
     tags: Optional[List[str]] = Form(None, alias="tags[]"),
     status: Optional[str] = Form(None),
-    progress: Optional[float] = Form(None)
+    progress: Optional[float] = Form(None),
+    attachments: List[UploadFile] = File(None)
 ):
     try:
+        task_attachments = []
+        if attachments:
+            for file in attachments:
+                uploaded = await file_handler.upload_file(file)
+                task_attachments.append(TaskAttachment(
+                    file_name=file.filename,
+                    file_url=uploaded["url"],
+                    file_type=file.content_type
+                ))
+
+        final_attachments = []
+        
+        # Fetch existing task to get current attachments if new ones are added
+        if task_attachments:
+            current_task = await repo.get_task(task_id)
+            if current_task and "attachments" in current_task:
+                 final_attachments.extend(current_task["attachments"])
+            final_attachments.extend(task_attachments)
+
         task = TaskUpdate(
             project_id=project_id,
             task_name=task_name,
@@ -148,7 +181,8 @@ async def update_task(
             assigned_to=assigned_to,
             tags=tags,
             status=status,
-            progress=progress
+            progress=progress,
+            attachments=final_attachments if final_attachments else None
         )
         updated_task = await repo.update_task(task_id, task)
         if not updated_task:
