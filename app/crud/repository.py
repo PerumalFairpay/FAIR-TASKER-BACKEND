@@ -1141,8 +1141,7 @@ class Repository:
                 {"_id": ObjectId(task_id)},
                 {
                     "$set": update_fields,
-                    "$push": {"eod_history": eod_entry},
-                    "$addToSet": {"attachments": {"$each": [a.dict() for a in item.new_attachments]}}
+                    "$push": {"eod_history": eod_entry}
                 }
             )
 
