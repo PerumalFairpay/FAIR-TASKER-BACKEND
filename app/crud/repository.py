@@ -1105,6 +1105,7 @@ class Repository:
                 "status": "Moved" if item.move_to_tomorrow else item.status,
                 "progress": item.progress,
                 "summary": item.eod_summary,
+                "attachments": [a.dict() for a in item.new_attachments],
                 "timestamp": datetime.utcnow()
             }
             
