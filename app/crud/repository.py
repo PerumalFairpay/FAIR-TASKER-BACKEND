@@ -212,22 +212,18 @@ class Repository:
             # 3. Get Direct Permissions (already slugs)
             direct_permissions = user.get("permissions", [])
 
-            # 4. Get Role Permissions (IDs -> Slugs)
+            # 4. Get Role Permissions (IDs)
             role_permissions = []
             role_name = user.get("role")
             if role_name:
                 role = await self.db["roles"].find_one({"name": role_name})
                 if role and "permissions" in role:
-                     perm_ids = role["permissions"]
-                     # Find all permissions where _id is in perm_ids
-                     perm_objs = await self.db["permissions"].find(
-                         {"_id": {"$in": [ObjectId(pid) for pid in perm_ids]}}
-                     ).to_list(length=None)
-                     role_permissions = [p["slug"] for p in perm_objs]
+                    # Role permissions are stored as list of IDs (strings or objects)
+                    role_permissions = [str(pid) for pid in role["permissions"]]
 
             return {
                 "role_permissions": role_permissions,
-                "direct_permissions": direct_permissions
+                "direct_permissions": direct_permissions # Already IDs
             }
         except Exception as e:
             raise e
