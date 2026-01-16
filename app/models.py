@@ -570,7 +570,7 @@ class EODReportItem(BaseModel):
     progress: float
     eod_summary: Optional[str] = None
     move_to_tomorrow: bool = False
-    new_attachments: List[str] = []
+    new_attachments: List[TaskAttachment] = []
 
 
 class EODReportRequest(BaseModel):

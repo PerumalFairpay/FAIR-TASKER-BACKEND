@@ -1141,7 +1141,7 @@ class Repository:
                 {
                     "$set": update_fields,
                     "$push": {"eod_history": eod_entry},
-                    "$addToSet": {"attachments": {"$each": item.new_attachments}}
+                    "$addToSet": {"attachments": {"$each": [a.dict() for a in item.new_attachments]}}
                 }
             )
 

@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, Depends, Body, Form, File, UploadFile
+from fastapi import APIRouter, HTTPException, Depends, Body, Form, File, UploadFile, Request
+import json
 from fastapi.responses import JSONResponse
 from app.crud.repository import repository as repo
 from app.models import TaskCreate, TaskUpdate, EODReportRequest, TaskResponse, TaskAttachment
@@ -81,14 +82,50 @@ async def get_tasks(
         )
 
 @router.post("/eod-report")
-async def process_eod_report(payload: EODReportRequest):
+async def process_eod_report(request: Request):
     try:
-        results = await repo.process_eod_report(payload.reports)
+        form = await request.form()
+        reports_json = form.get("reports")
+        if not reports_json:
+             return JSONResponse(status_code=400, content={"message": "Reports data is missing", "success": False})
+             
+        reports_data = json.loads(reports_json)
+        
+        final_reports = []
+        for report in reports_data:
+            task_id = report.get("task_id")
+            
+            # Check for attachments_{task_id} in form
+            files = form.getlist(f"attachments_{task_id}")
+            
+            new_attachments = []
+            for file in files:
+                if file.filename: # check if file object is valid/has name
+                    uploaded = await file_handler.upload_file(file)
+                    new_attachments.append(TaskAttachment(
+                        file_name=file.filename,
+                        file_url=uploaded["url"],
+                        file_type=file.content_type
+                    ))
+            
+            report_item = EODReportItem(
+                task_id=task_id,
+                status=report.get("status"),
+                progress=float(report.get("progress", 0)),
+                eod_summary=report.get("eod_summary"),
+                move_to_tomorrow=report.get("move_to_tomorrow"),
+                new_attachments=new_attachments
+            )
+            final_reports.append(report_item)
+            
+        results = await repo.process_eod_report(final_reports)
         return JSONResponse(
             status_code=200,
             content={"message": "EOD report processed successfully", "success": True, "data": results}
         )
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JSONResponse(
             status_code=500,
             content={"message": f"Failed to process EOD report: {str(e)}", "success": False}
