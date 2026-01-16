@@ -195,20 +195,40 @@ class Repository:
         except Exception as e:
             raise e
 
-    async def get_user_permissions(self, employee_id: str) -> List[str]:
+    async def get_user_permissions(self, employee_id: str) -> dict:
         try:
             # 1. Find Employee by _id (Primary ID)
             employee = await self.employees.find_one({"_id": ObjectId(employee_id)})
             if not employee:
-                return []
+                return {"role_permissions": [], "direct_permissions": []}
                 
             # 2. Get the business key
             emp_no_id = employee.get("employee_no_id")
             
             user = await self.users.find_one({"employee_id": emp_no_id})
-            if user:
-                return user.get("permissions", [])
-            return []
+            if not user:
+                 return {"role_permissions": [], "direct_permissions": []}
+
+            # 3. Get Direct Permissions (already slugs)
+            direct_permissions = user.get("permissions", [])
+
+            # 4. Get Role Permissions (IDs -> Slugs)
+            role_permissions = []
+            role_name = user.get("role")
+            if role_name:
+                role = await self.db["roles"].find_one({"name": role_name})
+                if role and "permissions" in role:
+                     perm_ids = role["permissions"]
+                     # Find all permissions where _id is in perm_ids
+                     perm_objs = await self.db["permissions"].find(
+                         {"_id": {"$in": [ObjectId(pid) for pid in perm_ids]}}
+                     ).to_list(length=None)
+                     role_permissions = [p["slug"] for p in perm_objs]
+
+            return {
+                "role_permissions": role_permissions,
+                "direct_permissions": direct_permissions
+            }
         except Exception as e:
             raise e
 

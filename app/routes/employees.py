@@ -248,10 +248,14 @@ async def update_permissions(employee_id: str, permissions_data: UserPermissions
 @router.get("/{employee_id}/permissions", dependencies=[Depends(require_permission("permission:manage"))])
 async def get_permissions(employee_id: str):
     try:
-        permissions = await repo.get_user_permissions(employee_id)
+        data = await repo.get_user_permissions(employee_id)
         return success_response(
             message="User permissions fetched successfully",
-            data={"id": employee_id, "permissions": permissions}
+            data={
+                "id": employee_id, 
+                "role_permissions": data["role_permissions"],
+                "direct_permissions": data["direct_permissions"]
+            }
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
