@@ -178,8 +178,17 @@ class Repository:
 
     async def update_user_permissions(self, employee_id: str, permissions: List[str]) -> bool:
         try:
+            # 1. Find Employee by _id (Primary ID)
+            employee = await self.employees.find_one({"_id": ObjectId(employee_id)})
+            if not employee:
+                return False
+                
+            # 2. Get the business key (employee_no_id) used in User table
+            emp_no_id = employee.get("employee_no_id")
+            
+            # 3. Update User
             result = await self.users.update_one(
-                {"employee_id": employee_id},
+                {"employee_id": emp_no_id},
                 {"$set": {"permissions": permissions, "updated_at": datetime.utcnow()}}
             )
             return result.matched_count > 0
@@ -188,7 +197,15 @@ class Repository:
 
     async def get_user_permissions(self, employee_id: str) -> List[str]:
         try:
-            user = await self.users.find_one({"employee_id": employee_id})
+            # 1. Find Employee by _id (Primary ID)
+            employee = await self.employees.find_one({"_id": ObjectId(employee_id)})
+            if not employee:
+                return []
+                
+            # 2. Get the business key
+            emp_no_id = employee.get("employee_no_id")
+            
+            user = await self.users.find_one({"employee_id": emp_no_id})
             if user:
                 return user.get("permissions", [])
             return []

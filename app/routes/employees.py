@@ -240,7 +240,7 @@ async def update_permissions(employee_id: str, permissions_data: UserPermissions
         
         return success_response(
             message="User permissions updated successfully",
-            data={"employee_id": employee_id, "permissions": permissions_data.permissions}
+            data={"id": employee_id, "permissions": permissions_data.permissions}
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
@@ -251,7 +251,7 @@ async def get_permissions(employee_id: str):
         permissions = await repo.get_user_permissions(employee_id)
         return success_response(
             message="User permissions fetched successfully",
-            data={"employee_id": employee_id, "permissions": permissions}
+            data={"id": employee_id, "permissions": permissions}
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
