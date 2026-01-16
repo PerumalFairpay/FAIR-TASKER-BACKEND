@@ -1,6 +1,6 @@
-# Fair Tasker Backend
+# FAIRPAY HRM Backend
 
-This is the backend for the Fair Tasker project, built with FastAPI and MongoDB.
+This is the backend for the FAIRPAY HRM project, built with FastAPI and MongoDB.
 
 ## Features
 
@@ -21,7 +21,7 @@ This is the backend for the Fair Tasker project, built with FastAPI and MongoDB.
 2. (Optional) Create a `.env` file in the root directory to configure the database:
    ```env
    MONGO_URL=mongodb://localhost:27017
-   DB_NAME=fair_tasker_db
+   DB_NAME=fairpay_hrm_db
    ```
 
 ## Running with Docker (Recommended)
