@@ -10,6 +10,7 @@ class UserBase(BaseModel):
     email: EmailStr
     mobile: str
     role: Optional[str] = "employee"
+    permissions: List[str] = []
 
 class UserCreate(UserBase):
     password: str
@@ -26,6 +27,9 @@ class UserResponse(UserBase):
 
     class Config:
         from_attributes = True
+
+class UserPermissionsUpdate(BaseModel):
+    permissions: List[str]
 
 class RoleBase(BaseModel):
     name: str

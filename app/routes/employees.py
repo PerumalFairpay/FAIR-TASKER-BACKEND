@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from app.helper.response_helper import success_response, error_response
 from app.crud.repository import repository as repo
-from app.models import EmployeeCreate, EmployeeUpdate, EmployeeDocument
+from app.models import EmployeeCreate, EmployeeUpdate, EmployeeDocument, UserPermissionsUpdate
 from app.helper.file_handler import file_handler
 from typing import Optional, List
 import json
@@ -224,6 +224,34 @@ async def delete_employee(employee_id: str):
             return error_response(message="Employee not found", status_code=404)
         return success_response(
             message="Employee deleted successfully"
+        )
+    except Exception as e:
+        return error_response(message=str(e), status_code=500)
+
+@router.put("/{employee_id}/permissions", dependencies=[Depends(require_permission("permission:manage"))])
+async def update_permissions(employee_id: str, permissions_data: UserPermissionsUpdate):
+    try:
+        success = await repo.update_user_permissions(employee_id, permissions_data.permissions)
+        # We can't easily distinguish between "User not found" and "Permissions unchanged" with simple boolean if user exists but nothing changed.
+        # But provided implementation returns matched_count > 0, so if user exists it returns true.
+        
+        if not success:
+             return error_response(message="User not found for this employee ID", status_code=404)
+        
+        return success_response(
+            message="User permissions updated successfully",
+            data={"employee_id": employee_id, "permissions": permissions_data.permissions}
+        )
+    except Exception as e:
+        return error_response(message=str(e), status_code=500)
+
+@router.get("/{employee_id}/permissions", dependencies=[Depends(require_permission("permission:manage"))])
+async def get_permissions(employee_id: str):
+    try:
+        permissions = await repo.get_user_permissions(employee_id)
+        return success_response(
+            message="User permissions fetched successfully",
+            data={"employee_id": employee_id, "permissions": permissions}
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)

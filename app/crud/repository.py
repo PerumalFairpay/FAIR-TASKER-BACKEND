@@ -176,6 +176,25 @@ class Repository:
         except Exception as e:
             raise e
 
+    async def update_user_permissions(self, employee_id: str, permissions: List[str]) -> bool:
+        try:
+            result = await self.users.update_one(
+                {"employee_id": employee_id},
+                {"$set": {"permissions": permissions, "updated_at": datetime.utcnow()}}
+            )
+            return result.matched_count > 0
+        except Exception as e:
+            raise e
+
+    async def get_user_permissions(self, employee_id: str) -> List[str]:
+        try:
+            user = await self.users.find_one({"employee_id": employee_id})
+            if user:
+                return user.get("permissions", [])
+            return []
+        except Exception as e:
+            raise e
+
     async def create_department(self, department: DepartmentCreate) -> dict:
         try:
             department_data = department.dict()

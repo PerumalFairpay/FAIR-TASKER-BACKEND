@@ -79,7 +79,11 @@ async def get_current_user(token: dict = Depends(verify_token)):
             async for p in permissions_collection.find({"_id": {"$in": valid_ids}}):
                 permissions.append(p.get("slug"))
     
-    user["permissions"] = permissions
+    # Add user-specific permissions
+    if "permissions" in user and isinstance(user["permissions"], list):
+        permissions.extend(user["permissions"])
+        
+    user["permissions"] = list(set(permissions))
     
     user["id"] = str(user.pop("_id"))
     return user
