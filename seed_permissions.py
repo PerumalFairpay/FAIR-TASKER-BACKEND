@@ -142,7 +142,7 @@ async def seed_permissions():
                 perm_map.get("nav:leave"),
                 perm_map.get("nav:task"),
                 perm_map.get("nav:feeds"),
-                perm_map.get("nav:milestone"),
+                # perm_map.get("nav:milestone"),
             ]
         }
     ]
