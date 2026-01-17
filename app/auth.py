@@ -64,22 +64,32 @@ async def get_current_user(token: dict = Depends(verify_token)):
     user["role"] = role_name
     role_data = await roles_collection.find_one({"name": {"$regex": f"^{role_name}$", "$options": "i"}})
     
-    permissions = []
-    if role_data and "permissions" in role_data:
-        perm_ids = role_data["permissions"]
-        # Convert string IDs to ObjectIds if they are valid
-        valid_ids = []
-        for pid in perm_ids:
-            if isinstance(pid, ObjectId):
-                valid_ids.append(pid)
-            elif ObjectId.is_valid(str(pid)):
-                valid_ids.append(ObjectId(str(pid)))
-                
-        if valid_ids:
-            async for p in permissions_collection.find({"_id": {"$in": valid_ids}}):
-                permissions.append(p.get("slug"))
+    # Merge Role IDs and User IDs
+    all_perm_ids = set()
     
-    user["permissions"] = permissions
+    # 1. Add Role IDs
+    if role_data and "permissions" in role_data:
+        all_perm_ids.update(role_data["permissions"])
+        
+    # 2. Add User Direct IDs
+    if "permissions" in user and isinstance(user["permissions"], list):
+        all_perm_ids.update(user["permissions"])
+        
+    # Convert all valid ObjectIds
+    valid_ids = []
+    for pid in all_perm_ids:
+        if isinstance(pid, ObjectId):
+            valid_ids.append(pid)
+        elif ObjectId.is_valid(str(pid)):
+            valid_ids.append(ObjectId(str(pid)))
+            
+    # Resolve to Slugs
+    permissions = []
+    if valid_ids:
+        async for p in permissions_collection.find({"_id": {"$in": valid_ids}}):
+            permissions.append(p.get("slug"))
+            
+    user["permissions"] = list(set(permissions))
     
     user["id"] = str(user.pop("_id"))
     return user

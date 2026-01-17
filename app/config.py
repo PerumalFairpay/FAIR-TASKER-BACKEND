@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
-DB_NAME = os.getenv("DB_NAME", "fair_tasker_db")
+DB_NAME = os.getenv("DB_NAME", "fairpay_hrm_db")
 
 SECRET_KEY = os.getenv("SECRET_KEY", "7b9d8c4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2") # Default secret for development
 ALGORITHM = os.getenv("ALGORITHM", "HS256")

@@ -176,6 +176,58 @@ class Repository:
         except Exception as e:
             raise e
 
+    async def update_user_permissions(self, employee_id: str, permissions: List[str]) -> bool:
+        try:
+            # 1. Find Employee by _id (Primary ID)
+            employee = await self.employees.find_one({"_id": ObjectId(employee_id)})
+            if not employee:
+                return False
+                
+            # 2. Get the business key (employee_no_id) used in User table
+            emp_no_id = employee.get("employee_no_id")
+            
+            # 3. Update User
+            result = await self.users.update_one(
+                {"employee_id": emp_no_id},
+                {"$set": {"permissions": permissions, "updated_at": datetime.utcnow()}}
+            )
+            return result.matched_count > 0
+        except Exception as e:
+            raise e
+
+    async def get_user_permissions(self, employee_id: str) -> dict:
+        try:
+            # 1. Find Employee by _id (Primary ID)
+            employee = await self.employees.find_one({"_id": ObjectId(employee_id)})
+            if not employee:
+                return {"role_permissions": [], "direct_permissions": []}
+                
+            # 2. Get the business key
+            emp_no_id = employee.get("employee_no_id")
+            
+            user = await self.users.find_one({"employee_id": emp_no_id})
+            if not user:
+                 return {"role_permissions": [], "direct_permissions": []}
+
+            # 3. Get Direct Permissions (already slugs)
+            direct_permissions = user.get("permissions", [])
+
+            # 4. Get Role Permissions (IDs)
+            role_permissions = []
+            role_name = user.get("role")
+            if role_name:
+                role = await self.db["roles"].find_one({"name": role_name})
+                if role and "permissions" in role:
+                    # Role permissions are stored as list of IDs (strings or objects)
+                    role_permissions = [str(pid) for pid in role["permissions"]]
+
+            return {
+                "role_permissions": role_permissions,
+                "direct_permissions": direct_permissions # Already IDs
+            }
+        except Exception as e:
+            raise e
+
     async def create_department(self, department: DepartmentCreate) -> dict:
         try:
             department_data = department.dict()
@@ -1053,6 +1105,7 @@ class Repository:
                 "status": "Moved" if item.move_to_tomorrow else item.status,
                 "progress": item.progress,
                 "summary": item.eod_summary,
+                "attachments": [a.dict() for a in item.new_attachments],
                 "timestamp": datetime.utcnow()
             }
             
@@ -1088,8 +1141,7 @@ class Repository:
                 {"_id": ObjectId(task_id)},
                 {
                     "$set": update_fields,
-                    "$push": {"eod_history": eod_entry},
-                    "$addToSet": {"attachments": {"$each": item.new_attachments}}
+                    "$push": {"eod_history": eod_entry}
                 }
             )
 

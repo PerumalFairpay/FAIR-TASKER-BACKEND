@@ -3,12 +3,12 @@ version: "3.8"
 services:
   backend:
     build: .
-    container_name: fair_tasker_backend
+    container_name: fairpay_hrm_backend
     ports:
       - "8000:8000"
     environment:
       - DATABASE_URL=mongodb://db:27017
-      - DATABASE_NAME=fair_tasker_db
+      - DATABASE_NAME=fairpay_hrm_db
     depends_on:
       - db
     volumes:
@@ -16,7 +16,7 @@ services:
 
   db:
     image: mongo:latest
-    container_name: fair_tasker_db
+    container_name: fairpay_hrm_db
     ports:
       - "27017:27017" # Exposed to localhost for tools like Compass
     volumes:

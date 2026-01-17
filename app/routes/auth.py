@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, Response, Depends, Cookie
 from fastapi.responses import JSONResponse
-from app.database import users_collection
+from app.database import users_collection, employees_collection
 from app.models import UserCreate, UserLogin, UserResponse
 from app.utils import get_password_hash, verify_password
 from app.auth import create_access_token, verify_token, get_current_user
@@ -89,6 +89,13 @@ async def logout(response: Response):
 @router.get("/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
     current_user.pop("hashed_password", None)
+    
+    # Fetch profile picture if linked to an employee
+    if "employee_id" in current_user and current_user["employee_id"]:
+        employee = await employees_collection.find_one({"employee_no_id": current_user["employee_id"]})
+        if employee:
+            current_user["profile_picture"] = employee.get("profile_picture")
+            
     return {
         "message": "Success",
         "success": True,

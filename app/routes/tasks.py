@@ -1,15 +1,56 @@
-from fastapi import APIRouter, HTTPException, Depends, Body
+from fastapi import APIRouter, HTTPException, Depends, Body, Form, File, UploadFile, Request
+import json
 from fastapi.responses import JSONResponse
 from app.crud.repository import repository as repo
-from app.models import TaskCreate, TaskUpdate, EODReportRequest, TaskResponse
+from app.models import TaskCreate, TaskUpdate, EODReportRequest, TaskResponse, TaskAttachment, EODReportItem
 from typing import List, Optional
 from app.auth import verify_token
+from app.helper.file_handler import file_handler
 
 router = APIRouter(prefix="/tasks", tags=["tasks"], dependencies=[Depends(verify_token)])
 
 @router.post("/")
-async def create_task(task: TaskCreate):
+async def create_task(
+    project_id: str = Form(...),
+    task_name: str = Form(...),
+    start_date: str = Form(...),
+    end_date: str = Form(...),
+    description: Optional[str] = Form(None),
+    start_time: Optional[str] = Form(None),
+    end_time: Optional[str] = Form(None),
+    priority: str = Form("Medium"),
+    assigned_to: List[str] = Form([], alias="assigned_to[]"),
+    tags: List[str] = Form([], alias="tags[]"),
+    status: str = Form("Todo"),
+    progress: float = Form(0.0),
+    attachments: List[UploadFile] = File([])
+):
     try:
+        task_attachments = []
+        if attachments:
+            for file in attachments:
+                uploaded = await file_handler.upload_file(file)
+                task_attachments.append(TaskAttachment(
+                    file_name=file.filename,
+                    file_url=uploaded["url"],
+                    file_type=file.content_type
+                ))
+
+        task = TaskCreate(
+            project_id=project_id,
+            task_name=task_name,
+            description=description,
+            start_date=start_date,
+            end_date=end_date,
+            start_time=start_time,
+            end_time=end_time,
+            priority=priority,
+            assigned_to=assigned_to,
+            tags=tags,
+            status=status,
+            progress=progress,
+            attachments=task_attachments
+        )
         new_task = await repo.create_task(task)
         return JSONResponse(
             status_code=201,
@@ -41,14 +82,42 @@ async def get_tasks(
         )
 
 @router.post("/eod-report")
-async def process_eod_report(payload: EODReportRequest):
+async def process_eod_report(
+    task_id: str = Form(...),
+    status: str = Form(...),
+    progress: float = Form(...),
+    eod_summary: Optional[str] = Form(None),
+    move_to_tomorrow: bool = Form(False),
+    attachments: List[UploadFile] = File([]) 
+):
     try:
-        results = await repo.process_eod_report(payload.reports)
+        new_attachments = []
+        if attachments:
+            for file in attachments:
+                uploaded = await file_handler.upload_file(file)
+                new_attachments.append(TaskAttachment(
+                    file_name=file.filename,
+                    file_url=uploaded["url"],
+                    file_type=file.content_type
+                ))
+        
+        report_item = EODReportItem(
+            task_id=task_id,
+            status=status,
+            progress=progress,
+            eod_summary=eod_summary,
+            move_to_tomorrow=move_to_tomorrow,
+            new_attachments=new_attachments
+        )
+            
+        results = await repo.process_eod_report([report_item])
         return JSONResponse(
             status_code=200,
             content={"message": "EOD report processed successfully", "success": True, "data": results}
         )
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JSONResponse(
             status_code=500,
             content={"message": f"Failed to process EOD report: {str(e)}", "success": False}
@@ -93,8 +162,57 @@ async def get_task(task_id: str):
         )
 
 @router.put("/{task_id}")
-async def update_task(task_id: str, task: TaskUpdate):
+async def update_task(
+    task_id: str,
+    project_id: Optional[str] = Form(None),
+    task_name: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    start_date: Optional[str] = Form(None),
+    end_date: Optional[str] = Form(None),
+    start_time: Optional[str] = Form(None),
+    end_time: Optional[str] = Form(None),
+    priority: Optional[str] = Form(None),
+    assigned_to: Optional[List[str]] = Form(None, alias="assigned_to[]"),
+    tags: Optional[List[str]] = Form(None, alias="tags[]"),
+    status: Optional[str] = Form(None),
+    progress: Optional[float] = Form(None),
+    attachments: List[UploadFile] = File(None)
+):
     try:
+        task_attachments = []
+        if attachments:
+            for file in attachments:
+                uploaded = await file_handler.upload_file(file)
+                task_attachments.append(TaskAttachment(
+                    file_name=file.filename,
+                    file_url=uploaded["url"],
+                    file_type=file.content_type
+                ))
+
+        final_attachments = []
+        
+        # Fetch existing task to get current attachments if new ones are added
+        if task_attachments:
+            current_task = await repo.get_task(task_id)
+            if current_task and "attachments" in current_task:
+                 final_attachments.extend(current_task["attachments"])
+            final_attachments.extend(task_attachments)
+
+        task = TaskUpdate(
+            project_id=project_id,
+            task_name=task_name,
+            description=description,
+            start_date=start_date,
+            end_date=end_date,
+            start_time=start_time,
+            end_time=end_time,
+            priority=priority,
+            assigned_to=assigned_to,
+            tags=tags,
+            status=status,
+            progress=progress,
+            attachments=final_attachments if final_attachments else None
+        )
         updated_task = await repo.update_task(task_id, task)
         if not updated_task:
             return JSONResponse(

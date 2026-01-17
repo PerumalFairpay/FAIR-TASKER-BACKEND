@@ -8,4 +8,5 @@ roles_collection = db["roles"]
 permissions_collection = db["permissions"]
 tasks_collection = db["tasks"]
 attendance_collection = db["attendance"]
+employees_collection = db["employees"]
 

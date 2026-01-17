@@ -10,6 +10,7 @@ class UserBase(BaseModel):
     email: EmailStr
     mobile: str
     role: Optional[str] = "employee"
+    permissions: List[str] = []
 
 class UserCreate(UserBase):
     password: str
@@ -26,6 +27,9 @@ class UserResponse(UserBase):
 
     class Config:
         from_attributes = True
+
+class UserPermissionsUpdate(BaseModel):
+    permissions: List[str]
 
 class RoleBase(BaseModel):
     name: str
@@ -513,6 +517,11 @@ class LeaveRequestResponse(LeaveRequestBase):
         from_attributes = True
 
 
+class TaskAttachment(BaseModel):
+    file_name: str
+    file_url: str
+    file_type: Optional[str] = None
+
 class TaskBase(BaseModel):
     project_id: str
     task_name: str
@@ -523,7 +532,7 @@ class TaskBase(BaseModel):
     end_time: Optional[str] = None
     priority: str = "Medium"
     assigned_to: List[str] = []
-    attachments: List[str] = []
+    attachments: List[TaskAttachment] = []
     tags: List[str] = []
     status: str = "Todo"
     progress: float = 0.0
@@ -544,7 +553,7 @@ class TaskUpdate(BaseModel):
     end_time: Optional[str] = None
     priority: Optional[str] = None
     assigned_to: Optional[List[str]] = None
-    attachments: Optional[List[str]] = None
+    attachments: Optional[List[TaskAttachment]] = None
     tags: Optional[List[str]] = None
     status: Optional[str] = None
     progress: Optional[float] = None
@@ -561,7 +570,7 @@ class EODReportItem(BaseModel):
     progress: float
     eod_summary: Optional[str] = None
     move_to_tomorrow: bool = False
-    new_attachments: List[str] = []
+    new_attachments: List[TaskAttachment] = []
 
 
 class EODReportRequest(BaseModel):

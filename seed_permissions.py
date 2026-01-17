@@ -13,7 +13,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "mongodb://localhost:27017")
 if not os.path.exists('/.dockerenv') and "mongodb://db:" in DATABASE_URL:
     DATABASE_URL = DATABASE_URL.replace("mongodb://db:", "mongodb://localhost:")
     
-DATABASE_NAME = os.getenv("DATABASE_NAME", "fair_tasker_db")
+DATABASE_NAME = os.getenv("DATABASE_NAME", "fairpay_hrm_db")
 
 permissions_data = [
     # Dashboard
@@ -69,6 +69,22 @@ permissions_data = [
     {"name": "Manage Holidays", "slug": "holiday:manage", "module": "Settings", "description": "Manage the annual holiday calendar"},
     {"name": "Manage Clients", "slug": "client:manage", "module": "Settings", "description": "Create and edit client/vendor profiles"},
     {"name": "Manage Blogs", "slug": "blog:manage", "module": "Settings", "description": "Create and publish internal blog posts"},
+
+    # Navigation (Sidebar) Permissions
+    {"name": "Nav Dashboard", "slug": "nav:dashboard", "module": "Navigation", "description": "View Dashboard in sidebar"},
+    {"name": "Nav Employee", "slug": "nav:employee", "module": "Navigation", "description": "View Employee menu in sidebar"},
+    {"name": "Nav Attendance", "slug": "nav:attendance", "module": "Navigation", "description": "View Attendance menu in sidebar"},
+    {"name": "Nav Leave", "slug": "nav:leave", "module": "Navigation", "description": "View Leave Management menu in sidebar"},
+    {"name": "Nav Holiday", "slug": "nav:holiday", "module": "Navigation", "description": "View Holiday menu in sidebar"},
+    {"name": "Nav Project", "slug": "nav:project", "module": "Navigation", "description": "View Project menu in sidebar"},
+    {"name": "Nav Task", "slug": "nav:task", "module": "Navigation", "description": "View Task Management menu in sidebar"},
+    {"name": "Nav Client", "slug": "nav:client", "module": "Navigation", "description": "View Client/Vendor menu in sidebar"},
+    {"name": "Nav Asset", "slug": "nav:asset", "module": "Navigation", "description": "View Asset Management menu in sidebar"},
+    {"name": "Nav Expense", "slug": "nav:expense", "module": "Navigation", "description": "View Expense Management menu in sidebar"},
+    {"name": "Nav Document", "slug": "nav:document", "module": "Navigation", "description": "View Document Management menu in sidebar"},
+    {"name": "Nav Blog", "slug": "nav:blog", "module": "Navigation", "description": "View Blog menu in sidebar"},
+    {"name": "Nav Feeds", "slug": "nav:feeds", "module": "Navigation", "description": "View Feeds menu in sidebar"},
+    {"name": "Nav Milestone", "slug": "nav:milestone", "module": "Navigation", "description": "View Milestone Roadmap menu in sidebar"},
 ]
 
 async def seed_permissions():
@@ -119,6 +135,14 @@ async def seed_permissions():
                 perm_map.get("expense:submit"),
                 perm_map.get("asset:view"),
                 perm_map.get("employee:view"), # Often employees can see the directory
+                
+                # Nav Permissions
+                perm_map.get("nav:dashboard"),
+                perm_map.get("nav:attendance"),
+                perm_map.get("nav:leave"),
+                perm_map.get("nav:task"),
+                perm_map.get("nav:feeds"),
+                # perm_map.get("nav:milestone"),
             ]
         }
     ]
