@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Body, Form, File, UploadF
 import json
 from fastapi.responses import JSONResponse
 from app.crud.repository import repository as repo
-from app.models import TaskCreate, TaskUpdate, EODReportRequest, TaskResponse, TaskAttachment
+from app.models import TaskCreate, TaskUpdate, EODReportRequest, TaskResponse, TaskAttachment, EODReportItem
 from typing import List, Optional
 from app.auth import verify_token
 from app.helper.file_handler import file_handler
@@ -82,43 +82,35 @@ async def get_tasks(
         )
 
 @router.post("/eod-report")
-async def process_eod_report(request: Request):
+async def process_eod_report(
+    task_id: str = Form(...),
+    status: str = Form(...),
+    progress: float = Form(...),
+    eod_summary: Optional[str] = Form(None),
+    move_to_tomorrow: bool = Form(False),
+    attachments: List[UploadFile] = File([]) 
+):
     try:
-        form = await request.form()
-        reports_json = form.get("reports")
-        if not reports_json:
-             return JSONResponse(status_code=400, content={"message": "Reports data is missing", "success": False})
-             
-        reports_data = json.loads(reports_json)
+        new_attachments = []
+        if attachments:
+            for file in attachments:
+                uploaded = await file_handler.upload_file(file)
+                new_attachments.append(TaskAttachment(
+                    file_name=file.filename,
+                    file_url=uploaded["url"],
+                    file_type=file.content_type
+                ))
         
-        final_reports = []
-        for report in reports_data:
-            task_id = report.get("task_id")
+        report_item = EODReportItem(
+            task_id=task_id,
+            status=status,
+            progress=progress,
+            eod_summary=eod_summary,
+            move_to_tomorrow=move_to_tomorrow,
+            new_attachments=new_attachments
+        )
             
-            # Check for attachments_{task_id} in form
-            files = form.getlist(f"attachments_{task_id}")
-            
-            new_attachments = []
-            for file in files:
-                if file.filename: # check if file object is valid/has name
-                    uploaded = await file_handler.upload_file(file)
-                    new_attachments.append(TaskAttachment(
-                        file_name=file.filename,
-                        file_url=uploaded["url"],
-                        file_type=file.content_type
-                    ))
-            
-            report_item = EODReportItem(
-                task_id=task_id,
-                status=report.get("status"),
-                progress=float(report.get("progress", 0)),
-                eod_summary=report.get("eod_summary"),
-                move_to_tomorrow=report.get("move_to_tomorrow"),
-                new_attachments=new_attachments
-            )
-            final_reports.append(report_item)
-            
-        results = await repo.process_eod_report(final_reports)
+        results = await repo.process_eod_report([report_item])
         return JSONResponse(
             status_code=200,
             content={"message": "EOD report processed successfully", "success": True, "data": results}
