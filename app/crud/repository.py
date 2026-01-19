@@ -71,6 +71,12 @@ class Repository:
             if "documents" in employee_data and employee_data["documents"]:
                  employee_data["documents"] = [doc if isinstance(doc, dict) else doc.dict() for doc in employee_data["documents"]]
             
+            if "onboarding_steps" in employee_data and employee_data["onboarding_steps"]:
+                 employee_data["onboarding_steps"] = [step if isinstance(step, dict) else step.dict() for step in employee_data["onboarding_steps"]]
+            
+            if "offboarding_steps" in employee_data and employee_data["offboarding_steps"]:
+                 employee_data["offboarding_steps"] = [step if isinstance(step, dict) else step.dict() for step in employee_data["offboarding_steps"]]
+            
             employee_data["created_at"] = datetime.utcnow()
             
             # Create User Entry
@@ -132,6 +138,12 @@ class Repository:
 
             if "documents" in update_data and update_data["documents"]:
                  update_data["documents"] = [doc if isinstance(doc, dict) else doc.dict() for doc in update_data["documents"]]
+
+            if "onboarding_steps" in update_data and update_data["onboarding_steps"]:
+                 update_data["onboarding_steps"] = [step if isinstance(step, dict) else step.dict() for step in update_data["onboarding_steps"]]
+
+            if "offboarding_steps" in update_data and update_data["offboarding_steps"]:
+                 update_data["offboarding_steps"] = [step if isinstance(step, dict) else step.dict() for step in update_data["offboarding_steps"]]
                 
             if update_data:
                 update_data["updated_at"] = datetime.utcnow()

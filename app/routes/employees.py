@@ -34,6 +34,16 @@ async def create_employee(
     notice_period: Optional[str] = Form(None),
 
     work_mode: Optional[str] = Form("Office"),
+    
+    # Onboarding / Offboarding
+    onboarding_status: Optional[str] = Form("Pending"),
+    onboarding_steps: Optional[str] = Form(None), # JSON string
+    offboarding_status: Optional[str] = Form("None"),
+    offboarding_steps: Optional[str] = Form(None), # JSON string
+    offboarding_date: Optional[str] = Form(None),
+    resignation_date: Optional[str] = Form(None),
+    exit_interview_notes: Optional[str] = Form(None),
+
     document_names: List[str] = Form([]),
     profile_picture: Optional[UploadFile] = File(None),
     document_proofs: List[UploadFile] = File([]) 
@@ -57,6 +67,22 @@ async def create_employee(
                     document_proof=doc_path,
                     file_type=doc_file.content_type
                 ))
+
+        # Parse steps if provided
+        parsed_onboarding_steps = []
+        if onboarding_steps:
+            try:
+                parsed_onboarding_steps = json.loads(onboarding_steps)
+            except:
+                pass # Or raise error
+
+        parsed_offboarding_steps = []
+        if offboarding_steps:
+            try:
+                parsed_offboarding_steps = json.loads(offboarding_steps)
+            except:
+                pass
+
 
         employee_data = EmployeeCreate(
             first_name=first_name,
@@ -82,6 +108,15 @@ async def create_employee(
             notice_period=notice_period,
 
             work_mode=work_mode,
+            
+            onboarding_status=onboarding_status,
+            onboarding_steps=parsed_onboarding_steps,
+            offboarding_status=offboarding_status,
+            offboarding_steps=parsed_offboarding_steps,
+            offboarding_date=offboarding_date,
+            resignation_date=resignation_date,
+            exit_interview_notes=exit_interview_notes,
+
             documents=documents_list
         )
 
@@ -150,6 +185,16 @@ async def update_employee(
     notice_period: Optional[str] = Form(None),
 
     work_mode: Optional[str] = Form(None),
+
+    # Onboarding / Offboarding
+    onboarding_status: Optional[str] = Form(None),
+    onboarding_steps: Optional[str] = Form(None), # JSON string
+    offboarding_status: Optional[str] = Form(None),
+    offboarding_steps: Optional[str] = Form(None), # JSON string
+    offboarding_date: Optional[str] = Form(None),
+    resignation_date: Optional[str] = Form(None),
+    exit_interview_notes: Optional[str] = Form(None),
+
     document_names: List[str] = Form([]),
     profile_picture: Optional[UploadFile] = File(None),
     document_proofs: List[UploadFile] = File([]) 
@@ -177,7 +222,22 @@ async def update_employee(
                     document_proof=doc_path,
                     file_type=doc_file.content_type
                 ))
-            
+        
+        # Parse steps if provided
+        parsed_onboarding_steps = None
+        if onboarding_steps:
+            try:
+                parsed_onboarding_steps = json.loads(onboarding_steps)
+            except:
+                pass 
+
+        parsed_offboarding_steps = None
+        if offboarding_steps:
+            try:
+                parsed_offboarding_steps = json.loads(offboarding_steps)
+            except:
+                pass
+
         update_data = EmployeeUpdate(
             first_name=first_name,
             last_name=last_name,
@@ -201,6 +261,15 @@ async def update_employee(
             notice_period=notice_period,
 
             work_mode=work_mode,
+            
+            onboarding_status=onboarding_status,
+            onboarding_steps=parsed_onboarding_steps,
+            offboarding_status=offboarding_status,
+            offboarding_steps=parsed_offboarding_steps,
+            offboarding_date=offboarding_date,
+            resignation_date=resignation_date,
+            exit_interview_notes=exit_interview_notes,
+
             documents=documents_list if documents_list else None
         )
         

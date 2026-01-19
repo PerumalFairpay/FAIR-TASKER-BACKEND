@@ -93,6 +93,13 @@ class EmployeeDocument(BaseModel):
     document_proof: str
     file_type: Optional[str] = None
 
+class ProcessStep(BaseModel):
+    id: str  # UUID or similar
+    label: str  # e.g., "Allocate Laptop"
+    status: str = "Pending"  # Pending, Completed
+    assigned_to: Optional[str] = None  # Role or Employee ID
+    completed_at: Optional[str] = None
+
 class EmployeeBase(BaseModel):
     first_name: str
     last_name: str
@@ -115,6 +122,18 @@ class EmployeeBase(BaseModel):
     confirmation_date: Optional[str] = None
     notice_period: Optional[str] = None
     work_mode: Optional[str] = "Office"
+    
+    # Onboarding
+    onboarding_status: Optional[str] = "Pending" # Pending, In Progress, Completed
+    onboarding_steps: List[ProcessStep] = []
+
+    # Offboarding
+    offboarding_status: Optional[str] = "None" # None, Pending, In Progress, Completed
+    offboarding_steps: List[ProcessStep] = []
+    offboarding_date: Optional[str] = None
+    resignation_date: Optional[str] = None
+    exit_interview_notes: Optional[str] = None
+
     documents: List[EmployeeDocument] = []
 
 class EmployeeCreate(EmployeeBase):
@@ -143,6 +162,18 @@ class EmployeeUpdate(BaseModel):
     confirmation_date: Optional[str] = None
     notice_period: Optional[str] = None
     work_mode: Optional[str] = None
+    
+    # Onboarding
+    onboarding_status: Optional[str] = None
+    onboarding_steps: Optional[List[ProcessStep]] = None
+
+    # Offboarding
+    offboarding_status: Optional[str] = None
+    offboarding_steps: Optional[List[ProcessStep]] = None
+    offboarding_date: Optional[str] = None
+    resignation_date: Optional[str] = None
+    exit_interview_notes: Optional[str] = None
+
     documents: Optional[List[EmployeeDocument]] = None
 
 class EmployeeResponse(EmployeeBase):
