@@ -36,7 +36,14 @@ async def create_employee(
     work_mode: Optional[str] = Form("Office"),
     document_names: List[str] = Form([]),
     profile_picture: Optional[UploadFile] = File(None),
-    document_proofs: List[UploadFile] = File([]) 
+    document_proofs: List[UploadFile] = File([]),
+    
+    # New Fields
+    onboarding_checklist: Optional[str] = Form(None), # JSON String
+    offboarding_checklist: Optional[str] = Form(None), # JSON String
+    resignation_date: Optional[str] = Form(None),
+    last_working_day: Optional[str] = Form(None),
+    exit_interview_notes: Optional[str] = Form(None) 
 ):
     try:
         profile_pic_path = None
@@ -82,7 +89,12 @@ async def create_employee(
             notice_period=notice_period,
 
             work_mode=work_mode,
-            documents=documents_list
+            documents=documents_list,
+            onboarding_checklist=json.loads(onboarding_checklist) if onboarding_checklist else [],
+            offboarding_checklist=json.loads(offboarding_checklist) if offboarding_checklist else [],
+            resignation_date=resignation_date,
+            last_working_day=last_working_day,
+            exit_interview_notes=exit_interview_notes
         )
 
         # Call repository. Note: repo signature change pending. passing profile_pic_path.
@@ -152,7 +164,14 @@ async def update_employee(
     work_mode: Optional[str] = Form(None),
     document_names: List[str] = Form([]),
     profile_picture: Optional[UploadFile] = File(None),
-    document_proofs: List[UploadFile] = File([]) 
+    document_proofs: List[UploadFile] = File([]),
+
+    # New Fields
+    onboarding_checklist: Optional[str] = Form(None), # JSON String
+    offboarding_checklist: Optional[str] = Form(None), # JSON String
+    resignation_date: Optional[str] = Form(None),
+    last_working_day: Optional[str] = Form(None),
+    exit_interview_notes: Optional[str] = Form(None) 
 ):
     try:
         profile_pic_path = None
@@ -201,7 +220,12 @@ async def update_employee(
             notice_period=notice_period,
 
             work_mode=work_mode,
-            documents=documents_list if documents_list else None
+            documents=documents_list if documents_list else None,
+            onboarding_checklist=json.loads(onboarding_checklist) if onboarding_checklist else None,
+            offboarding_checklist=json.loads(offboarding_checklist) if offboarding_checklist else None,
+            resignation_date=resignation_date,
+            last_working_day=last_working_day,
+            exit_interview_notes=exit_interview_notes
         )
         
         updated_employee = await repo.update_employee(employee_id, update_data, profile_pic_path)

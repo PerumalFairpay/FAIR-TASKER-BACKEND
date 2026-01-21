@@ -9,7 +9,7 @@ from app.routes import (
     expense_categories, expenses,
     document_categories, documents,
     clients, projects, holidays,
-    asset_categories, assets, blogs, leave_types, leave_requests, tasks, attendance, permissions, dashboard, files, profile
+    asset_categories, assets, blogs, leave_types, leave_requests, tasks, attendance, permissions, dashboard, files, profile, checklist_templates
 )
 
 app = FastAPI(title="Fair Tasker Backend", version="1.0.0", docs_url="/api/docs", redoc_url="/api/redoc")
@@ -53,6 +53,7 @@ api_router.include_router(permissions.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(files.router)
 api_router.include_router(profile.router)
+api_router.include_router(checklist_templates.router)
 
 app.include_router(api_router, prefix="/api")
  

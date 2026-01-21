@@ -15,7 +15,8 @@ from app.models import (
     LeaveTypeCreate, LeaveTypeUpdate,
     LeaveRequestCreate, LeaveRequestUpdate,
     TaskCreate, TaskUpdate, EODReportItem,
-    AttendanceCreate, AttendanceUpdate
+    AttendanceCreate, AttendanceUpdate,
+    EmployeeChecklistTemplateCreate, EmployeeChecklistTemplateUpdate
 )
 from app.utils import normalize, get_password_hash
 from bson import ObjectId
@@ -59,7 +60,20 @@ class Repository:
             # Prepare Employee Data
             employee_data = employee.dict()
             hashed_password = get_password_hash(employee.password)
-            employee_data["password"] = hashed_password # storing hashed in employee too? User prompt implies it.
+            employee_data["password"] = hashed_password 
+
+            # Auto-populate Onboarding Checklist
+            if not employee_data.get("onboarding_checklist"):
+                default_templates = await self.db["checklist_templates"].find({"type": "Onboarding", "is_default": True}).to_list(length=None)
+                checklist = []
+                for t in default_templates:
+                    checklist.append({
+                        "name": t["name"],
+                        "status": "Pending",
+                        "completed_at": None,
+                        "task_id": str(t["_id"]) # Link back to template if useful
+                    })
+                employee_data["onboarding_checklist"] = checklist
             # Usually we don't store password in Employee table if User table exists, but user asked for "fields... password" in employee table context.
             # I will store it in User table primarily. I'll remove plain password from employee_data before saving if implied, but prompt specifically listed password in payload.
             # I'll keep it hashed in both or just User. Let's put in User and Employee (for safekeeping/redundancy if requested, or just User).
@@ -1467,5 +1481,43 @@ class Repository:
         except Exception as e:
             raise e
 
-repository = Repository()
+    # Checklist Template CRUD
+    async def create_checklist_template(self, template: EmployeeChecklistTemplateCreate) -> dict:
+        try:
+            template_data = template.dict()
+            template_data["created_at"] = datetime.utcnow()
+            result = await self.db["checklist_templates"].insert_one(template_data)
+            template_data["id"] = str(result.inserted_id)
+            return normalize(template_data)
+        except Exception as e:
+            raise e
 
+    async def get_checklist_templates(self) -> List[dict]:
+        try:
+            templates = await self.db["checklist_templates"].find().to_list(length=None)
+            return [normalize(t) for t in templates]
+        except Exception as e:
+            raise e
+
+    async def update_checklist_template(self, template_id: str, template: EmployeeChecklistTemplateUpdate) -> dict:
+        try:
+            update_data = {k: v for k, v in template.dict().items() if v is not None}
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.db["checklist_templates"].update_one(
+                    {"_id": ObjectId(template_id)}, {"$set": update_data}
+                )
+            # Find and return
+            t = await self.db["checklist_templates"].find_one({"_id": ObjectId(template_id)})
+            return normalize(t) if t else None
+        except Exception as e:
+            raise e
+
+    async def delete_checklist_template(self, template_id: str) -> bool:
+        try:
+            result = await self.db["checklist_templates"].delete_one({"_id": ObjectId(template_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+repository = Repository()

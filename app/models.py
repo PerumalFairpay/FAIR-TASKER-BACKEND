@@ -93,6 +93,30 @@ class EmployeeDocument(BaseModel):
     document_proof: str
     file_type: Optional[str] = None
 
+class ChecklistItem(BaseModel):
+    name: str
+    status: str = "Pending"  # Pending, Completed
+    completed_at: Optional[str] = None
+
+class EmployeeChecklistTemplateBase(BaseModel):
+    name: str
+    type: str  # "Onboarding", "Offboarding"
+    is_default: bool = False
+
+class EmployeeChecklistTemplateCreate(EmployeeChecklistTemplateBase):
+    pass
+
+class EmployeeChecklistTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    is_default: Optional[bool] = None
+
+class EmployeeChecklistTemplateResponse(EmployeeChecklistTemplateBase):
+    id: str
+
+    class Config:
+        from_attributes = True
+
 class EmployeeBase(BaseModel):
     first_name: str
     last_name: str
@@ -116,6 +140,11 @@ class EmployeeBase(BaseModel):
     notice_period: Optional[str] = None
     work_mode: Optional[str] = "Office"
     documents: List[EmployeeDocument] = []
+    onboarding_checklist: List[ChecklistItem] = []
+    offboarding_checklist: List[ChecklistItem] = []
+    resignation_date: Optional[str] = None
+    last_working_day: Optional[str] = None
+    exit_interview_notes: Optional[str] = None
 
 class EmployeeCreate(EmployeeBase):
     password: str
@@ -144,6 +173,11 @@ class EmployeeUpdate(BaseModel):
     notice_period: Optional[str] = None
     work_mode: Optional[str] = None
     documents: Optional[List[EmployeeDocument]] = None
+    onboarding_checklist: Optional[List[ChecklistItem]] = None
+    offboarding_checklist: Optional[List[ChecklistItem]] = None
+    resignation_date: Optional[str] = None
+    last_working_day: Optional[str] = None
+    exit_interview_notes: Optional[str] = None
 
 class EmployeeResponse(EmployeeBase):
     id: str
