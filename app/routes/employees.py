@@ -114,12 +114,22 @@ async def create_employee(
         return error_response(message=f"Failed to create employee: {str(e)}", status_code=500)
 
 @router.get("/all", dependencies=[Depends(require_permission("employee:view"))])
-async def get_employees():
+async def get_employees(page: int = 1, limit: int = 10):
     try:
-        employees = await repo.get_employees()
+        employees, total_items = await repo.get_employees(page, limit)
+        
+        total_pages = (total_items + limit - 1) // limit
+        meta = {
+            "current_page": page,
+            "total_pages": total_pages,
+            "total_items": total_items,
+            "limit": limit
+        }
+        
         return success_response(
             message="Employees fetched successfully",
-            data=employees
+            data=employees,
+            meta=meta
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)

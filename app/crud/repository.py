@@ -116,16 +116,21 @@ class Repository:
         except Exception as e:
             raise e
 
-    async def get_employees(self) -> List[dict]:
+    async def get_employees(self, page: int = 1, limit: int = 10) -> (List[dict], int):
         try:
-            employees = await self.employees.find().to_list(length=None)
+            skip = (page - 1) * limit
+            total_items = await self.employees.count_documents({})
+            
+            employees = await self.employees.find().skip(skip).limit(limit).to_list(length=limit)
+            
             # Remove sensitive data like password
             for emp in employees:
                 if "hashed_password" in emp:
                     del emp["hashed_password"]
                 if "password" in emp:
                     del emp["password"]
-            return [normalize(emp) for emp in employees]
+                    
+            return [normalize(emp) for emp in employees], total_items
         except Exception as e:
             raise e
 
