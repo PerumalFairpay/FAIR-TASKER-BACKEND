@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
-from app.models import AssetCreate, AssetUpdate, AssetResponse
+from app.models import AssetCreate, AssetUpdate, AssetResponse, AssetAssignmentRequest
 from app.crud.repository import repository
 from typing import List, Optional
 import os
@@ -139,3 +139,13 @@ async def delete_asset(asset_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Asset not found")
     return {"message": "Asset deleted successfully"}
+
+@router.put("/{asset_id}/assignment")
+async def manage_asset_assignment(asset_id: str, request: AssetAssignmentRequest):
+    try:
+        updated_asset = await repository.manage_asset_assignment(asset_id, request.employee_id)
+        return updated_asset
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

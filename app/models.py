@@ -439,6 +439,9 @@ class AssetResponse(AssetBase):
     class Config:
         from_attributes = True
 
+class AssetAssignmentRequest(BaseModel):
+    employee_id: Optional[str] = None
+
 class BlogBase(BaseModel):
     title: str
     slug: str

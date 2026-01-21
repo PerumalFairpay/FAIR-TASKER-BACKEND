@@ -778,7 +778,7 @@ class Repository:
             employees = await self.employees.find().to_list(length=None)
             
             cat_map = {str(c["_id"]): normalize(c) for c in categories}
-            emp_map = {str(e["employee_no_id"]): normalize(e) for e in employees} # Mapping by employee_no_id as per assigned_to field
+            emp_map = {str(e["_id"]): normalize(e) for e in employees} # Mapping by _id (Primary Key)
             
             result = []
             for a in assets:
@@ -806,7 +806,10 @@ class Repository:
             # Employee
             assigned_to = a_norm.get("assigned_to")
             if assigned_to:
-                employee = await self.employees.find_one({"employee_no_id": assigned_to})
+                try:
+                    employee = await self.employees.find_one({"_id": ObjectId(assigned_to)})
+                except:
+                    employee = None
                 a_norm["assigned_to_details"] = normalize(employee) if employee else None
             
             return a_norm
@@ -832,6 +835,40 @@ class Repository:
         try:
             result = await self.assets.delete_one({"_id": ObjectId(asset_id)})
             return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+    async def manage_asset_assignment(self, asset_id: str, employee_id: Optional[str] = None) -> dict:
+        try:
+            # Verify asset exists
+            asset = await self.assets.find_one({"_id": ObjectId(asset_id)})
+            if not asset:
+                raise ValueError("Asset not found")
+            
+            update_data = {}
+            
+            if employee_id:
+                # Verify employee exists
+                employee = await self.employees.find_one({"_id": ObjectId(employee_id)})
+                if not employee:
+                    raise ValueError("Employee not found")
+                
+                # Assign asset
+                update_data["assigned_to"] = employee_id
+                update_data["status"] = "Assigned"
+            else:
+                # Unassign asset
+                update_data["assigned_to"] = None
+                update_data["status"] = "Available"
+            
+            update_data["updated_at"] = datetime.utcnow()
+            
+            await self.assets.update_one(
+                {"_id": ObjectId(asset_id)},
+                {"$set": update_data}
+            )
+            
+            return await self.get_asset(asset_id)
         except Exception as e:
             raise e
 
