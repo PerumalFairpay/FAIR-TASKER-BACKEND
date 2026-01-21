@@ -114,9 +114,16 @@ async def create_employee(
         return error_response(message=f"Failed to create employee: {str(e)}", status_code=500)
 
 @router.get("/all", dependencies=[Depends(require_permission("employee:view"))])
-async def get_employees(page: int = 1, limit: int = 10):
+async def get_employees(
+    page: int = 1, 
+    limit: int = 10,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    role: Optional[str] = None,
+    work_mode: Optional[str] = None
+):
     try:
-        employees, total_items = await repo.get_employees(page, limit)
+        employees, total_items = await repo.get_employees(page, limit, search, status, role, work_mode)
         
         total_pages = (total_items + limit - 1) // limit
         meta = {

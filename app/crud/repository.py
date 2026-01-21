@@ -116,12 +116,40 @@ class Repository:
         except Exception as e:
             raise e
 
-    async def get_employees(self, page: int = 1, limit: int = 10) -> (List[dict], int):
+    async def get_employees(
+        self, 
+        page: int = 1, 
+        limit: int = 10,
+        search: Optional[str] = None,
+        status: Optional[str] = None,
+        role: Optional[str] = None,
+        work_mode: Optional[str] = None
+    ) -> (List[dict], int):
         try:
-            skip = (page - 1) * limit
-            total_items = await self.employees.count_documents({})
+            query = {}
             
-            employees = await self.employees.find().skip(skip).limit(limit).to_list(length=limit)
+            if status:
+                query["status"] = status
+            if role:
+                query["role"] = role
+            if work_mode:
+                query["work_mode"] = work_mode
+                
+            if search:
+                regex_pattern = {"$regex": search, "$options": "i"}
+                query["$or"] = [
+                    {"name": regex_pattern},
+                    {"email": regex_pattern},
+                    {"employee_no_id": regex_pattern},
+                    {"first_name": regex_pattern},
+                    {"last_name": regex_pattern},
+                    {"mobile": regex_pattern}
+                ]
+
+            skip = (page - 1) * limit
+            total_items = await self.employees.count_documents(query)
+            
+            employees = await self.employees.find(query).skip(skip).limit(limit).to_list(length=limit)
             
             # Remove sensitive data like password
             for emp in employees:
