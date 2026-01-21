@@ -28,7 +28,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             # --- ADMIN DASHBOARD ---
             
             # 1. Overview Counts
-            employees = await repo.get_employees()
+            employees, _ = await repo.get_employees(limit=1000)
             clients = await repo.get_clients()
             projects = await repo.get_projects()
             leave_requests = await repo.get_leave_requests()
@@ -462,7 +462,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             recent_activity = recent_activity[:5]
 
             # 8. Birthdays
-            all_employees = await repo.get_employees()
+            all_employees, _ = await repo.get_employees(limit=1000)
             birthdays = []
             today_date = datetime.utcnow()
             for e in all_employees:
