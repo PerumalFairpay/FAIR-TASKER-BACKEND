@@ -162,6 +162,22 @@ class Repository:
         except Exception as e:
             raise e
 
+    async def get_all_employees_summary(self) -> List[dict]:
+        try:
+            # Projection to fetch only necessary fields
+            projection = {
+                "employee_no_id": 1,
+                "profile_picture": 1,
+                "name": 1,
+                "email": 1,
+                "status": 1
+            }
+            employees = await self.employees.find({}, projection).to_list(length=None)
+            
+            return [normalize(emp) for emp in employees]
+        except Exception as e:
+            raise e
+
     async def get_employee(self, employee_id: str) -> dict:
         try:
             employee = await self.employees.find_one({"_id": ObjectId(employee_id)})

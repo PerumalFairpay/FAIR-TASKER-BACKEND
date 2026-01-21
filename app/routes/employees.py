@@ -141,6 +141,17 @@ async def get_employees(
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
+@router.get("/summary", dependencies=[Depends(require_permission("employee:view"))])
+async def get_employees_summary():
+    try:
+        employees = await repo.get_all_employees_summary()
+        return success_response(
+            message="Employees summary fetched successfully",
+            data=employees
+        )
+    except Exception as e:
+        return error_response(message=str(e), status_code=500)
+
 @router.get("/{employee_id}", dependencies=[Depends(require_permission("employee:view"))])
 async def get_employee(employee_id: str):
     try:
