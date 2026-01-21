@@ -771,7 +771,7 @@ class Repository:
 
     async def get_assets(self) -> List[dict]:
         try:
-            assets = await self.assets.find().to_list(length=None)
+            assets = await self.assets.find().sort("created_at", -1).to_list(length=None)
             
             # Map categories and employees
             categories = await self.asset_categories.find().to_list(length=None)
