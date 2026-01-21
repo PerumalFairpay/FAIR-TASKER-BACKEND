@@ -140,11 +140,22 @@ async def delete_asset(asset_id: str):
         raise HTTPException(status_code=404, detail="Asset not found")
     return {"message": "Asset deleted successfully"}
 
+
 @router.put("/{asset_id}/assignment")
 async def manage_asset_assignment(asset_id: str, request: AssetAssignmentRequest):
     try:
         updated_asset = await repository.manage_asset_assignment(asset_id, request.employee_id)
         return updated_asset
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/employee/{employee_id}")
+async def get_assets_by_employee(employee_id: str):
+    try:
+        assets = await repository.get_assets_by_employee(employee_id)
+        return assets
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:

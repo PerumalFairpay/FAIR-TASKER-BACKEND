@@ -872,6 +872,31 @@ class Repository:
         except Exception as e:
             raise e
 
+    async def get_assets_by_employee(self, employee_id: str) -> List[dict]:
+        try:
+            # Verify employee exists
+            employee = await self.employees.find_one({"_id": ObjectId(employee_id)})
+            if not employee:
+                raise ValueError("Employee not found")
+            
+            # Get all assets assigned to this employee
+            assets = await self.assets.find({"assigned_to": employee_id}).to_list(length=None)
+            
+            # Map categories
+            categories = await self.asset_categories.find().to_list(length=None)
+            cat_map = {str(c["_id"]): normalize(c) for c in categories}
+            
+            result = []
+            for a in assets:
+                a_norm = normalize(a)
+                a_norm["category"] = cat_map.get(str(a_norm.get("asset_category_id")))
+                a_norm["assigned_to_details"] = normalize(employee)
+                result.append(a_norm)
+                
+            return result
+        except Exception as e:
+            raise e
+
     # Blog CRUD Operations
     async def create_blog(self, blog: BlogCreate) -> dict:
         try:
