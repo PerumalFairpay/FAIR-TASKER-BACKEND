@@ -15,7 +15,8 @@ from app.models import (
     LeaveTypeCreate, LeaveTypeUpdate,
     LeaveRequestCreate, LeaveRequestUpdate,
     TaskCreate, TaskUpdate, EODReportItem,
-    AttendanceCreate, AttendanceUpdate
+    AttendanceCreate, AttendanceUpdate,
+    EmployeeChecklistTemplateCreate, EmployeeChecklistTemplateUpdate
 )
 from app.utils import normalize, get_password_hash
 from bson import ObjectId
@@ -59,7 +60,20 @@ class Repository:
             # Prepare Employee Data
             employee_data = employee.dict()
             hashed_password = get_password_hash(employee.password)
-            employee_data["password"] = hashed_password # storing hashed in employee too? User prompt implies it.
+            employee_data["password"] = hashed_password 
+
+            # Auto-populate Onboarding Checklist
+            if not employee_data.get("onboarding_checklist"):
+                default_templates = await self.db["checklist_templates"].find({"type": "Onboarding", "is_default": True}).to_list(length=None)
+                checklist = []
+                for t in default_templates:
+                    checklist.append({
+                        "name": t["name"],
+                        "status": "Pending",
+                        "completed_at": None,
+                        "task_id": str(t["_id"]) # Link back to template if useful
+                    })
+                employee_data["onboarding_checklist"] = checklist
             # Usually we don't store password in Employee table if User table exists, but user asked for "fields... password" in employee table context.
             # I will store it in User table primarily. I'll remove plain password from employee_data before saving if implied, but prompt specifically listed password in payload.
             # I'll keep it hashed in both or just User. Let's put in User and Employee (for safekeeping/redundancy if requested, or just User).
@@ -102,15 +116,64 @@ class Repository:
         except Exception as e:
             raise e
 
-    async def get_employees(self) -> List[dict]:
+    async def get_employees(
+        self, 
+        page: int = 1, 
+        limit: int = 10,
+        search: Optional[str] = None,
+        status: Optional[str] = None,
+        role: Optional[str] = None,
+        work_mode: Optional[str] = None
+    ) -> (List[dict], int):
         try:
-            employees = await self.employees.find().to_list(length=None)
+            query = {}
+            
+            if status:
+                query["status"] = status
+            if role:
+                query["role"] = role
+            if work_mode:
+                query["work_mode"] = work_mode
+                
+            if search:
+                regex_pattern = {"$regex": search, "$options": "i"}
+                query["$or"] = [
+                    {"name": regex_pattern},
+                    {"email": regex_pattern},
+                    {"employee_no_id": regex_pattern},
+                    {"first_name": regex_pattern},
+                    {"last_name": regex_pattern},
+                    {"mobile": regex_pattern}
+                ]
+
+            skip = (page - 1) * limit
+            total_items = await self.employees.count_documents(query)
+            
+            employees = await self.employees.find(query).skip(skip).limit(limit).to_list(length=limit)
+            
             # Remove sensitive data like password
             for emp in employees:
                 if "hashed_password" in emp:
                     del emp["hashed_password"]
                 if "password" in emp:
                     del emp["password"]
+                    
+            return [normalize(emp) for emp in employees], total_items
+        except Exception as e:
+            raise e
+
+    async def get_all_employees_summary(self) -> List[dict]:
+        try:
+            # Projection to fetch only necessary fields
+            projection = {
+                "employee_no_id": 1,
+                "profile_picture": 1,
+                "name": 1,
+                "email": 1,
+                "status": 1
+            }
+            employees = await self.employees.find({}, projection).to_list(length=None)
+            
             return [normalize(emp) for emp in employees]
         except Exception as e:
             raise e
@@ -724,14 +787,14 @@ class Repository:
 
     async def get_assets(self) -> List[dict]:
         try:
-            assets = await self.assets.find().to_list(length=None)
+            assets = await self.assets.find().sort("created_at", -1).to_list(length=None)
             
             # Map categories and employees
             categories = await self.asset_categories.find().to_list(length=None)
             employees = await self.employees.find().to_list(length=None)
             
             cat_map = {str(c["_id"]): normalize(c) for c in categories}
-            emp_map = {str(e["employee_no_id"]): normalize(e) for e in employees} # Mapping by employee_no_id as per assigned_to field
+            emp_map = {str(e["_id"]): normalize(e) for e in employees} # Mapping by _id (Primary Key)
             
             result = []
             for a in assets:
@@ -759,7 +822,10 @@ class Repository:
             # Employee
             assigned_to = a_norm.get("assigned_to")
             if assigned_to:
-                employee = await self.employees.find_one({"employee_no_id": assigned_to})
+                try:
+                    employee = await self.employees.find_one({"_id": ObjectId(assigned_to)})
+                except:
+                    employee = None
                 a_norm["assigned_to_details"] = normalize(employee) if employee else None
             
             return a_norm
@@ -785,6 +851,65 @@ class Repository:
         try:
             result = await self.assets.delete_one({"_id": ObjectId(asset_id)})
             return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+    async def manage_asset_assignment(self, asset_id: str, employee_id: Optional[str] = None) -> dict:
+        try:
+            # Verify asset exists
+            asset = await self.assets.find_one({"_id": ObjectId(asset_id)})
+            if not asset:
+                raise ValueError("Asset not found")
+            
+            update_data = {}
+            
+            if employee_id:
+                # Verify employee exists
+                employee = await self.employees.find_one({"_id": ObjectId(employee_id)})
+                if not employee:
+                    raise ValueError("Employee not found")
+                
+                # Assign asset
+                update_data["assigned_to"] = employee_id
+                update_data["status"] = "Assigned"
+            else:
+                # Unassign asset
+                update_data["assigned_to"] = None
+                update_data["status"] = "Available"
+            
+            update_data["updated_at"] = datetime.utcnow()
+            
+            await self.assets.update_one(
+                {"_id": ObjectId(asset_id)},
+                {"$set": update_data}
+            )
+            
+            return await self.get_asset(asset_id)
+        except Exception as e:
+            raise e
+
+    async def get_assets_by_employee(self, employee_id: str) -> List[dict]:
+        try:
+            # Verify employee exists
+            employee = await self.employees.find_one({"_id": ObjectId(employee_id)})
+            if not employee:
+                raise ValueError("Employee not found")
+            
+            # Get all assets assigned to this employee
+            assets = await self.assets.find({"assigned_to": employee_id}).to_list(length=None)
+            
+            # Map categories
+            categories = await self.asset_categories.find().to_list(length=None)
+            cat_map = {str(c["_id"]): normalize(c) for c in categories}
+            
+            result = []
+            for a in assets:
+                a_norm = normalize(a)
+                a_norm["category"] = cat_map.get(str(a_norm.get("asset_category_id")))
+                a_norm["assigned_to_details"] = normalize(employee)
+                result.append(a_norm)
+                
+            return result
         except Exception as e:
             raise e
 
@@ -1467,5 +1592,43 @@ class Repository:
         except Exception as e:
             raise e
 
-repository = Repository()
+    # Checklist Template CRUD
+    async def create_checklist_template(self, template: EmployeeChecklistTemplateCreate) -> dict:
+        try:
+            template_data = template.dict()
+            template_data["created_at"] = datetime.utcnow()
+            result = await self.db["checklist_templates"].insert_one(template_data)
+            template_data["id"] = str(result.inserted_id)
+            return normalize(template_data)
+        except Exception as e:
+            raise e
 
+    async def get_checklist_templates(self) -> List[dict]:
+        try:
+            templates = await self.db["checklist_templates"].find().to_list(length=None)
+            return [normalize(t) for t in templates]
+        except Exception as e:
+            raise e
+
+    async def update_checklist_template(self, template_id: str, template: EmployeeChecklistTemplateUpdate) -> dict:
+        try:
+            update_data = {k: v for k, v in template.dict().items() if v is not None}
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.db["checklist_templates"].update_one(
+                    {"_id": ObjectId(template_id)}, {"$set": update_data}
+                )
+            # Find and return
+            t = await self.db["checklist_templates"].find_one({"_id": ObjectId(template_id)})
+            return normalize(t) if t else None
+        except Exception as e:
+            raise e
+
+    async def delete_checklist_template(self, template_id: str) -> bool:
+        try:
+            result = await self.db["checklist_templates"].delete_one({"_id": ObjectId(template_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+repository = Repository()

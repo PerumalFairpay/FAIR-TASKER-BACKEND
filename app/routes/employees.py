@@ -36,7 +36,14 @@ async def create_employee(
     work_mode: Optional[str] = Form("Office"),
     document_names: List[str] = Form([]),
     profile_picture: Optional[UploadFile] = File(None),
-    document_proofs: List[UploadFile] = File([]) 
+    document_proofs: List[UploadFile] = File([]),
+    
+    # New Fields
+    onboarding_checklist: Optional[str] = Form(None), # JSON String
+    offboarding_checklist: Optional[str] = Form(None), # JSON String
+    resignation_date: Optional[str] = Form(None),
+    last_working_day: Optional[str] = Form(None),
+    exit_interview_notes: Optional[str] = Form(None) 
 ):
     try:
         profile_pic_path = None
@@ -82,7 +89,12 @@ async def create_employee(
             notice_period=notice_period,
 
             work_mode=work_mode,
-            documents=documents_list
+            documents=documents_list,
+            onboarding_checklist=json.loads(onboarding_checklist) if onboarding_checklist else [],
+            offboarding_checklist=json.loads(offboarding_checklist) if offboarding_checklist else [],
+            resignation_date=resignation_date,
+            last_working_day=last_working_day,
+            exit_interview_notes=exit_interview_notes
         )
 
         # Call repository. Note: repo signature change pending. passing profile_pic_path.
@@ -102,11 +114,39 @@ async def create_employee(
         return error_response(message=f"Failed to create employee: {str(e)}", status_code=500)
 
 @router.get("/all", dependencies=[Depends(require_permission("employee:view"))])
-async def get_employees():
+async def get_employees(
+    page: int = 1, 
+    limit: int = 10,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    role: Optional[str] = None,
+    work_mode: Optional[str] = None
+):
     try:
-        employees = await repo.get_employees()
+        employees, total_items = await repo.get_employees(page, limit, search, status, role, work_mode)
+        
+        total_pages = (total_items + limit - 1) // limit
+        meta = {
+            "current_page": page,
+            "total_pages": total_pages,
+            "total_items": total_items,
+            "limit": limit
+        }
+        
         return success_response(
             message="Employees fetched successfully",
+            data=employees,
+            meta=meta
+        )
+    except Exception as e:
+        return error_response(message=str(e), status_code=500)
+
+@router.get("/summary", dependencies=[Depends(require_permission("employee:view"))])
+async def get_employees_summary():
+    try:
+        employees = await repo.get_all_employees_summary()
+        return success_response(
+            message="Employees summary fetched successfully",
             data=employees
         )
     except Exception as e:
@@ -152,7 +192,14 @@ async def update_employee(
     work_mode: Optional[str] = Form(None),
     document_names: List[str] = Form([]),
     profile_picture: Optional[UploadFile] = File(None),
-    document_proofs: List[UploadFile] = File([]) 
+    document_proofs: List[UploadFile] = File([]),
+
+    # New Fields
+    onboarding_checklist: Optional[str] = Form(None), # JSON String
+    offboarding_checklist: Optional[str] = Form(None), # JSON String
+    resignation_date: Optional[str] = Form(None),
+    last_working_day: Optional[str] = Form(None),
+    exit_interview_notes: Optional[str] = Form(None) 
 ):
     try:
         profile_pic_path = None
@@ -201,7 +248,12 @@ async def update_employee(
             notice_period=notice_period,
 
             work_mode=work_mode,
-            documents=documents_list if documents_list else None
+            documents=documents_list if documents_list else None,
+            onboarding_checklist=json.loads(onboarding_checklist) if onboarding_checklist else None,
+            offboarding_checklist=json.loads(offboarding_checklist) if offboarding_checklist else None,
+            resignation_date=resignation_date,
+            last_working_day=last_working_day,
+            exit_interview_notes=exit_interview_notes
         )
         
         updated_employee = await repo.update_employee(employee_id, update_data, profile_pic_path)
