@@ -1177,8 +1177,14 @@ class Repository:
                 query["assigned_to"] = assigned_to 
             
             if date:
+                # Determine the cutoff date for overdue calculation.
+                # If the filter date is in the future (e.g., Tomorrow), we shouldn't mark "Today's" tasks as overdue yet.
+                # So "Overdue" is always strictly relative to "Now" (Today), unless we are looking at the past.
+                today_str = datetime.utcnow().strftime("%Y-%m-%d")
+                overdue_cutoff = date if date < today_str else today_str
+
                 # Active tasks on this specific date OR Overdue tasks
-                # Overdue = end_date < date AND status != Completed
+                # Overdue = end_date < overdue_cutoff AND status != Completed
                 query["$or"] = [
                     # 1. Active on date: start_date <= date AND (end_date >= date OR end_date is None)
                     {
@@ -1192,10 +1198,10 @@ class Repository:
                             ]}
                         ]
                     },
-                    # 2. Overdue: end_date < date AND status != Completed
+                    # 2. Overdue: end_date < overdue_cutoff AND status != Completed
                     {
                         "$and": [
-                            {"end_date": {"$lt": date}},
+                            {"end_date": {"$lt": overdue_cutoff}},
                             {"status": {"$ne": "Completed"}},
                             {"end_date": {"$ne": None}},
                             {"end_date": {"$ne": ""}}
@@ -1215,7 +1221,11 @@ class Repository:
                  # Calculate is_overdue flag
                  is_overdue = False
                  if date and norm_task.get("end_date") and norm_task.get("status") != "Completed":
-                     if norm_task["end_date"] < date:
+                     # Use the same cutoff logic for the flag
+                     today_str = datetime.utcnow().strftime("%Y-%m-%d")
+                     cutoff = date if date < today_str else today_str
+                     
+                     if norm_task["end_date"] < cutoff:
                          is_overdue = True
                  
                  norm_task["is_overdue"] = is_overdue
