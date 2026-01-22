@@ -574,6 +574,7 @@ class TaskBase(BaseModel):
     status: str = "Todo"
     progress: float = 0.0
     last_rollover_date: Optional[str] = None
+    is_overdue_moved: bool = False
 
 
 class TaskCreate(TaskBase):
@@ -594,6 +595,7 @@ class TaskUpdate(BaseModel):
     tags: Optional[List[str]] = None
     status: Optional[str] = None
     progress: Optional[float] = None
+    is_overdue_moved: Optional[bool] = None
 
 
 class TaskStatusUpdate(BaseModel):
