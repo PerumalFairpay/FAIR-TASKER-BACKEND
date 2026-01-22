@@ -1575,24 +1575,31 @@ class Repository:
                         virt_status = None
                         notes = None
                         
-                        if h_name:
-                            virt_status = "Holiday"
-                            notes = h_name
-                        else:
-                            # Check if employee has an approved leave for this date
-                            for leaf in approved_leaves:
-                                if str(leaf.get("employee_id")) == str(emp.get("id")):
-                                    if leaf.get("start_date") <= dt <= leaf.get("end_date"):
-                                        virt_status = "Leave"
-                                        notes = leaf.get("reason")
-                                        break
-                            
-                            if not virt_status and dt <= today_str:
-                                # It's a past/current date with no attendance, holiday, or leave.
-                                # Check if it's a weekend (optional but helpful)
-                                dt_parsed = datetime.strptime(dt, "%Y-%m-%d")
-                                if dt_parsed.weekday() < 5: # Mon-Fri
-                                    virt_status = "Absent"
+                        # Only create virtual records for past and current dates
+                        if dt <= today_str:
+                            if h_name:
+                                virt_status = "Holiday"
+                                notes = h_name
+                            else:
+                                # Check if employee has an approved leave for this date
+                                for leaf in approved_leaves:
+                                    if str(leaf.get("employee_id")) == str(emp.get("id")):
+                                        if leaf.get("start_date") <= dt <= leaf.get("end_date"):
+                                            virt_status = "Leave"
+                                            notes = leaf.get("reason")
+                                            break
+                                
+                                if not virt_status and dt < today_str:
+                                    # It's a past date with no attendance, holiday, or leave.
+                                    dt_parsed = datetime.strptime(dt, "%Y-%m-%d")
+                                    
+                                    # Check if it's a weekend (Sunday=6, Saturday=5 is a working day)
+                                    if dt_parsed.weekday() == 6:
+                                        virt_status = "Holiday"
+                                        notes = "Sunday"
+                                    else:
+                                        # Weekday with no attendance
+                                        virt_status = "Absent"
                         
                         if virt_status:
                             # If status filter is active, only include if it matches
