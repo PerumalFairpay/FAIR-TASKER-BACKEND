@@ -176,6 +176,7 @@ async def update_task(
     tags: Optional[List[str]] = Form(None, alias="tags[]"),
     status: Optional[str] = Form(None),
     progress: Optional[float] = Form(None),
+    is_overdue_moved: Optional[bool] = Form(None),
     attachments: List[UploadFile] = File(None)
 ):
     try:
@@ -211,6 +212,7 @@ async def update_task(
             tags=tags,
             status=status,
             progress=progress,
+            is_overdue_moved=is_overdue_moved,
             attachments=final_attachments if final_attachments else None
         )
         updated_task = await repo.update_task(task_id, task)
