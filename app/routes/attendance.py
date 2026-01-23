@@ -82,6 +82,34 @@ async def get_all_attendance(
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": f"Server Error: {str(e)}", "success": False})
 
+@router.post("/generate-records")
+async def generate_attendance_records(date: Optional[str] = None, preplanned_only: bool = False):
+    """
+    Manual trigger to generate attendance records for a specific date.
+    Useful for testing or backfilling historical data.
+    
+    Args:
+        date: Date in YYYY-MM-DD format. Defaults to yesterday.
+        preplanned_only: If true, only generates holiday/leave records (no absences).
+    """
+    try:
+        from app.jobs.attendance_jobs import generate_attendance_for_date
+        result = await generate_attendance_for_date(date, preplanned_only=preplanned_only)
+        
+        if result.get("success"):
+            return JSONResponse(
+                status_code=200,
+                content=result
+            )
+        else:
+            return JSONResponse(
+                status_code=400,
+                content=result
+            )
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"message": f"Server Error: {str(e)}", "success": False})
+
+
 @router.post("/import")
 async def import_attendance(file: UploadFile = File(...)):
     try:

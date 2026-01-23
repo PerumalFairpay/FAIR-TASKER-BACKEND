@@ -1144,9 +1144,74 @@ class Repository:
                 await self.leave_requests.update_one(
                     {"_id": ObjectId(leave_request_id)}, {"$set": update_data}
                 )
-            return await self.get_leave_request(leave_request_id)
+            
+            updated_req = await self.get_leave_request(leave_request_id)
+            
+            # If status became Approved, handle immediate attendance update
+            if updated_req and updated_req.get("status") == "Approved":
+                 await self.handle_approved_leave_impact(updated_req)
+                 
+            return updated_req
         except Exception as e:
             raise e
+
+    async def handle_approved_leave_impact(self, leave_req: dict):
+        """
+        If a leave is approved for TODAY, immediately create/update the attendance record.
+        This provides instant feedback on the dashboard.
+        """
+        try:
+            start_date = leave_req.get("start_date")
+            end_date = leave_req.get("end_date")
+            emp_mongo_id = leave_req.get("employee_id") 
+            reason = leave_req.get("reason", "On Leave")
+            
+            today = datetime.utcnow().strftime("%Y-%m-%d")
+            
+            # Check if today is covered by the leave
+            if start_date <= today <= end_date:
+                # Need to find the employee_no_id (which is used in attendance collection)
+                # using the mongo _id stored in leave request
+                employee = await self.employees.find_one({"_id": ObjectId(emp_mongo_id)})
+                if not employee:
+                    return
+                    
+                emp_no_id = str(employee.get("employee_no_id"))
+                
+                # Check existing attendance for today
+                existing = await self.attendance.find_one({"employee_id": emp_no_id, "date": today})
+                
+                if not existing:
+                    # Create Leave record
+                    await self.attendance.insert_one({
+                        "employee_id": emp_no_id,
+                        "date": today,
+                        "status": "Leave",
+                        "notes": reason,
+                        "clock_in": None,
+                        "clock_out": None,
+                        "total_work_hours": 0.0,
+                        "overtime_hours": 0.0,
+                        "device_type": "System Generated (Leave Approved)",
+                        "created_at": datetime.utcnow()
+                    })
+                elif existing.get("status") == "Absent":
+                    # Update Absent record to Leave
+                    await self.attendance.update_one(
+                        {"_id": existing["_id"]},
+                        {"$set": {
+                            "status": "Leave",
+                            "notes": reason,
+                            "device_type": "System Generated (Leave Approved)",
+                            "updated_at": datetime.utcnow()
+                        }}
+                    )
+                # If status is "Present" (Clocked In), we typically don't overwrite it with Leave
+                # as presence usually takes precedence or requires manual fix. 
+                
+        except Exception as e:
+            # We don't want to fail the whole request if this background task fails
+            print(f"Error handling leave impact: {e}")
 
     async def delete_leave_request(self, leave_request_id: str) -> bool:
         try:
@@ -1501,123 +1566,31 @@ class Repository:
             if employee_id:
                 query["employee_id"] = employee_id
                 
-            # Internal status check for the attendance collection
-            db_status = status if status in ["Present", "Late", "Overtime"] else None
-            if db_status:
-                query["status"] = db_status
+            # Status filter for all attendance statuses
+            if status:
+                query["status"] = status
                 
             records = await self.attendance.find(query).sort("date", -1).to_list(length=None)
             
             # Fetch employee details for mapping
             employees = await self.employees.find().to_list(length=None)
             emp_map = {str(e.get("employee_no_id")): normalize(e) for e in employees if e.get("employee_no_id")}
-            id_to_emp_map = {str(e["_id"]): normalize(e) for e in employees}
             
-            # Identify target date range for virtual record generation
-            target_dates = []
-            if date:
-                target_dates = [date]
-            elif start_date and end_date:
-                s_dt = datetime.strptime(start_date, "%Y-%m-%d")
-                e_dt = datetime.strptime(end_date, "%Y-%m-%d")
-                curr = s_dt
-                while curr <= e_dt:
-                    target_dates.append(curr.strftime("%Y-%m-%d"))
-                    curr += timedelta(days=1)
-            else:
-                # Default to today if no date filter is applied
-                target_dates = [datetime.utcnow().strftime("%Y-%m-%d")]
-            
-            # If we are looking for specific virtual statuses or no status filter, 
-            # we need to consider holidays and leaves.
-            include_virtual = not status or status in ["Holiday", "Leave", "Absent"]
-
             result = []
-            attendance_map = {} # (employee_id, date)
             
             for r in records:
                 r_norm = normalize(r)
                 emp_details = emp_map.get(r_norm.get("employee_id"))
                 if emp_details:
-                    if "hashed_password" in emp_details: del emp_details["hashed_password"]
-                    if "password" in emp_details: del emp_details["password"]
+                    # Remove sensitive data
+                    if "hashed_password" in emp_details: 
+                        del emp_details["hashed_password"]
+                    if "password" in emp_details: 
+                        del emp_details["password"]
                 r_norm["employee_details"] = emp_details
                 result.append(r_norm)
-                attendance_map[(r_norm.get("employee_id"), r_norm.get("date"))] = r_norm
-
-            if target_dates and include_virtual:
-                # Fetch holidays and leaves for the target range
-                holidays = await self.holidays.find({"date": {"$in": target_dates}}).to_list(length=None)
-                holiday_map = {h["date"]: h["name"] for h in holidays}
-                
-                leave_query = {"status": "Approved"}
-                # Leaves overlap if start_date <= target_date <= end_date
-                # We fetch all approved leaves that could possibly overlap
-                approved_leaves = await self.leave_requests.find(leave_query).to_list(length=None)
-                
-                today_str = datetime.utcnow().strftime("%Y-%m-%d")
-                
-                # Determine which employees to check
-                employees_to_check = []
-                if employee_id:
-                    emp = emp_map.get(employee_id)
-                    if emp: employees_to_check = [emp]
-                else:
-                    employees_to_check = list(emp_map.values())
-
-                for dt in target_dates:
-                    h_name = holiday_map.get(dt)
-                    for emp in employees_to_check:
-                        emp_no_id = emp.get("employee_no_id")
-                        if (emp_no_id, dt) in attendance_map:
-                            continue
-                        
-                        virt_status = None
-                        notes = None
-                        
-                        # Only create virtual records for past and current dates
-                        if dt <= today_str:
-                            if h_name:
-                                virt_status = "Holiday"
-                                notes = h_name
-                            else:
-                                # Check if employee has an approved leave for this date
-                                for leaf in approved_leaves:
-                                    if str(leaf.get("employee_id")) == str(emp.get("id")):
-                                        if leaf.get("start_date") <= dt <= leaf.get("end_date"):
-                                            virt_status = "Leave"
-                                            notes = leaf.get("reason")
-                                            break
-                                
-                                if not virt_status and dt < today_str:
-                                    # It's a past date with no attendance, holiday, or leave.
-                                    dt_parsed = datetime.strptime(dt, "%Y-%m-%d")
-                                    
-                                    # Check if it's a weekend (Sunday=6, Saturday=5 is a working day)
-                                    if dt_parsed.weekday() == 6:
-                                        virt_status = "Holiday"
-                                        notes = "Sunday"
-                                    else:
-                                        # Weekday with no attendance
-                                        virt_status = "Absent"
-                        
-                        if virt_status:
-                            # If status filter is active, only include if it matches
-                            if status and status != virt_status:
-                                continue
-                            
-                            result.append({
-                                "id": f"v_{emp_no_id}_{dt}",
-                                "employee_id": emp_no_id,
-                                "date": dt,
-                                "status": virt_status,
-                                "notes": notes,
-                                "employee_details": emp,
-                                "clock_in": None,
-                                "clock_out": None,
-                                "total_work_hours": 0.0
-                            })
             
+            # Sort by date and employee name
             result.sort(key=lambda x: (x.get("date", ""), (x.get("employee_details") or {}).get("name", "")), reverse=True)
             
             # Calculate metrics

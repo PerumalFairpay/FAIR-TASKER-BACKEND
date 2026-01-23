@@ -11,8 +11,34 @@ from app.routes import (
     clients, projects, holidays,
     asset_categories, assets, blogs, leave_types, leave_requests, tasks, attendance, permissions, dashboard, files, profile, checklist_templates
 )
+from app.jobs.scheduler import init_scheduler, shutdown_scheduler
+import logging
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Fair Tasker Backend", version="1.0.0", docs_url="/api/docs", redoc_url="/api/redoc")
+
+# Application startup event
+@app.on_event("startup")
+async def startup_event():
+    """Initialize background jobs on application startup"""
+    try:
+        logger.info("Application starting up...")
+        init_scheduler()
+        logger.info("Background scheduler initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize scheduler: {str(e)}")
+
+# Application shutdown event
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Gracefully shutdown background jobs"""
+    try:
+        logger.info("Application shutting down...")
+        shutdown_scheduler()
+        logger.info("Background scheduler stopped successfully")
+    except Exception as e:
+        logger.error(f"Error during scheduler shutdown: {str(e)}")
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
