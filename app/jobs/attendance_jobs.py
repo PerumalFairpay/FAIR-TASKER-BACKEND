@@ -110,7 +110,7 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
                     "clock_out": None,
                     "total_work_hours": 0.0,
                     "overtime_hours": 0.0,
-                    "device_type": "System Generated",
+                    "device_type": "Auto Sync",
                     "created_at": datetime.utcnow()
                 }
                 

@@ -1232,7 +1232,7 @@ class Repository:
                         "clock_out": None,
                         "total_work_hours": 0.0,
                         "overtime_hours": 0.0,
-                        "device_type": "System Generated (Leave Approved)",
+                        "device_type": "Auto Sync",
                         "created_at": datetime.utcnow()
                     })
                 elif existing.get("status") == "Absent":
@@ -1242,7 +1242,7 @@ class Repository:
                         {"$set": {
                             "status": "Leave",
                             "notes": reason,
-                            "device_type": "System Generated (Leave Approved)",
+                            "device_type": "Auto Sync",
                             "updated_at": datetime.utcnow()
                         }}
                     )
