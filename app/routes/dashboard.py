@@ -302,10 +302,13 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                     if att_record:
                         # Record Exists
                         status = att_record.get("status", "Present")
-                        if status == "Present": present_days += 1
-                        elif status == "Absent": absent_days += 1
+                        if status in ["Present", "Late"]: 
+                            present_days += 1
+                        elif status == "Absent": 
+                            absent_days += 1
                         
-                        if att_record.get("is_late"): late_days += 1
+                        if att_record.get("is_late") or status == "Late": 
+                            late_days += 1
                         
                         # Hours
                         wh = float(att_record.get("total_work_hours", 0))
@@ -330,7 +333,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                 "present_days": present_days,
                 "absent_days": absent_days,
                 "late_days": late_days,
-                "half_days": 0, 
+                "holiday_days": len(month_holidays), 
                 "leave_days": leaves_this_month,
                 "total_working_days": total_working_days_elapsed
             }
