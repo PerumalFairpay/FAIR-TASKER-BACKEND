@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, File, UploadFile
 from fastapi.responses import JSONResponse
 from app.crud.repository import repository as repo
-from app.models import AttendanceCreate, AttendanceUpdate
+from app.models import AttendanceCreate, AttendanceUpdate, AttendanceStatusUpdate
 from typing import List, Optional
 from app.auth import verify_token, get_current_user
 import pandas as pd
@@ -46,6 +46,43 @@ async def clock_out(attendance: AttendanceUpdate, current_user: dict = Depends(g
         )
     except ValueError as e:
          return JSONResponse(status_code=400, content={"message": str(e), "success": False})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"message": f"Server Error: {str(e)}", "success": False})
+
+@router.patch("/update-status/{attendance_id}")
+async def update_attendance_status(
+    attendance_id: str,
+    status_update: AttendanceStatusUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Update attendance status for a specific record.
+    If status is changed to 'Leave', automatically creates a leave request with default reason.
+    """
+    try:
+        result = await repo.update_attendance_status(
+            attendance_id, 
+            status_update.status, 
+            status_update.reason,
+            status_update.notes
+        )
+        
+        if not result:
+            return JSONResponse(
+                status_code=404,
+                content={"message": "Attendance record not found", "success": False}
+            )
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": f"Attendance status updated to {status_update.status}",
+                "success": True,
+                "data": result
+            }
+        )
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"message": str(e), "success": False})
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": f"Server Error: {str(e)}", "success": False})
 

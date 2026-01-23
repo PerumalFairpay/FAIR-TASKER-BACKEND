@@ -670,6 +670,13 @@ class AttendanceUpdate(BaseModel):
     status: Optional[str] = None
 
 
+class AttendanceStatusUpdate(BaseModel):
+    """Payload for updating attendance status"""
+    status: str
+    reason: Optional[str] = None
+    notes: Optional[str] = None
+
+
 class AttendanceResponse(AttendanceBase):
     id: str
     employee_details: Optional[dict] = None

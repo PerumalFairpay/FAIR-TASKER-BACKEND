@@ -1606,6 +1606,79 @@ class Repository:
         except Exception as e:
             raise e
 
+    async def update_attendance_status(self, attendance_id: str, status: str, reason: str = None, notes: str = None) -> dict:
+        """
+        Update attendance status for a specific record.
+        If status is 'Leave', creates a leave request with default reason if needed.
+        """
+        try:
+            # Find the attendance record
+            attendance_record = await self.attendance.find_one({"_id": ObjectId(attendance_id)})
+            if not attendance_record:
+                return None
+            
+            # Prepare update data
+            update_data = {
+                "status": status,
+                "updated_at": datetime.utcnow()
+            }
+            
+            if notes:
+                update_data["notes"] = notes
+            
+            # Update the attendance record
+            await self.attendance.update_one(
+                {"_id": ObjectId(attendance_id)},
+                {"$set": update_data}
+            )
+            
+            # If status is changed to "Leave", create a leave request if it doesn't exist
+            if status == "Leave":
+                emp_no_id = attendance_record.get("employee_id")
+                date = attendance_record.get("date")
+                
+                # Find employee by employee_no_id to get MongoDB _id
+                employee = await self.employees.find_one({"employee_no_id": emp_no_id})
+                if employee:
+                    emp_mongo_id = str(employee.get("_id"))
+                    
+                    # Check if a leave request already exists for this date
+                    existing_leave = await self.leave_requests.find_one({
+                        "employee_id": emp_mongo_id,
+                        "start_date": {"$lte": date},
+                        "end_date": {"$gte": date}
+                    })
+                    
+                    if not existing_leave:
+                        # Get default leave type (first active leave type)
+                        default_leave_type = await self.leave_types.find_one({"status": "Active"})
+                        
+                        if default_leave_type:
+                            # Create leave request with default reason
+                            leave_reason = reason if reason else "Manual Leave Entry"
+                            
+                            leave_data = {
+                                "employee_id": emp_mongo_id,
+                                "leave_type_id": str(default_leave_type.get("_id")),
+                                "leave_duration_type": "Single",
+                                "start_date": date,
+                                "end_date": date,
+                                "total_days": 1.0,
+                                "reason": leave_reason,
+                                "status": "Approved",  # Auto-approve since it's manual entry
+                                "created_at": datetime.utcnow(),
+                                "updated_at": datetime.utcnow()
+                            }
+                            
+                            await self.leave_requests.insert_one(leave_data)
+            
+            # Return updated record
+            updated_record = await self.attendance.find_one({"_id": ObjectId(attendance_id)})
+            return normalize(updated_record)
+            
+        except Exception as e:
+            raise e
+
     async def get_employee_attendance(self, employee_id: str, start_date: str = None, end_date: str = None) -> dict:
         try:
             # If no dates provided, default to current month
