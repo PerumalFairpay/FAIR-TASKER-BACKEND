@@ -1048,6 +1048,22 @@ class Repository:
     async def create_leave_request(self, leave_request: LeaveRequestCreate, attachment_path: str = None) -> dict:
         try:
             leave_request_data = leave_request.dict()
+            
+            # Check for overlapping leave requests
+            existing_leave = await self.leave_requests.find_one({
+                "employee_id": leave_request.employee_id,
+                "status": {"$in": ["Approved", "Pending"]},
+                "$or": [
+                    {
+                        "start_date": {"$lte": leave_request.end_date},
+                        "end_date": {"$gte": leave_request.start_date}
+                    }
+                ]
+            })
+            
+            if existing_leave:
+                raise ValueError(f"A leave request already exists for the selected dates (Status: {existing_leave.get('status')})")
+            
             if attachment_path:
                 leave_request_data["attachment"] = attachment_path
             
