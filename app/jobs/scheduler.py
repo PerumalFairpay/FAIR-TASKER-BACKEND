@@ -28,7 +28,7 @@ def init_scheduler():
     # Runs at 01:02 AM
     scheduler.add_job(
         generate_today_preplanned_records,
-        trigger=CronTrigger(hour=1, minute=2),
+        trigger=CronTrigger(hour=0, minute=5),
         id="daily_preplanned_attendance",
         name="Generate Pre-planned Attendance (Leaves/Holidays)",
         replace_existing=True
