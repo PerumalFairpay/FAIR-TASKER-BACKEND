@@ -1610,12 +1610,17 @@ class Repository:
         """
         Update attendance status for a specific record.
         If status is 'Leave', creates a leave request with default reason if needed.
+        If status changes FROM 'Leave' to something else, deletes the associated leave request.
         """
         try:
             # Find the attendance record
             attendance_record = await self.attendance.find_one({"_id": ObjectId(attendance_id)})
             if not attendance_record:
                 return None
+            
+            old_status = attendance_record.get("status")
+            emp_no_id = attendance_record.get("employee_id")
+            date = attendance_record.get("date")
             
             # Prepare update data
             update_data = {
@@ -1632,24 +1637,59 @@ class Repository:
                 {"$set": update_data}
             )
             
-            # If status is changed to "Leave", create a leave request if it doesn't exist
-            if status == "Leave":
-                emp_no_id = attendance_record.get("employee_id")
-                date = attendance_record.get("date")
+            # Find employee by employee_no_id to get MongoDB _id
+            employee = await self.employees.find_one({"employee_no_id": emp_no_id})
+            if employee:
+                emp_mongo_id = str(employee.get("_id"))
                 
-                # Find employee by employee_no_id to get MongoDB _id
-                employee = await self.employees.find_one({"employee_no_id": emp_no_id})
-                if employee:
-                    emp_mongo_id = str(employee.get("_id"))
+                # If status is changed FROM "Leave" to something else, reject the leave request
+                if old_status == "Leave" and status != "Leave":
+                    # Reject leave request that covers this specific date
+                    rejection_reason = notes if notes else "Attendance status changed from Leave"
                     
-                    # Check if a leave request already exists for this date
+                    # Reject any approved leave that covers this date
+                    await self.leave_requests.update_many(
+                        {
+                            "employee_id": emp_mongo_id,
+                            "start_date": {"$lte": date},
+                            "end_date": {"$gte": date},
+                            "status": "Approved"
+                        },
+                        {
+                            "$set": {
+                                "status": "Rejected",
+                                "rejection_reason": rejection_reason,
+                                "updated_at": datetime.utcnow()
+                            }
+                        }
+                    )
+                
+                # If status is changed TO "Leave", create or update leave request
+                elif status == "Leave":
+                    # Check if a leave request already exists for this date (including rejected ones)
                     existing_leave = await self.leave_requests.find_one({
                         "employee_id": emp_mongo_id,
                         "start_date": {"$lte": date},
                         "end_date": {"$gte": date}
                     })
                     
-                    if not existing_leave:
+                    if existing_leave:
+                        # If leave exists but is rejected, re-approve it
+                        if existing_leave.get("status") == "Rejected":
+                            leave_reason = reason if reason else existing_leave.get("reason", "Manual Leave Entry")
+                            await self.leave_requests.update_one(
+                                {"_id": existing_leave["_id"]},
+                                {
+                                    "$set": {
+                                        "status": "Approved",
+                                        "reason": leave_reason,
+                                        "rejection_reason": None,  # Clear rejection reason
+                                        "updated_at": datetime.utcnow()
+                                    }
+                                }
+                            )
+                    else:
+                        # No existing leave, create a new one
                         # Get default leave type (first active leave type)
                         default_leave_type = await self.leave_types.find_one({"status": "Active"})
                         
