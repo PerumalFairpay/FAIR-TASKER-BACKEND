@@ -1135,6 +1135,9 @@ class Repository:
 
     async def update_leave_request(self, leave_request_id: str, leave_request: LeaveRequestUpdate, attachment_path: str = None) -> dict:
         try:
+            # Fetch current state before update to check for status changes
+            old_req = await self.get_leave_request(leave_request_id)
+            
             update_data = {k: v for k, v in leave_request.dict().items() if v is not None}
             if attachment_path:
                 update_data["attachment"] = attachment_path
@@ -1147,13 +1150,50 @@ class Repository:
             
             updated_req = await self.get_leave_request(leave_request_id)
             
-            # If status became Approved, handle immediate attendance update
-            if updated_req and updated_req.get("status") == "Approved":
+            if not updated_req or not old_req:
+                return updated_req
+
+            old_status = old_req.get("status")
+            new_status = updated_req.get("status")
+
+            # Logic 1: Status changed TO Approved
+            if new_status == "Approved" and old_status != "Approved":
                  await self.handle_approved_leave_impact(updated_req)
+            
+            # Logic 2: Status changed FROM Approved TO something else (Cancellation/Rejection)
+            elif old_status == "Approved" and new_status != "Approved":
+                await self.cleanup_leave_attendance_records(old_req)
                  
             return updated_req
         except Exception as e:
             raise e
+
+    async def cleanup_leave_attendance_records(self, leave_req: dict):
+        """
+        Removes system-generated "Leave" attendance records for a given leave request.
+        Used when a leave is cancelled, rejected, or deleted.
+        """
+        try:
+            start_date = leave_req.get("start_date")
+            end_date = leave_req.get("end_date")
+            emp_mongo_id = leave_req.get("employee_id")
+            
+            employee = await self.employees.find_one({"_id": ObjectId(emp_mongo_id)})
+            if not employee:
+                return
+                
+            emp_no_id = str(employee.get("employee_no_id"))
+            
+            # Remove "Leave" records for this employee in the date range
+            # ONLY if they haven't clocked in (clock_in is None)
+            await self.attendance.delete_many({
+                "employee_id": emp_no_id,
+                "date": {"$gte": start_date, "$lte": end_date},
+                "status": "Leave",
+                "clock_in": None
+            })
+        except Exception as e:
+            print(f"Error cleaning up leave attendance: {e}")
 
     async def handle_approved_leave_impact(self, leave_req: dict):
         """
@@ -1215,7 +1255,17 @@ class Repository:
 
     async def delete_leave_request(self, leave_request_id: str) -> bool:
         try:
+            # Fetch the request first so we know what to cleanup
+            leave_req = await self.get_leave_request(leave_request_id)
+            if not leave_req:
+                return False
+                
             result = await self.leave_requests.delete_one({"_id": ObjectId(leave_request_id)})
+            
+            if result.deleted_count > 0 and leave_req.get("status") == "Approved":
+                # If it was approved, cleanup the attendance records for its dates
+                await self.cleanup_leave_attendance_records(leave_req)
+            
             return result.deleted_count > 0
         except Exception as e:
             raise e
@@ -1477,19 +1527,39 @@ class Repository:
     # Attendance CRUD
     async def clock_in(self, attendance: AttendanceCreate, employee_id: str) -> dict:
         try:
-            # Check if already clocked in for this date
+            # Check if already has an attendance record for this date
             existing = await self.attendance.find_one({
                 "employee_id": employee_id,
                 "date": attendance.date
             })
-            if existing:
-                raise ValueError("Already clocked in for this date")
 
             attendance_data = attendance.dict()
             attendance_data["employee_id"] = employee_id
-            attendance_data["created_at"] = datetime.utcnow()
+            attendance_data["updated_at"] = datetime.utcnow()
             attendance_data["status"] = "Present"
             
+            if existing:
+                # If they are already marked "Present", "Late", or "Overtime", don't allow double clock-in
+                if existing.get("status") in ["Present", "Late", "Overtime"]:
+                    raise ValueError("Already clocked in for this date")
+                
+                # If they were marked "Absent", "Leave", or "Holiday" by the system, 
+                # we OVERSHADOW it because the employee actually showed up to work.
+                await self.attendance.update_one(
+                    {"_id": existing["_id"]},
+                    {"$set": {
+                        "clock_in": attendance_data["clock_in"],
+                        "device_type": attendance_data["device_type"],
+                        "status": "Present",
+                        "notes": f"Overrode {existing.get('status')} - Employee clocked in",
+                        "updated_at": datetime.utcnow()
+                    }}
+                )
+                attendance_data["id"] = str(existing["_id"])
+                return normalize({**existing, **attendance_data})
+            
+            # No existing record, create new one
+            attendance_data["created_at"] = datetime.utcnow()
             result = await self.attendance.insert_one(attendance_data)
             attendance_data["id"] = str(result.inserted_id)
             return normalize(attendance_data)
