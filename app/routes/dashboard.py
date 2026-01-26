@@ -418,7 +418,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                         days_diff = (this_year_bday - now_utc.replace(hour=0, minute=0, second=0, microsecond=0)).days
                         if days_diff == 0:
                             birthdays.append({
-                                "name": e.get("name"), "date": this_year_bday.strftime("%Y-%m-%d"),
+                                "name": e.get("name"), "date": this_year_bday.strftime("%b %d"),
                                 "days_until": days_diff, "profile_picture": e.get("profile_picture")
                             })
                     except: pass
