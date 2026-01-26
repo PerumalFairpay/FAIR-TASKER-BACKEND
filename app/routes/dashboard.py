@@ -214,7 +214,130 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                 }
             }
 
-            # 5. Alerts & Notifications
+            # 5. Task Analytics
+            all_tasks = await repo.get_tasks()
+            
+            # Overview Metrics
+            total_tasks = len(all_tasks)
+            completed_tasks = len([t for t in all_tasks if t.get("status") == "Completed"])
+            in_progress_tasks = len([t for t in all_tasks if t.get("status") == "In Progress"])
+            pending_tasks = len([t for t in all_tasks if t.get("status") == "Pending"])
+            review_tasks = len([t for t in all_tasks if t.get("status") == "In Review"]) # Assuming this status exists
+            
+            overdue_tasks_count = len([
+                t for t in all_tasks 
+                if t.get("end_date") and t.get("end_date") < today_str and t.get("status") != "Completed"
+            ])
+            
+            completion_rate = round((completed_tasks / total_tasks) * 100, 1) if total_tasks > 0 else 0.0
+
+            # Status Distribution
+            status_dist = {
+                "todo": pending_tasks,
+                "in_progress": in_progress_tasks,
+                "in_review": review_tasks,
+                "completed": completed_tasks
+            }
+
+            # Priority Breakdown
+            prio_counts = {"Critical": 0, "High": 0, "Medium": 0, "Low": 0}
+            for t in all_tasks:
+                p = t.get("priority", "Medium")
+                if p in prio_counts: prio_counts[p] += 1
+            
+            priority_breakdown = {
+                "critical": prio_counts["Critical"],
+                "high": prio_counts["High"],
+                "medium": prio_counts["Medium"],
+                "low": prio_counts["Low"]
+            }
+
+            # Productivity Trends (Mock Data / Logic based on updated_at if available)
+            # For now, we'll keep the structure ready with mock last 7 days data to match the UI request
+            productivity_trends = {
+                "labels": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+                "completed": [5, 8, 12, 5, 20, 15, 10], # Mocked
+                "created": [10, 12, 15, 8, 12, 10, 5]   # Mocked
+            }
+
+            # Top Contributors
+            contributor_map = {}
+            for t in all_tasks:
+                if t.get("status") == "Completed":
+                    raw_assignee = t.get("assigned_to")
+                    assignees = []
+                    if isinstance(raw_assignee, list):
+                        assignees = raw_assignee
+                    elif raw_assignee:
+                        assignees = [raw_assignee]
+                        
+                    for assignee_id in assignees:
+                         if assignee_id not in contributor_map:
+                             contributor_map[assignee_id] = {"count": 0, "name": "Unknown"}
+                         contributor_map[assignee_id]["count"] += 1
+            
+            # Enrich with names
+            top_contributors = []
+            for eid, data in contributor_map.items():
+                emp = next((e for e in employees if str(e.get("employee_no_id")) == str(eid)), None) # Using employee_no_id as link key
+                # Or try matching _id if assigned_to uses ObjectIds
+                if not emp:
+                     emp = next((e for e in employees if str(e.get("_id")) == str(eid)), None)
+
+                if emp:
+                    top_contributors.append({
+                        "name": emp.get("name"),
+                        "role": emp.get("designation", "Employee"),
+                        "completed": data["count"],
+                        "efficiency": random.randint(70, 99) # Placeholder for efficiency metric
+                    })
+            
+            top_contributors.sort(key=lambda x: x["completed"], reverse=True)
+            top_contributors = top_contributors[:5]
+
+            recent_overdue_tasks = []
+            for t in all_tasks:
+                if t.get("end_date") and t.get("end_date") < today_str and t.get("status") != "Completed":
+                     assignee_name = "Unassigned"
+                     
+                     # robustly get first assignee ID
+                     raw_assignee = t.get("assigned_to")
+                     assignee_id = None
+                     if isinstance(raw_assignee, list) and len(raw_assignee) > 0:
+                         assignee_id = raw_assignee[0]
+                     elif raw_assignee and not isinstance(raw_assignee, list):
+                         assignee_id = raw_assignee
+
+                     if assignee_id:
+                         emp = next((e for e in employees if str(e.get("employee_no_id")) == str(assignee_id)), None)
+                         if not emp: emp = next((e for e in employees if str(e.get("_id")) == str(assignee_id)), None)
+                         if emp: assignee_name = emp.get("name")
+                         
+                     recent_overdue_tasks.append({
+                         "id": str(t.get("_id", "")),
+                         "title": t.get("task_name"),
+                         "assigned_to": assignee_name,
+                         "due_date": t.get("end_date"),
+                         "priority": t.get("priority")
+                     })
+            
+            task_analytics = {
+                "overview": {
+                    "total_assigned": total_tasks,
+                    "completed": completed_tasks,
+                    "in_progress": in_progress_tasks,
+                    "pending": pending_tasks,
+                    "overdue": overdue_tasks_count,
+                    "completion_rate_percentage": completion_rate
+                },
+                "status_distribution": status_dist,
+                "priority_breakdown": priority_breakdown,
+                "productivity_trends": productivity_trends,
+                "top_contributors": top_contributors,
+                "recent_overdue_tasks": recent_overdue_tasks[:5]
+            }
+
+            # 6. Alerts & Notifications
             alerts = {
                 "critical": [], "warnings": [], "info": []
             }
@@ -329,6 +452,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                 "attendance_analytics": attendance_analytics,
                 "leave_analytics": leave_analytics,
                 "project_analytics": project_analytics,
+                "task_analytics": task_analytics,
                 "alerts": alerts,
                 "recent_activities": recent_activities,
                 "upcoming_events": upcoming_events
