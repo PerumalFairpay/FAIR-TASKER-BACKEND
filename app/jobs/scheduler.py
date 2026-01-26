@@ -25,26 +25,26 @@ def init_scheduler():
     scheduler = AsyncIOScheduler()
     
     # 1. Morning Job: Generate Pre-planned Attendance (Leaves & Holidays)
-    # Runs at 01:02 AM
+    # Runs at 06:35 PM UTC (12:05 AM IST)
     scheduler.add_job(
         generate_today_preplanned_records,
-        trigger=CronTrigger(hour=0, minute=5),
+        trigger=CronTrigger(hour=18, minute=35),
         id="daily_preplanned_attendance",
         name="Generate Pre-planned Attendance (Leaves/Holidays)",
         replace_existing=True
     )
     
     # 2. Night Job: Generate Full Attendance (Absences)
-    # Runs at 23:59 PM
+    # Runs at 06:27 PM UTC (11:57 PM IST)
     scheduler.add_job(
         generate_daily_attendance_records,
-        trigger=CronTrigger(hour=23, minute=59),
+        trigger=CronTrigger(hour=18, minute=27),
         id="daily_full_attendance",
         name="Generate Daily Attendance Records (Absences)",
         replace_existing=True
     )
     
-    logger.info("Scheduled jobs: Pre-planned at 01:02 AM, Full generation at 23:59 PM")
+    logger.info("Scheduled jobs: Pre-planned at 12:05 AM IST, Full generation at 11:57 PM IST")
     
     # Start the scheduler
     scheduler.start()
