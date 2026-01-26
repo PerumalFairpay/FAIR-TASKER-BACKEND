@@ -5,6 +5,9 @@ FROM python:3.10-slim
 # Set the working directory in the container
 WORKDIR /app
 
+# Disable Python output buffering
+ENV PYTHONUNBUFFERED=1
+
 # Copy the file from your host to your current location
 COPY requirements.txt .
 

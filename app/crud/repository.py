@@ -1048,6 +1048,22 @@ class Repository:
     async def create_leave_request(self, leave_request: LeaveRequestCreate, attachment_path: str = None) -> dict:
         try:
             leave_request_data = leave_request.dict()
+            
+            # Check for overlapping leave requests
+            existing_leave = await self.leave_requests.find_one({
+                "employee_id": leave_request.employee_id,
+                "status": {"$in": ["Approved", "Pending"]},
+                "$or": [
+                    {
+                        "start_date": {"$lte": leave_request.end_date},
+                        "end_date": {"$gte": leave_request.start_date}
+                    }
+                ]
+            })
+            
+            if existing_leave:
+                raise ValueError(f"A leave request already exists for the selected dates (Status: {existing_leave.get('status')})")
+            
             if attachment_path:
                 leave_request_data["attachment"] = attachment_path
             
@@ -1135,6 +1151,9 @@ class Repository:
 
     async def update_leave_request(self, leave_request_id: str, leave_request: LeaveRequestUpdate, attachment_path: str = None) -> dict:
         try:
+            # Fetch current state before update to check for status changes
+            old_req = await self.get_leave_request(leave_request_id)
+            
             update_data = {k: v for k, v in leave_request.dict().items() if v is not None}
             if attachment_path:
                 update_data["attachment"] = attachment_path
@@ -1144,13 +1163,125 @@ class Repository:
                 await self.leave_requests.update_one(
                     {"_id": ObjectId(leave_request_id)}, {"$set": update_data}
                 )
-            return await self.get_leave_request(leave_request_id)
+            
+            updated_req = await self.get_leave_request(leave_request_id)
+            
+            if not updated_req or not old_req:
+                return updated_req
+
+            old_status = old_req.get("status")
+            new_status = updated_req.get("status")
+
+            # Logic 1: Status changed TO Approved
+            if new_status == "Approved" and old_status != "Approved":
+                 await self.handle_approved_leave_impact(updated_req)
+            
+            # Logic 2: Status changed FROM Approved TO something else (Cancellation/Rejection)
+            elif old_status == "Approved" and new_status != "Approved":
+                await self.cleanup_leave_attendance_records(old_req)
+                 
+            return updated_req
         except Exception as e:
             raise e
 
+    async def cleanup_leave_attendance_records(self, leave_req: dict):
+        """
+        Removes system-generated "Leave" attendance records for a given leave request.
+        Used when a leave is cancelled, rejected, or deleted.
+        """
+        try:
+            start_date = leave_req.get("start_date")
+            end_date = leave_req.get("end_date")
+            emp_mongo_id = leave_req.get("employee_id")
+            
+            employee = await self.employees.find_one({"_id": ObjectId(emp_mongo_id)})
+            if not employee:
+                return
+                
+            emp_no_id = str(employee.get("employee_no_id"))
+            
+            # Remove "Leave" records for this employee in the date range
+            # ONLY if they haven't clocked in (clock_in is None)
+            await self.attendance.delete_many({
+                "employee_id": emp_no_id,
+                "date": {"$gte": start_date, "$lte": end_date},
+                "status": "Leave",
+                "clock_in": None
+            })
+        except Exception as e:
+            print(f"Error cleaning up leave attendance: {e}")
+
+    async def handle_approved_leave_impact(self, leave_req: dict):
+        """
+        If a leave is approved for TODAY, immediately create/update the attendance record.
+        This provides instant feedback on the dashboard.
+        """
+        try:
+            start_date = leave_req.get("start_date")
+            end_date = leave_req.get("end_date")
+            emp_mongo_id = leave_req.get("employee_id") 
+            reason = leave_req.get("reason", "On Leave")
+            
+            today = datetime.utcnow().strftime("%Y-%m-%d")
+            
+            # Check if today is covered by the leave
+            if start_date <= today <= end_date:
+                # Need to find the employee_no_id (which is used in attendance collection)
+                # using the mongo _id stored in leave request
+                employee = await self.employees.find_one({"_id": ObjectId(emp_mongo_id)})
+                if not employee:
+                    return
+                    
+                emp_no_id = str(employee.get("employee_no_id"))
+                
+                # Check existing attendance for today
+                existing = await self.attendance.find_one({"employee_id": emp_no_id, "date": today})
+                
+                if not existing:
+                    # Create Leave record
+                    await self.attendance.insert_one({
+                        "employee_id": emp_no_id,
+                        "date": today,
+                        "status": "Leave",
+                        "notes": reason,
+                        "clock_in": None,
+                        "clock_out": None,
+                        "total_work_hours": 0.0,
+                        "overtime_hours": 0.0,
+                        "device_type": "Auto Sync",
+                        "created_at": datetime.utcnow()
+                    })
+                elif existing.get("status") == "Absent":
+                    # Update Absent record to Leave
+                    await self.attendance.update_one(
+                        {"_id": existing["_id"]},
+                        {"$set": {
+                            "status": "Leave",
+                            "notes": reason,
+                            "device_type": "Auto Sync",
+                            "updated_at": datetime.utcnow()
+                        }}
+                    )
+                # If status is "Present" (Clocked In), we typically don't overwrite it with Leave
+                # as presence usually takes precedence or requires manual fix. 
+                
+        except Exception as e:
+            # We don't want to fail the whole request if this background task fails
+            print(f"Error handling leave impact: {e}")
+
     async def delete_leave_request(self, leave_request_id: str) -> bool:
         try:
+            # Fetch the request first so we know what to cleanup
+            leave_req = await self.get_leave_request(leave_request_id)
+            if not leave_req:
+                return False
+                
             result = await self.leave_requests.delete_one({"_id": ObjectId(leave_request_id)})
+            
+            if result.deleted_count > 0 and leave_req.get("status") == "Approved":
+                # If it was approved, cleanup the attendance records for its dates
+                await self.cleanup_leave_attendance_records(leave_req)
+            
             return result.deleted_count > 0
         except Exception as e:
             raise e
@@ -1412,19 +1543,39 @@ class Repository:
     # Attendance CRUD
     async def clock_in(self, attendance: AttendanceCreate, employee_id: str) -> dict:
         try:
-            # Check if already clocked in for this date
+            # Check if already has an attendance record for this date
             existing = await self.attendance.find_one({
                 "employee_id": employee_id,
                 "date": attendance.date
             })
-            if existing:
-                raise ValueError("Already clocked in for this date")
 
             attendance_data = attendance.dict()
             attendance_data["employee_id"] = employee_id
-            attendance_data["created_at"] = datetime.utcnow()
+            attendance_data["updated_at"] = datetime.utcnow()
             attendance_data["status"] = "Present"
             
+            if existing:
+                # If they are already marked "Present", "Late", or "Overtime", don't allow double clock-in
+                if existing.get("status") in ["Present", "Late", "Overtime"]:
+                    raise ValueError("Already clocked in for this date")
+                
+                # If they were marked "Absent", "Leave", or "Holiday" by the system, 
+                # we OVERSHADOW it because the employee actually showed up to work.
+                await self.attendance.update_one(
+                    {"_id": existing["_id"]},
+                    {"$set": {
+                        "clock_in": attendance_data["clock_in"],
+                        "device_type": attendance_data["device_type"],
+                        "status": "Present",
+                        "notes": f"Overrode {existing.get('status')} - Employee clocked in",
+                        "updated_at": datetime.utcnow()
+                    }}
+                )
+                attendance_data["id"] = str(existing["_id"])
+                return normalize({**existing, **attendance_data})
+            
+            # No existing record, create new one
+            attendance_data["created_at"] = datetime.utcnow()
             result = await self.attendance.insert_one(attendance_data)
             attendance_data["id"] = str(result.inserted_id)
             return normalize(attendance_data)
@@ -1471,6 +1622,119 @@ class Repository:
         except Exception as e:
             raise e
 
+    async def update_attendance_status(self, attendance_id: str, status: str, reason: str = None, notes: str = None) -> dict:
+        """
+        Update attendance status for a specific record.
+        If status is 'Leave', creates a leave request with default reason if needed.
+        If status changes FROM 'Leave' to something else, deletes the associated leave request.
+        """
+        try:
+            # Find the attendance record
+            attendance_record = await self.attendance.find_one({"_id": ObjectId(attendance_id)})
+            if not attendance_record:
+                return None
+            
+            old_status = attendance_record.get("status")
+            emp_no_id = attendance_record.get("employee_id")
+            date = attendance_record.get("date")
+            
+            # Prepare update data
+            update_data = {
+                "status": status,
+                "updated_at": datetime.utcnow()
+            }
+            
+            if notes:
+                update_data["notes"] = notes
+            
+            # Update the attendance record
+            await self.attendance.update_one(
+                {"_id": ObjectId(attendance_id)},
+                {"$set": update_data}
+            )
+            
+            # Find employee by employee_no_id to get MongoDB _id
+            employee = await self.employees.find_one({"employee_no_id": emp_no_id})
+            if employee:
+                emp_mongo_id = str(employee.get("_id"))
+                
+                # If status is changed FROM "Leave" to something else, reject the leave request
+                if old_status == "Leave" and status != "Leave":
+                    # Reject leave request that covers this specific date
+                    rejection_reason = notes if notes else "Attendance status changed from Leave"
+                    
+                    # Reject any approved leave that covers this date
+                    await self.leave_requests.update_many(
+                        {
+                            "employee_id": emp_mongo_id,
+                            "start_date": {"$lte": date},
+                            "end_date": {"$gte": date},
+                            "status": "Approved"
+                        },
+                        {
+                            "$set": {
+                                "status": "Rejected",
+                                "rejection_reason": rejection_reason,
+                                "updated_at": datetime.utcnow()
+                            }
+                        }
+                    )
+                
+                # If status is changed TO "Leave", create or update leave request
+                elif status == "Leave":
+                    # Check if a leave request already exists for this date (including rejected ones)
+                    existing_leave = await self.leave_requests.find_one({
+                        "employee_id": emp_mongo_id,
+                        "start_date": {"$lte": date},
+                        "end_date": {"$gte": date}
+                    })
+                    
+                    if existing_leave:
+                        # If leave exists but is rejected, re-approve it
+                        if existing_leave.get("status") == "Rejected":
+                            leave_reason = reason if reason else existing_leave.get("reason", "Manual Leave Entry")
+                            await self.leave_requests.update_one(
+                                {"_id": existing_leave["_id"]},
+                                {
+                                    "$set": {
+                                        "status": "Approved",
+                                        "reason": leave_reason,
+                                        "rejection_reason": None,  # Clear rejection reason
+                                        "updated_at": datetime.utcnow()
+                                    }
+                                }
+                            )
+                    else:
+                        # No existing leave, create a new one
+                        # Get default leave type (first active leave type)
+                        default_leave_type = await self.leave_types.find_one({"status": "Active"})
+                        
+                        if default_leave_type:
+                            # Create leave request with default reason
+                            leave_reason = reason if reason else "Manual Leave Entry"
+                            
+                            leave_data = {
+                                "employee_id": emp_mongo_id,
+                                "leave_type_id": str(default_leave_type.get("_id")),
+                                "leave_duration_type": "Single",
+                                "start_date": date,
+                                "end_date": date,
+                                "total_days": 1.0,
+                                "reason": leave_reason,
+                                "status": "Approved",  # Auto-approve since it's manual entry
+                                "created_at": datetime.utcnow(),
+                                "updated_at": datetime.utcnow()
+                            }
+                            
+                            await self.leave_requests.insert_one(leave_data)
+            
+            # Return updated record
+            updated_record = await self.attendance.find_one({"_id": ObjectId(attendance_id)})
+            return normalize(updated_record)
+            
+        except Exception as e:
+            raise e
+
     async def get_employee_attendance(self, employee_id: str, start_date: str = None, end_date: str = None) -> dict:
         try:
             # If no dates provided, default to current month
@@ -1501,116 +1765,31 @@ class Repository:
             if employee_id:
                 query["employee_id"] = employee_id
                 
-            # Internal status check for the attendance collection
-            db_status = status if status in ["Present", "Late", "Overtime"] else None
-            if db_status:
-                query["status"] = db_status
+            # Status filter for all attendance statuses
+            if status:
+                query["status"] = status
                 
             records = await self.attendance.find(query).sort("date", -1).to_list(length=None)
             
             # Fetch employee details for mapping
             employees = await self.employees.find().to_list(length=None)
             emp_map = {str(e.get("employee_no_id")): normalize(e) for e in employees if e.get("employee_no_id")}
-            id_to_emp_map = {str(e["_id"]): normalize(e) for e in employees}
             
-            # Identify target date range for virtual record generation
-            target_dates = []
-            if date:
-                target_dates = [date]
-            elif start_date and end_date:
-                s_dt = datetime.strptime(start_date, "%Y-%m-%d")
-                e_dt = datetime.strptime(end_date, "%Y-%m-%d")
-                curr = s_dt
-                while curr <= e_dt:
-                    target_dates.append(curr.strftime("%Y-%m-%d"))
-                    curr += timedelta(days=1)
-            else:
-                # Default to today if no date filter is applied
-                target_dates = [datetime.utcnow().strftime("%Y-%m-%d")]
-            
-            # If we are looking for specific virtual statuses or no status filter, 
-            # we need to consider holidays and leaves.
-            include_virtual = not status or status in ["Holiday", "Leave", "Absent"]
-
             result = []
-            attendance_map = {} # (employee_id, date)
             
             for r in records:
                 r_norm = normalize(r)
                 emp_details = emp_map.get(r_norm.get("employee_id"))
                 if emp_details:
-                    if "hashed_password" in emp_details: del emp_details["hashed_password"]
-                    if "password" in emp_details: del emp_details["password"]
+                    # Remove sensitive data
+                    if "hashed_password" in emp_details: 
+                        del emp_details["hashed_password"]
+                    if "password" in emp_details: 
+                        del emp_details["password"]
                 r_norm["employee_details"] = emp_details
                 result.append(r_norm)
-                attendance_map[(r_norm.get("employee_id"), r_norm.get("date"))] = r_norm
-
-            if target_dates and include_virtual:
-                # Fetch holidays and leaves for the target range
-                holidays = await self.holidays.find({"date": {"$in": target_dates}}).to_list(length=None)
-                holiday_map = {h["date"]: h["name"] for h in holidays}
-                
-                leave_query = {"status": "Approved"}
-                # Leaves overlap if start_date <= target_date <= end_date
-                # We fetch all approved leaves that could possibly overlap
-                approved_leaves = await self.leave_requests.find(leave_query).to_list(length=None)
-                
-                today_str = datetime.utcnow().strftime("%Y-%m-%d")
-                
-                # Determine which employees to check
-                employees_to_check = []
-                if employee_id:
-                    emp = emp_map.get(employee_id)
-                    if emp: employees_to_check = [emp]
-                else:
-                    employees_to_check = list(emp_map.values())
-
-                for dt in target_dates:
-                    h_name = holiday_map.get(dt)
-                    for emp in employees_to_check:
-                        emp_no_id = emp.get("employee_no_id")
-                        if (emp_no_id, dt) in attendance_map:
-                            continue
-                        
-                        virt_status = None
-                        notes = None
-                        
-                        if h_name:
-                            virt_status = "Holiday"
-                            notes = h_name
-                        else:
-                            # Check if employee has an approved leave for this date
-                            for leaf in approved_leaves:
-                                if str(leaf.get("employee_id")) == str(emp.get("id")):
-                                    if leaf.get("start_date") <= dt <= leaf.get("end_date"):
-                                        virt_status = "Leave"
-                                        notes = leaf.get("reason")
-                                        break
-                            
-                            if not virt_status and dt <= today_str:
-                                # It's a past/current date with no attendance, holiday, or leave.
-                                # Check if it's a weekend (optional but helpful)
-                                dt_parsed = datetime.strptime(dt, "%Y-%m-%d")
-                                if dt_parsed.weekday() < 5: # Mon-Fri
-                                    virt_status = "Absent"
-                        
-                        if virt_status:
-                            # If status filter is active, only include if it matches
-                            if status and status != virt_status:
-                                continue
-                            
-                            result.append({
-                                "id": f"v_{emp_no_id}_{dt}",
-                                "employee_id": emp_no_id,
-                                "date": dt,
-                                "status": virt_status,
-                                "notes": notes,
-                                "employee_details": emp,
-                                "clock_in": None,
-                                "clock_out": None,
-                                "total_work_hours": 0.0
-                            })
             
+            # Sort by date and employee name
             result.sort(key=lambda x: (x.get("date", ""), (x.get("employee_details") or {}).get("name", "")), reverse=True)
             
             # Calculate metrics

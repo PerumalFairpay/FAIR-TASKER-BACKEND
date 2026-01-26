@@ -9,6 +9,7 @@ services:
     environment:
       - DATABASE_URL=mongodb://db:27017
       - DATABASE_NAME=fairpay_hrm_db
+      - PYTHONUNBUFFERED=1
     depends_on:
       - db
     volumes:
