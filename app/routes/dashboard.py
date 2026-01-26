@@ -26,139 +26,316 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
 
         if user_role == "admin":
             # --- ADMIN DASHBOARD ---
+            now_utc = datetime.utcnow()
+            today_str = now_utc.strftime("%Y-%m-%d")
             
-            # 1. Overview Counts
+            # 1. Employee Analytics
             employees, _ = await repo.get_employees(limit=1000)
-            clients = await repo.get_clients()
-            projects = await repo.get_projects()
-            leave_requests = await repo.get_leave_requests()
+            thirty_days_ago = (now_utc - timedelta(days=30)).strftime("%Y-%m-%d")
+            sixty_days_ago = (now_utc - timedelta(days=60)).strftime("%Y-%m-%d")
             
             total_employees = len(employees)
-            total_clients = len(clients)
-            total_projects = len(projects)
-            active_projects = len([p for p in projects if p.get("status") == "Active"])
-            pending_leaves = len([l for l in leave_requests if l.get("status") == "Pending"])
+            active_employees = len([e for e in employees if e.get("status") == "Active"])
+            inactive_employees = total_employees - active_employees
             
-            approved_leaves_today = 0
-            for l in leave_requests:
-                if l.get("status") == "Approved" and l.get("start_date") <= today_str <= l.get("end_date"):
-                    approved_leaves_today += 1
+            new_hires_this_month = len([e for e in employees if e.get("date_of_joining") and e.get("date_of_joining") >= thirty_days_ago])
+            new_hires_last_month = len([e for e in employees if e.get("date_of_joining") and sixty_days_ago <= e.get("date_of_joining") < thirty_days_ago])
+            
+            growth_rate = 0
+            if total_employees - new_hires_this_month > 0:
+                growth_rate = round((new_hires_this_month / (total_employees - new_hires_this_month)) * 100, 1)
 
-            # 2. Task Metrics
-            all_tasks = await repo.get_tasks()
-            total_tasks_pending = 0
-            total_tasks_completed = 0
-            tasks_overdue = 0
-            by_priority = {"High": 0, "Medium": 0, "Low": 0}
-            by_status = {"Todo": 0, "In Progress": 0, "Review": 0, "Completed": 0}
-            
-            for t in all_tasks:
-                status = t.get("status", "Todo")
-                priority = t.get("priority", "Medium")
-                if status == "Completed":
-                    total_tasks_completed += 1
-                else:
-                    total_tasks_pending += 1
-                    if t.get("end_date") and t.get("end_date") < today_str:
-                        tasks_overdue += 1
-                
-                # Safe increment
-                if priority in by_priority: by_priority[priority] += 1
-                
-                # Safe increment status
-                if status not in by_status: by_status[status] = 0
-                by_status[status] += 1
+            # Attrition (Mock logic for now as we don't have exit data clearly tracked in basic employees list)
+            attrition_this_month = len([e for e in employees if e.get("status") == "Inactive" and e.get("updated_at") and str(e.get("updated_at")) >= thirty_days_ago])
+            attrition_rate = round((attrition_this_month / total_employees) * 100, 1) if total_employees > 0 else 0
 
-            completion_rate = 0
-            if len(all_tasks) > 0:
-                completion_rate = round((total_tasks_completed / len(all_tasks)) * 100, 1)
-
-            # 3. Attendance Metrics (Today)
-            attendance_data = await repo.get_all_attendance(date=today_str)
-            att_metrics = attendance_data.get("metrics", {})
-            
-            # 4. New Employees (Last 30 days)
-            thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).strftime("%Y-%m-%d")
-            new_employees = [
-                e for e in employees 
-                if e.get("date_of_joining") and e.get("date_of_joining") >= thirty_days_ago
-            ]
-            new_employees.sort(key=lambda x: x.get("date_of_joining"), reverse=True)
-            new_employees = new_employees[:5] # Top 5
-            
-            # 5. Department Distribution
-            dept_counts = {}
+            # Work Mode Distribution
+            work_modes = {"Office": 0, "Remote": 0, "Hybrid": 0}
             for e in employees:
-                d = e.get("department", "Unknown")
-                dept_counts[d] = dept_counts.get(d, 0) + 1
+                m = e.get("work_mode", "Office")
+                if m in work_modes: work_modes[m] += 1
             
-            department_distribution = [{"name": k, "count": v} for k, v in dept_counts.items()]
-            
-            # 6. Recent Activity (Simplified Mock or Real)
-            # We can combine recent leave requests and maybe recent project creations
-            # Real implementation: Recent pending leaves + Recent created projects
-            recent_activities = []
-            
-            # Recent Leaves
-            sorted_leaves = sorted(leave_requests, key=lambda x: x.get("created_at", ""), reverse=True)
-            for l in sorted_leaves[:3]:
-                emp_name = l.get("employee_details", {}).get("name", "Unknown")
-                recent_activities.append({
-                    "type": "leave_request",
-                    "message": f"{emp_name} requested {l.get('leave_type_details', {}).get('name', 'Leave')}",
-                    "timestamp": l.get("created_at")
-                })
-                
-            # Recent Projects
-            sorted_projects = sorted(projects, key=lambda x: x.get("created_at", ""), reverse=True)
-            for p in sorted_projects[:3]:
-                 recent_activities.append({
-                    "type": "project_create",
-                    "message": f"New project '{p.get('name')}' created",
-                    "timestamp": p.get("created_at")
-                })
-            
-            # Sort combined
-            recent_activities.sort(key=lambda x: str(x.get("timestamp")), reverse=True)
-            recent_activities = recent_activities[:5]
+            work_mode_dist = {
+                "office": work_modes["Office"],
+                "remote": work_modes["Remote"],
+                "hybrid": work_modes["Hybrid"],
+                "office_percentage": round((work_modes["Office"] / total_employees) * 100, 1) if total_employees > 0 else 0,
+                "remote_percentage": round((work_modes["Remote"] / total_employees) * 100, 1) if total_employees > 0 else 0,
+                "hybrid_percentage": round((work_modes["Hybrid"] / total_employees) * 100, 1) if total_employees > 0 else 0
+            }
 
-            # Client Stats
-            active_clients = len([c for c in clients if c.get("status") == "Active"])
-            # New clients logic similar to employees if needed, skipping complex date logic for now, utilizing simplified stat
+            recent_hires = sorted(
+                [e for e in employees if e.get("date_of_joining")],
+                key=lambda x: x.get("date_of_joining"),
+                reverse=True
+            )[:5]
             
+            upcoming_confirmations = []
+            for e in employees:
+                conf_date = e.get("confirmation_date")
+                if conf_date and conf_date >= today_str:
+                    days_diff = (datetime.strptime(conf_date, "%Y-%m-%d") - datetime.strptime(today_str, "%Y-%m-%d")).days
+                    if days_diff <= 30:
+                        upcoming_confirmations.append({**e, "days_until_confirmation": days_diff})
+            
+            upcoming_exits = []
+            for e in employees:
+                last_day = e.get("last_working_day")
+                if last_day and last_day >= today_str:
+                    days_diff = (datetime.strptime(last_day, "%Y-%m-%d") - datetime.strptime(today_str, "%Y-%m-%d")).days
+                    if days_diff <= 30:
+                        upcoming_exits.append({**e, "days_remaining": days_diff})
+
+            employee_analytics = {
+                "overview": {
+                    "total_count": total_employees,
+                    "active_count": active_employees,
+                    "inactive_count": inactive_employees,
+                    "new_hires_this_month": new_hires_this_month,
+                    "new_hires_last_month": new_hires_last_month,
+                    "growth_rate_percentage": growth_rate,
+                    "attrition_this_month": attrition_this_month,
+                    "attrition_rate_percentage": attrition_rate
+                },
+                "work_mode_distribution": work_mode_dist,
+                "recent_hires": [
+                    {
+                        "id": e.get("id"), "name": e.get("name"), "email": e.get("email"),
+                        "profile_picture": e.get("profile_picture"), "department": e.get("department"),
+                        "designation": e.get("designation"), "date_of_joining": e.get("date_of_joining")
+                    } for e in recent_hires
+                ],
+                "upcoming_confirmations": [
+                    {
+                        "id": e.get("id"), "name": e.get("name"), "email": e.get("email"),
+                        "profile_picture": e.get("profile_picture"), "department": e.get("department"),
+                        "confirmation_date": e.get("confirmation_date"), "days_until_confirmation": e.get("days_until_confirmation")
+                    } for e in sorted(upcoming_confirmations, key=lambda x: x["confirmation_date"])[:5]
+                ],
+                "upcoming_exits": [
+                    {
+                        "id": e.get("id"), "name": e.get("name"), "email": e.get("email"),
+                        "profile_picture": e.get("profile_picture"), "department": e.get("department"),
+                        "last_working_day": e.get("last_working_day"), "days_remaining": e.get("days_remaining")
+                    } for e in sorted(upcoming_exits, key=lambda x: x["last_working_day"])[:5]
+                ]
+            }
+
+            # 2. Attendance Analytics
+            start_of_week = (now_utc - timedelta(days=now_utc.weekday())).strftime("%Y-%m-%d")
+            start_of_month = now_utc.replace(day=1).strftime("%Y-%m-%d")
+            
+            att_today = await repo.get_all_attendance(date=today_str)
+            att_week = await repo.get_all_attendance(start_date=start_of_week, end_date=today_str)
+            att_month = await repo.get_all_attendance(start_date=start_of_month, end_date=today_str)
+            
+            today_metrics = att_today.get("metrics", {})
+            week_metrics = att_week.get("metrics", {})
+            month_metrics = att_month.get("metrics", {})
+            
+            # Punctuality/Attendance Concerns (Mock Logic or simplified)
+            attendance_concerns = []
+            att_records_month = att_month.get("data", [])
+            emp_att_summary = {}
+            for r in att_records_month:
+                eid = r.get("employee_id")
+                if eid not in emp_att_summary: emp_att_summary[eid] = {"late": 0, "absent": 0, "present": 0}
+                status = r.get("status")
+                if status == "Late": emp_att_summary[eid]["late"] += 1
+                elif status == "Absent": emp_att_summary[eid]["absent"] += 1
+                elif status == "Present": emp_att_summary[eid]["present"] += 1
+
+            for eid, stats in emp_att_summary.items():
+                if stats["late"] > 3 or stats["absent"] > 2:
+                    emp_info = next((e for e in employees if e.get("employee_no_id") == eid), {})
+                    attendance_concerns.append({
+                        "employee_id": eid,
+                        "name": emp_info.get("name", "Unknown"),
+                        "profile_picture": emp_info.get("profile_picture"),
+                        "late_count": stats["late"],
+                        "absent_days": stats["absent"],
+                        "concern_level": "high" if stats["late"] > 5 or stats["absent"] > 3 else "medium"
+                    })
+
+            attendance_analytics = {
+                "today": {
+                    "date": today_str,
+                    "total_employees": total_employees,
+                    "present": today_metrics.get("present", 0),
+                    "absent": today_metrics.get("absent", 0),
+                    "on_leave": today_metrics.get("leave", 0),
+                    "late": today_metrics.get("late", 0),
+                    "present_percentage": round((today_metrics.get("present", 0) / total_employees) * 100, 1) if total_employees > 0 else 0,
+                    "avg_work_hours": today_metrics.get("avg_work_hours", 0)
+                },
+                "this_week": {
+                    "avg_attendance_percentage": round((week_metrics.get("present", 0) / (total_employees * 5)) * 100, 1) if total_employees > 0 else 0,
+                    "total_late_instances": week_metrics.get("late", 0),
+                    "avg_work_hours_per_day": week_metrics.get("avg_work_hours", 0)
+                },
+                "this_month": {
+                    "total_late_instances": month_metrics.get("late", 0),
+                    "total_absences": month_metrics.get("absent", 0),
+                    "avg_work_hours_per_day": month_metrics.get("avg_work_hours", 0)
+                },
+                "attendance_concerns": sorted(attendance_concerns, key=lambda x: x["late_count"] + x["absent_days"], reverse=True)[:5]
+            }
+
+            # 3. Leave Management
+            leave_requests = await repo.get_leave_requests()
+            pending_leaves = [l for l in leave_requests if l.get("status") == "Pending"]
+            approved_today = len([l for l in leave_requests if l.get("status") == "Approved" and l.get("start_date") <= today_str <= l.get("end_date")])
+            
+            leave_analytics = {
+                "overview": {
+                    "pending_requests": len(pending_leaves),
+                    "approved_today": approved_today,
+                    "total_leaves_this_month": len([l for l in leave_requests if l.get("status") == "Approved" and l.get("start_date") >= start_of_month])
+                },
+                "pending_requests": [
+                    {
+                        "id": str(l.get("id")), "employee_name": l.get("employee_details", {}).get("name"),
+                        "leave_type": l.get("leave_type_details", {}).get("name"),
+                        "start_date": l.get("start_date"), "end_date": l.get("end_date"),
+                        "total_days": l.get("total_days"), "reason": l.get("reason"),
+                        "applied_on": l.get("created_at")
+                    } for l in sorted(pending_leaves, key=lambda x: str(x.get("created_at")), reverse=True)[:5]
+                ]
+            }
+
+            # 4. Project Analytics
+            projects = await repo.get_projects()
+            project_analytics = {
+                "overview": {
+                    "total_projects": len(projects),
+                    "active_projects": len([p for p in projects if p.get("status") == "Active"]),
+                    "completed_projects": len([p for p in projects if p.get("status") == "Completed"]),
+                    "on_hold_projects": len([p for p in projects if p.get("status") == "On Hold"])
+                }
+            }
+
+            # 5. Alerts & Notifications
+            alerts = {
+                "critical": [], "warnings": [], "info": []
+            }
+            # Overdue Projects
+            overdue_projs = [p for p in projects if p.get("status") == "Active" and p.get("end_date") and p.get("end_date") < today_str]
+            if overdue_projs:
+                alerts["critical"].append({
+                    "type": "project_overdue", "severity": "critical",
+                    "message": f"{len(overdue_projs)} projects are overdue",
+                    "count": len(overdue_projs), "action_required": True, "link": "/projects"
+                })
+            
+            # Pending Leaves
+            if pending_leaves:
+                alerts["critical"].append({
+                    "type": "pending_leave_requests", "severity": "high",
+                    "message": f"{len(pending_leaves)} leave requests pending approval",
+                    "count": len(pending_leaves), "action_required": True, "link": "/leaves"
+                })
+
+            # Low Attendance Concern
+            low_att_emps = [c for c in attendance_concerns if c["concern_level"] == "high"]
+            if low_att_emps:
+                alerts["warnings"].append({
+                    "type": "low_attendance", "severity": "medium",
+                    "message": f"{len(low_att_emps)} employees with critical attendance issues",
+                    "count": len(low_att_emps), "action_required": False, "link": "/attendance"
+                })
+
+            # 6. Recent Activities
+            recent_activities = []
+            # Recent Employee Joins
+            for e in sorted(employees, key=lambda x: x.get("created_at") or "", reverse=True)[:3]:
+                recent_activities.append({
+                    "type": "employee_joined", "icon": "user-plus",
+                    "message": f"{e.get('name')} joined as {e.get('designation')}",
+                    "timestamp": e.get("created_at"), "priority": "low"
+                })
+            # Recent Project Creations
+            for p in sorted(projects, key=lambda x: x.get("created_at") or "", reverse=True)[:3]:
+                recent_activities.append({
+                    "type": "project_created", "icon": "folder",
+                    "message": f"New project '{p.get('name')}' created",
+                    "timestamp": p.get("created_at"), "priority": "high"
+                })
+            # Recent Leave Requests
+            for l in sorted(leave_requests, key=lambda x: x.get("created_at") or "", reverse=True)[:3]:
+                msg = f"{l.get('employee_details', {}).get('name')} requested {l.get('leave_type_details', {}).get('name')}"
+                recent_activities.append({
+                    "type": "leave_request", "icon": "calendar",
+                    "message": msg, "timestamp": l.get("created_at"), "priority": "medium"
+                })
+            
+            recent_activities = sorted(recent_activities, key=lambda x: str(x["timestamp"]), reverse=True)[:10]
+
+            # 7. Upcoming Events
+            # Holidays
+            upcoming_holidays_list = []
+            for h in upcoming_holidays:
+                upcoming_holidays_list.append({
+                    "name": h.get("name"), "date": h.get("date"),
+                    "days_until": (datetime.strptime(h.get("date"), "%Y-%m-%d") - datetime.strptime(today_str, "%Y-%m-%d")).days,
+                    "type": h.get("holiday_type")
+                })
+            
+            # Birthdays & Anniversaries
+            birthdays = []
+            anniversaries = []
+            for e in employees:
+                # Birthday Logic
+                dob_str = e.get("date_of_birth")
+                if dob_str:
+                    try:
+                        dob = datetime.strptime(dob_str, "%Y-%m-%d")
+                        this_year_bday = dob.replace(year=now_utc.year)
+                        if this_year_bday < now_utc.replace(hour=0, minute=0, second=0, microsecond=0):
+                            this_year_bday = dob.replace(year=now_utc.year + 1)
+                        days_diff = (this_year_bday - now_utc.replace(hour=0, minute=0, second=0, microsecond=0)).days
+                        if 0 <= days_diff <= 30:
+                            birthdays.append({
+                                "name": e.get("name"), "date": this_year_bday.strftime("%Y-%m-%d"),
+                                "days_until": days_diff, "profile_picture": e.get("profile_picture")
+                            })
+                    except: pass
+                
+                # Anniversary Logic
+                doj_str = e.get("date_of_joining")
+                if doj_str:
+                    try:
+                        doj = datetime.strptime(doj_str, "%Y-%m-%d")
+                        this_year_anniv = doj.replace(year=now_utc.year)
+                        if this_year_anniv < now_utc.replace(hour=0, minute=0, second=0, microsecond=0):
+                             this_year_anniv = doj.replace(year=now_utc.year + 1)
+                        days_diff = (this_year_anniv - now_utc.replace(hour=0, minute=0, second=0, microsecond=0)).days
+                        if 0 <= days_diff <= 30:
+                            anniversaries.append({
+                                "name": e.get("name"), "date": this_year_anniv.strftime("%Y-%m-%d"),
+                                "days_until": days_diff, "years_completed": this_year_anniv.year - doj.year,
+                                "profile_picture": e.get("profile_picture")
+                            })
+                    except: pass
+
+            upcoming_events = {
+                "holidays": upcoming_holidays_list,
+                "birthdays": sorted(birthdays, key=lambda x: x["days_until"]),
+                "anniversaries": sorted(anniversaries, key=lambda x: x["days_until"])
+            }
+
             data = {
                 "type": "admin",
-                "overview": {
-                    "total_employees": total_employees,
-                    "total_clients": total_clients,
-                    "active_projects": active_projects,
-                    "total_projects": total_projects,
-                    "pending_leaves": pending_leaves,
-                    "approved_leaves_today": approved_leaves_today
-                },
-                "task_metrics": {
-                    "total_pending": total_tasks_pending,
-                    "total_completed": total_tasks_completed,
-                    "overdue": tasks_overdue,
-                    "completion_rate": completion_rate,
-                    "by_priority": by_priority,
-                    "by_status": by_status
-                },
-                "attendance_metrics": {
-                    "today_stats": att_metrics,
-                    # average_check_in_time could be calculated if needed
-                },
-                "new_employees": new_employees,
-                "department_distribution": department_distribution,
+                "employee_analytics": employee_analytics,
+                "attendance_analytics": attendance_analytics,
+                "leave_analytics": leave_analytics,
+                "project_analytics": project_analytics,
+                "alerts": alerts,
                 "recent_activities": recent_activities,
-                "client_stats": {
-                    "active_clients": active_clients,
-                    "new_clients_this_month": 0 # Placeholder or implement date logic
-                },
-                "upcoming_holidays": upcoming_holidays
+                "upcoming_events": upcoming_events
             }
             
             return JSONResponse(status_code=200, content={"success": True, "data": data})
+
 
         else:
             # --- EMPLOYEE DASHBOARD ---
