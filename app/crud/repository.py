@@ -1094,7 +1094,8 @@ class Repository:
                     "code": lt.get("code"),
                     "total_allowed": total_allowed,
                     "used": used,
-                    "available": max(0, total_allowed - used)
+                    "available": max(0, total_allowed - used),
+                    "allowed_hours": lt.get("allowed_hours", 0)
                 })
             return balances
         except Exception as e:
