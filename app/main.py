@@ -85,9 +85,28 @@ app.include_router(api_router, prefix="/api")
  
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    formatted_errors = {}
+    for error in exc.errors():
+        loc = error.get("loc", [])
+        # Skip the location type (body, query, etc.) if possible for cleaner field names
+        if loc and loc[0] in ("body", "query", "path") and len(loc) > 1:
+            field = ".".join(str(x) for x in loc[1:])
+        else:
+            field = ".".join(str(x) for x in loc)
+        
+        msg = error.get("msg")
+        formatted_errors[field] = msg
+
+    first_error_msg = "Validation failed"
+    if exc.errors():
+        error = exc.errors()[0]
+        field = str(error.get("loc", ["field"])[-1])
+        msg = error.get("msg", "invalid input")
+        first_error_msg = f"{field.replace('_', ' ').capitalize()}: {msg}"
+
     return error_response(
-        message="Validation failed",
-        errors=exc.errors(),
+        message=first_error_msg,
+        errors=formatted_errors,
         status_code=422
     )
 
