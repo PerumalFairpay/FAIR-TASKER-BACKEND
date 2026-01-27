@@ -53,7 +53,7 @@ permissions_data = [
     {"name": "Manage Projects", "slug": "project:manage", "module": "Projects", "description": "Create and manage project lifecycles"},
     {"name": "View Projects", "slug": "project:view", "module": "Projects", "description": "Access project details and status"},
     
-    # Finance
+    # expense -seeder updated
     {"name": "View Expenses", "slug": "expense:view", "module": "Finance", "description": "View expense records"},
     {"name": "Submit Expense", "slug": "expense:submit", "module": "Finance", "description": "Submit personal expense claims"},
     {"name": "Approve Expenses", "slug": "expense:approve", "module": "Finance", "description": "Financial approval of expense claims"},
@@ -63,7 +63,8 @@ permissions_data = [
     {"name": "View Assets", "slug": "asset:view", "module": "Assets", "description": "View list of assigned or available assets"},
     
     # Document Management
-    {"name": "Manage Documents", "slug": "document:manage", "module": "Documents", "description": "Upload and organize company documents"},
+    {"name": "View Documents", "slug": "document:view", "module": "Documents", "description": "View company documents"},
+    {"name": "Submit Document", "slug": "document:submit", "module": "Documents", "description": "Upload and manage documents"},
     
     # Miscellaneous
     {"name": "Manage Holidays", "slug": "holiday:manage", "module": "Settings", "description": "Manage the annual holiday calendar"},
