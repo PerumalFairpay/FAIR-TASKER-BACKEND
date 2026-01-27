@@ -54,7 +54,7 @@ permissions_data = [
     {"name": "View Projects", "slug": "project:view", "module": "Projects", "description": "Access project details and status"},
     
     # Finance
-    {"name": "View All Expenses", "slug": "expense:view_all", "module": "Finance", "description": "View company-wide expense records"},
+    {"name": "View Expenses", "slug": "expense:view", "module": "Finance", "description": "View expense records"},
     {"name": "Submit Expense", "slug": "expense:submit", "module": "Finance", "description": "Submit personal expense claims"},
     {"name": "Approve Expenses", "slug": "expense:approve", "module": "Finance", "description": "Financial approval of expense claims"},
     
