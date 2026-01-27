@@ -482,6 +482,7 @@ class LeaveTypeBase(BaseModel):
     status: str = "Active"
     number_of_days: int
     monthly_allowed: int
+    allowed_hours: Optional[float] = 0.0
 
 
 class LeaveTypeCreate(LeaveTypeBase):
@@ -512,6 +513,8 @@ class LeaveRequestBase(BaseModel):
     start_date: str
     end_date: str
     half_day_session: Optional[str] = None  # "First Half", "Second Half"
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
     total_days: float
     reason: str
     attachment: Optional[str] = None
@@ -530,6 +533,8 @@ class LeaveRequestUpdate(BaseModel):
     leave_duration_type: Optional[str] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
     half_day_session: Optional[str] = None
     total_days: Optional[float] = None
     reason: Optional[str] = None

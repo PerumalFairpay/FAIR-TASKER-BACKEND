@@ -1226,6 +1226,10 @@ class Repository:
             
             # Check if today is covered by the leave
             if start_date <= today <= end_date:
+                # If it's a "Permission" type (short duration), do NOT mark as "Leave" in attendance.
+                if leave_req.get("leave_duration_type") == "Permission":
+                    return
+
                 # Need to find the employee_no_id (which is used in attendance collection)
                 # using the mongo _id stored in leave request
                 employee = await self.employees.find_one({"_id": ObjectId(emp_mongo_id)})
