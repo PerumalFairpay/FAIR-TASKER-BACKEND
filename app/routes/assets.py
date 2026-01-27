@@ -6,14 +6,14 @@ from typing import List, Optional
 import os
 from app.helper.file_handler import file_handler
 
-from app.auth import verify_token
+from app.auth import verify_token, require_permission
 
 router = APIRouter(prefix="/assets", tags=["assets"], dependencies=[Depends(verify_token)])
 
 UPLOAD_DIR = "static/assets"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-@router.post("/", response_model=AssetResponse)
+@router.post("/", response_model=AssetResponse, dependencies=[Depends(require_permission("asset:manage"))])
 async def create_asset(
     asset_name: str = Form(...),
     asset_category_id: str = Form(...),
@@ -73,7 +73,7 @@ async def create_asset(
     except Exception as e:
         return error_response(message=f"Failed to create asset: {str(e)}", status_code=500)
 
-@router.get("/all")
+@router.get("/all", dependencies=[Depends(require_permission("asset:view"))])
 async def get_assets():
     try:
         assets = await repository.get_assets()
@@ -84,7 +84,7 @@ async def get_assets():
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
-@router.get("/{asset_id}")
+@router.get("/{asset_id}", dependencies=[Depends(require_permission("asset:view"))])
 async def get_asset(asset_id: str):
     try:
         asset = await repository.get_asset(asset_id)
@@ -97,7 +97,7 @@ async def get_asset(asset_id: str):
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
-@router.put("/{asset_id}")
+@router.put("/{asset_id}", dependencies=[Depends(require_permission("asset:manage"))])
 async def update_asset(
     asset_id: str,
     asset_name: Optional[str] = Form(None),
@@ -160,7 +160,7 @@ async def update_asset(
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
-@router.delete("/{asset_id}")
+@router.delete("/{asset_id}", dependencies=[Depends(require_permission("asset:manage"))])
 async def delete_asset(asset_id: str):
     try:
         success = await repository.delete_asset(asset_id)
@@ -171,7 +171,7 @@ async def delete_asset(asset_id: str):
         return error_response(message=str(e), status_code=500)
 
 
-@router.put("/{asset_id}/assignment")
+@router.put("/{asset_id}/assignment", dependencies=[Depends(require_permission("asset:manage"))])
 async def manage_asset_assignment(asset_id: str, request: AssetAssignmentRequest):
     try:
         updated_asset = await repository.manage_asset_assignment(asset_id, request.employee_id)
@@ -184,7 +184,7 @@ async def manage_asset_assignment(asset_id: str, request: AssetAssignmentRequest
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
-@router.get("/employee/{employee_id}")
+@router.get("/employee/{employee_id}", dependencies=[Depends(require_permission("asset:view"))])
 async def get_assets_by_employee(employee_id: str):
     try:
         assets = await repository.get_assets_by_employee(employee_id)

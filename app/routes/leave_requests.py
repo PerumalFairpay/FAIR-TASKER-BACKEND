@@ -20,6 +20,10 @@ async def create_leave_request(
     total_days: float = Form(...),
     reason: str = Form(...),
     half_day_session: Optional[str] = Form(None),
+    start_session: Optional[str] = Form("Full Day"),
+    end_session: Optional[str] = Form("Full Day"),
+    start_time: Optional[str] = Form(None),
+    end_time: Optional[str] = Form(None),
     attachment: Optional[UploadFile] = File(None)
 ):
     try:
@@ -38,6 +42,10 @@ async def create_leave_request(
             total_days=total_days,
             reason=reason,
             half_day_session=half_day_session,
+            start_session=start_session,
+            end_session=end_session,
+            start_time=start_time,
+            end_time=end_time,
             status="Pending",
             attachment=attachment_path,
             file_type=file_type
@@ -132,6 +140,10 @@ async def update_leave_request(
     reason: Optional[str] = Form(None),
     status: Optional[str] = Form(None),
     half_day_session: Optional[str] = Form(None),
+    start_session: Optional[str] = Form(None),
+    end_session: Optional[str] = Form(None),
+    start_time: Optional[str] = Form(None),
+    end_time: Optional[str] = Form(None),
     attachment: Optional[UploadFile] = File(None)
 ):
     try:
@@ -151,6 +163,10 @@ async def update_leave_request(
             reason=reason,
             status=status,
             half_day_session=half_day_session,
+            start_session=start_session,
+            end_session=end_session,
+            start_time=start_time,
+            end_time=end_time,
             attachment=attachment_path,
             file_type=file_type
         )

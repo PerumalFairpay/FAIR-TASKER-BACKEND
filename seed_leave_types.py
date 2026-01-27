@@ -25,21 +25,13 @@ leave_types_data = [
         "monthly_allowed": 1
     },
     {
-        "name": "Sick Leave",
+        "name": "Sick & Earned Leave",
         "type": "Paid",
-        "code": "SL",
+        "code": "SL & EL",
         "status": "Active",
         "number_of_days": 10,
         "monthly_allowed": 1
-    },
-    {
-        "name": "Earned Leave",
-        "type": "Paid",
-        "code": "EL",
-        "status": "Active",
-        "number_of_days": 15,
-        "monthly_allowed": 2
-    },
+    }, 
     {
         "name": "Loss of Pay",
         "type": "Unpaid",
@@ -47,23 +39,7 @@ leave_types_data = [
         "status": "Active",
         "number_of_days": 365,
         "monthly_allowed": 0
-    },
-    {
-        "name": "Maternity Leave",
-        "type": "Paid",
-        "code": "ML",
-        "status": "Active",
-        "number_of_days": 180,
-        "monthly_allowed": 0
-    },
-    {
-        "name": "Paternity Leave",
-        "type": "Paid",
-        "code": "PL",
-        "status": "Active",
-        "number_of_days": 5,
-        "monthly_allowed": 0
-    },
+    }, 
     {
         "name": "Compensatory Off",
         "type": "Paid",
@@ -78,7 +54,8 @@ leave_types_data = [
         "code": "PER",
         "status": "Active",
         "number_of_days": 12,
-        "monthly_allowed": 2
+        "monthly_allowed": 2,
+        "allowed_hours": 2
     }
 ]
 
