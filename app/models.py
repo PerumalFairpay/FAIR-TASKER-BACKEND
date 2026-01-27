@@ -496,6 +496,7 @@ class LeaveTypeUpdate(BaseModel):
     status: Optional[str] = None
     number_of_days: Optional[int] = None
     monthly_allowed: Optional[int] = None
+    allowed_hours: Optional[float] = None
 
 
 class LeaveTypeResponse(LeaveTypeBase):
