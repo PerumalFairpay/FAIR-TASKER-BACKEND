@@ -514,6 +514,8 @@ class LeaveRequestBase(BaseModel):
     start_date: str
     end_date: str
     half_day_session: Optional[str] = None  # "First Half", "Second Half"
+    start_session: Optional[str] = "Full Day" # "Full Day", "Second Half" (For Multiple)
+    end_session: Optional[str] = "Full Day"   # "Full Day", "First Half" (For Multiple)
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     total_days: float
@@ -537,6 +539,8 @@ class LeaveRequestUpdate(BaseModel):
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     half_day_session: Optional[str] = None
+    start_session: Optional[str] = None
+    end_session: Optional[str] = None
     total_days: Optional[float] = None
     reason: Optional[str] = None
     attachment: Optional[str] = None
