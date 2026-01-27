@@ -129,13 +129,13 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             att_week = await repo.get_all_attendance(start_date=start_of_week, end_date=today_str)
             att_month = await repo.get_all_attendance(start_date=start_of_month, end_date=today_str)
             
-            today_metrics = att_today.get("metrics", {})
-            week_metrics = att_week.get("metrics", {})
-            month_metrics = att_month.get("metrics", {})
+            today_metrics = (att_today or {}).get("metrics", {})
+            week_metrics = (att_week or {}).get("metrics", {})
+            month_metrics = (att_month or {}).get("metrics", {})
             
             # Punctuality/Attendance Concerns (Mock Logic or simplified)
             attendance_concerns = []
-            att_records_month = att_month.get("data", [])
+            att_records_month = (att_month or {}).get("data", [])
             emp_att_summary = {}
             for r in att_records_month:
                 eid = r.get("employee_id")
@@ -194,8 +194,8 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                 },
                 "pending_requests": [
                     {
-                        "id": str(l.get("id")), "employee_name": l.get("employee_details", {}).get("name"),
-                        "leave_type": l.get("leave_type_details", {}).get("name"),
+                        "id": str(l.get("id")), "employee_name": (l.get("employee_details") or {}).get("name"),
+                        "leave_type": (l.get("leave_type_details") or {}).get("name"),
                         "start_date": l.get("start_date"), "end_date": l.get("end_date"),
                         "total_days": l.get("total_days"), "reason": l.get("reason"),
                         "applied_on": l.get("created_at")
@@ -385,7 +385,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                 })
             # Recent Leave Requests
             for l in sorted(leave_requests, key=lambda x: x.get("created_at") or "", reverse=True)[:3]:
-                msg = f"{l.get('employee_details', {}).get('name')} requested {l.get('leave_type_details', {}).get('name')}"
+                msg = f"{(l.get('employee_details') or {}).get('name')} requested {(l.get('leave_type_details') or {}).get('name')}"
                 recent_activities.append({
                     "type": "leave_request", "icon": "calendar",
                     "message": msg, "timestamp": l.get("created_at"), "priority": "medium"
