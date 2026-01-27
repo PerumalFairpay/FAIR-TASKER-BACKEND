@@ -416,9 +416,9 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                         if this_year_bday < now_utc.replace(hour=0, minute=0, second=0, microsecond=0):
                             this_year_bday = dob.replace(year=now_utc.year + 1)
                         days_diff = (this_year_bday - now_utc.replace(hour=0, minute=0, second=0, microsecond=0)).days
-                        if 0 <= days_diff <= 30:
+                        if days_diff == 0:
                             birthdays.append({
-                                "name": e.get("name"), "date": this_year_bday.strftime("%Y-%m-%d"),
+                                "name": e.get("name"), "date": this_year_bday.strftime("%b %d"),
                                 "days_until": days_diff, "profile_picture": e.get("profile_picture")
                             })
                     except: pass
@@ -775,13 +775,17 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                     try:
                         # Parse date, assuming YYYY-MM-DD
                         dob = datetime.strptime(dob_str, "%Y-%m-%d")
-                        # Check if birthday is in next 30 days
+                        # Check if birthday is today
                         this_year_bday = dob.replace(year=today_date.year)
-                        if this_year_bday < today_date:
+                        
+                        # Normalize today_date to midnight for day-based comparison
+                        today_midnight = today_date.replace(hour=0, minute=0, second=0, microsecond=0)
+                        
+                        if this_year_bday < today_midnight:
                             this_year_bday = dob.replace(year=today_date.year + 1)
                         
-                        days_diff = (this_year_bday - today_date).days
-                        if 0 <= days_diff <= 30:
+                        days_diff = (this_year_bday - today_midnight).days
+                        if days_diff == 0:
                             birthdays.append({
                                 "name": e.get("name"),
                                 "date": this_year_bday.strftime("%b %d"),

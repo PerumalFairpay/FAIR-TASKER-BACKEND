@@ -140,12 +140,15 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
 
 async def generate_today_preplanned_records():
     """
-    Morning job (01:02 AM) to generate Leave & Holiday records for TODAY.
+    Morning job (12:05 AM IST) to generate Leave & Holiday records for the starting day.
     Does NOT generate 'Absent' records.
     """
     try:
-        today_str = datetime.utcnow().strftime("%Y-%m-%d")
-        logger.info(f"Starting morning pre-planned attendance generation for {today_str}")
+        # Calculate current date in IST (UTC + 5:30)
+        ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
+        today_str = ist_now.strftime("%Y-%m-%d")
+        
+        logger.info(f"Starting morning pre-planned attendance generation for {today_str} (IST)")
         return await generate_attendance_for_date(today_str, preplanned_only=True)
     except Exception as e:
         logger.error(f"Morning pre-planned generation failed: {str(e)}")
@@ -153,16 +156,16 @@ async def generate_today_preplanned_records():
 
 async def generate_daily_attendance_records():
     """
-    Night job (23:59 PM) to generate ALL missing records for TODAY.
+    Night job (11:57 PM IST) to generate ALL missing records for the ending day.
     This fills in 'Absent' records for anyone who didn't clock in.
     """
     try:
-        # We run this at the very end of the day, so 'today' is correct.
-        today_str = datetime.utcnow().strftime("%Y-%m-%d")
-        logger.info(f"Starting end-of-day attendance generation for {today_str}")
+        # Calculate current date in IST (UTC + 5:30)
+        ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
+        today_str = ist_now.strftime("%Y-%m-%d")
         
+        logger.info(f"Starting end-of-day attendance generation for {today_str} (IST)")
         return await generate_attendance_for_date(today_str, preplanned_only=False)
-        
     except Exception as e:
         logger.error(f"Daily attendance job failed: {str(e)}")
         return {"success": False, "message": str(e)}
