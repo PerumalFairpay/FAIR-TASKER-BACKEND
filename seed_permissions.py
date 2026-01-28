@@ -62,7 +62,7 @@ permissions_data = [
     {"name": "View Assets", "slug": "asset:view", "module": "Assets", "description": "View list of assigned or available assets"},
     {"name": "Submit Asset Request", "slug": "asset:submit", "module": "Assets", "description": "Request new assets or return existing ones"},
     
-    # Document Management
+    # Document Management -seeder updated
     {"name": "View Documents", "slug": "document:view", "module": "Documents", "description": "View company documents"},
     {"name": "Submit Document", "slug": "document:submit", "module": "Documents", "description": "Upload and manage documents"},
     
