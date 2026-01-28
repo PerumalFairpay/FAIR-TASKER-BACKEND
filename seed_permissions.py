@@ -58,9 +58,9 @@ permissions_data = [
     {"name": "Submit Expense", "slug": "expense:submit", "module": "Finance", "description": "Submit personal expense claims"},
     {"name": "Approve Expenses", "slug": "expense:approve", "module": "Finance", "description": "Financial approval of expense claims"},
     
-    # Assets
-    {"name": "Manage Assets", "slug": "asset:manage", "module": "Assets", "description": "Full control over company asset tracking"},
+    # Assets -seeder updated
     {"name": "View Assets", "slug": "asset:view", "module": "Assets", "description": "View list of assigned or available assets"},
+    {"name": "Submit Asset Request", "slug": "asset:submit", "module": "Assets", "description": "Request new assets or return existing ones"},
     
     # Document Management
     {"name": "View Documents", "slug": "document:view", "module": "Documents", "description": "View company documents"},

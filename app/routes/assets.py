@@ -13,7 +13,7 @@ router = APIRouter(prefix="/assets", tags=["assets"], dependencies=[Depends(veri
 UPLOAD_DIR = "static/assets"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-@router.post("/", response_model=AssetResponse, dependencies=[Depends(require_permission("asset:manage"))])
+@router.post("/", response_model=AssetResponse, dependencies=[Depends(require_permission("asset:submit"))])
 async def create_asset(
     asset_name: str = Form(...),
     asset_category_id: str = Form(...),
@@ -97,7 +97,7 @@ async def get_asset(asset_id: str):
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
-@router.put("/{asset_id}", dependencies=[Depends(require_permission("asset:manage"))])
+@router.put("/{asset_id}", dependencies=[Depends(require_permission("asset:submit"))])
 async def update_asset(
     asset_id: str,
     asset_name: Optional[str] = Form(None),
@@ -160,7 +160,7 @@ async def update_asset(
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
-@router.delete("/{asset_id}", dependencies=[Depends(require_permission("asset:manage"))])
+@router.delete("/{asset_id}", dependencies=[Depends(require_permission("asset:submit"))])
 async def delete_asset(asset_id: str):
     try:
         success = await repository.delete_asset(asset_id)
@@ -171,7 +171,7 @@ async def delete_asset(asset_id: str):
         return error_response(message=str(e), status_code=500)
 
 
-@router.put("/{asset_id}/assignment", dependencies=[Depends(require_permission("asset:manage"))])
+@router.put("/{asset_id}/assignment", dependencies=[Depends(require_permission("asset:submit"))])
 async def manage_asset_assignment(asset_id: str, request: AssetAssignmentRequest):
     try:
         updated_asset = await repository.manage_asset_assignment(asset_id, request.employee_id)
