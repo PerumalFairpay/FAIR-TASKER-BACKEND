@@ -27,8 +27,9 @@ permissions_data = [
     {"name": "Manage Roles", "slug": "role:manage", "module": "Access Control", "description": "Create, Edit, and Delete system roles"},
     {"name": "Manage Permissions", "slug": "permission:manage", "module": "Access Control", "description": "Complete control over the permissions list"},
     
-    # Department
-    {"name": "Manage Departments", "slug": "department:manage", "module": "Organization", "description": "Manage company structural hierarchy"},
+    # Department -seeder updated
+    {"name": "View Departments", "slug": "department:view", "module": "Organization", "description": "View company organizational structure"},
+    {"name": "Submit Departments", "slug": "department:submit", "module": "Organization", "description": "Create, update, and delete departments"},
     
     # Attendance
     {"name": "View All Attendance", "slug": "attendance:view_all", "module": "Attendance", "description": "View records for all employees (Admin view)"},
