@@ -280,7 +280,7 @@ async def delete_employee(employee_id: str):
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
-@router.put("/{employee_id}/permissions", dependencies=[Depends(require_permission("permission:manage"))])
+@router.put("/{employee_id}/permissions", dependencies=[Depends(require_permission("permission:submit"))])
 async def update_permissions(employee_id: str, permissions_data: UserPermissionsUpdate):
     try:
         success = await repo.update_user_permissions(employee_id, permissions_data.permissions)
@@ -297,7 +297,7 @@ async def update_permissions(employee_id: str, permissions_data: UserPermissions
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
-@router.get("/{employee_id}/permissions", dependencies=[Depends(require_permission("permission:manage"))])
+@router.get("/{employee_id}/permissions", dependencies=[Depends(require_permission("permission:view"))])
 async def get_permissions(employee_id: str):
     try:
         data = await repo.get_user_permissions(employee_id)

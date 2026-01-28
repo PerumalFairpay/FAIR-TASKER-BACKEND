@@ -3,11 +3,11 @@ from app.database import roles_collection
 from app.models import RoleCreate, RoleUpdate, RoleResponse
 from bson import ObjectId
 from typing import List
-from app.auth import verify_token
+from app.auth import verify_token, require_permission
 
 router = APIRouter(dependencies=[Depends(verify_token)])
 
-@router.post("/", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=RoleResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("role:submit"))])
 async def create_role(role: RoleCreate):
     existing_role = await roles_collection.find_one({"name": role.name})
     if existing_role:
@@ -18,14 +18,14 @@ async def create_role(role: RoleCreate):
     created_role = await roles_collection.find_one({"_id": new_role.inserted_id})
     return RoleResponse(**created_role, id=str(created_role["_id"]))
 
-@router.get("/", response_model=List[RoleResponse])
+@router.get("/", response_model=List[RoleResponse], dependencies=[Depends(require_permission("role:view"))])
 async def get_roles():
     roles = []
     async for role in roles_collection.find():
         roles.append(RoleResponse(**role, id=str(role["_id"])))
     return roles
 
-@router.get("/{role_id}", response_model=RoleResponse)
+@router.get("/{role_id}", response_model=RoleResponse, dependencies=[Depends(require_permission("role:view"))])
 async def get_role(role_id: str):
     if not ObjectId.is_valid(role_id):
         raise HTTPException(status_code=400, detail="Invalid role ID")
@@ -36,7 +36,7 @@ async def get_role(role_id: str):
     
     return RoleResponse(**role, id=str(role["_id"]))
 
-@router.put("/{role_id}", response_model=RoleResponse)
+@router.put("/{role_id}", response_model=RoleResponse, dependencies=[Depends(require_permission("role:submit"))])
 async def update_role(role_id: str, role_update: RoleUpdate):
     if not ObjectId.is_valid(role_id):
         raise HTTPException(status_code=400, detail="Invalid role ID")
@@ -59,7 +59,7 @@ async def update_role(role_id: str, role_update: RoleUpdate):
     updated_role = await roles_collection.find_one({"_id": ObjectId(role_id)})
     return RoleResponse(**updated_role, id=str(updated_role["_id"]))
 
-@router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission("role:submit"))])
 async def delete_role(role_id: str):
     if not ObjectId.is_valid(role_id):
         raise HTTPException(status_code=400, detail="Invalid role ID")

@@ -3,11 +3,11 @@ from app.helper.response_helper import success_response, error_response
 from app.crud.repository import repository as repo
 from app.models import DepartmentCreate, DepartmentUpdate
 from typing import List
-from app.auth import verify_token, require_permission
+from app.auth import verify_token
 
 router = APIRouter(prefix="/departments", tags=["departments"], dependencies=[Depends(verify_token)])
 
-@router.post("/create", dependencies=[Depends(require_permission("department:submit"))])
+@router.post("/create")
 async def create_department(department: DepartmentCreate):
     try:
         new_department = await repo.create_department(department)
@@ -22,7 +22,7 @@ async def create_department(department: DepartmentCreate):
             status_code=500
         )
 
-@router.get("/all", dependencies=[Depends(require_permission("department:view"))])
+@router.get("/all")
 async def get_departments():
     try:
         departments = await repo.get_departments()
@@ -36,7 +36,7 @@ async def get_departments():
             status_code=500
         )
 
-@router.get("/{department_id}", dependencies=[Depends(require_permission("department:view"))])
+@router.get("/{department_id}")
 async def get_department(department_id: str):
     try:
         department = await repo.get_department(department_id)
@@ -55,7 +55,7 @@ async def get_department(department_id: str):
             status_code=500
         )
 
-@router.put("/update/{department_id}", dependencies=[Depends(require_permission("department:submit"))])
+@router.put("/update/{department_id}")
 async def update_department(department_id: str, department: DepartmentUpdate):
     try:
         updated_department = await repo.update_department(department_id, department)
@@ -74,7 +74,7 @@ async def update_department(department_id: str, department: DepartmentUpdate):
             status_code=500
         )
 
-@router.delete("/delete/{department_id}", dependencies=[Depends(require_permission("department:submit"))])
+@router.delete("/delete/{department_id}")
 async def delete_department(department_id: str):
     try:
         success = await repo.delete_department(department_id)

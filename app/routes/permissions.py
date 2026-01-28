@@ -3,11 +3,11 @@ from app.database import permissions_collection
 from app.models import PermissionCreate, PermissionUpdate, PermissionResponse
 from bson import ObjectId
 from typing import List
-from app.auth import verify_token
+from app.auth import verify_token, require_permission
 
 router = APIRouter(prefix="/permissions", tags=["permissions"], dependencies=[Depends(verify_token)])
 
-@router.post("/", response_model=PermissionResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=PermissionResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("permission:submit"))])
 async def create_permission(permission: PermissionCreate):
     existing_perm = await permissions_collection.find_one({"slug": permission.slug})
     if existing_perm:
@@ -18,14 +18,14 @@ async def create_permission(permission: PermissionCreate):
     created_perm = await permissions_collection.find_one({"_id": new_perm.inserted_id})
     return PermissionResponse(**created_perm, id=str(created_perm["_id"]))
 
-@router.get("/", response_model=List[PermissionResponse])
+@router.get("/", response_model=List[PermissionResponse], dependencies=[Depends(require_permission("permission:view"))])
 async def get_permissions():
     permissions = []
     async for perm in permissions_collection.find():
         permissions.append(PermissionResponse(**perm, id=str(perm["_id"])))
     return permissions
 
-@router.get("/{permission_id}", response_model=PermissionResponse)
+@router.get("/{permission_id}", response_model=PermissionResponse, dependencies=[Depends(require_permission("permission:view"))])
 async def get_permission(permission_id: str):
     if not ObjectId.is_valid(permission_id):
         raise HTTPException(status_code=400, detail="Invalid permission ID")
@@ -36,7 +36,7 @@ async def get_permission(permission_id: str):
     
     return PermissionResponse(**perm, id=str(perm["_id"]))
 
-@router.put("/{permission_id}", response_model=PermissionResponse)
+@router.put("/{permission_id}", response_model=PermissionResponse, dependencies=[Depends(require_permission("permission:submit"))])
 async def update_permission(permission_id: str, perm_update: PermissionUpdate):
     if not ObjectId.is_valid(permission_id):
         raise HTTPException(status_code=400, detail="Invalid permission ID")
@@ -59,7 +59,7 @@ async def update_permission(permission_id: str, perm_update: PermissionUpdate):
     updated_perm = await permissions_collection.find_one({"_id": ObjectId(permission_id)})
     return PermissionResponse(**updated_perm, id=str(updated_perm["_id"]))
 
-@router.delete("/{permission_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{permission_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission("permission:submit"))])
 async def delete_permission(permission_id: str):
     if not ObjectId.is_valid(permission_id):
         raise HTTPException(status_code=400, detail="Invalid permission ID")

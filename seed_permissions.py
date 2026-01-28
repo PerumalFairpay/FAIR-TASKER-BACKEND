@@ -23,31 +23,17 @@ permissions_data = [
     {"name": "View Employees", "slug": "employee:view", "module": "Employee", "description": "Can see the list of all staff members"},
     {"name": "Submit Employee", "slug": "employee:submit", "module": "Employee", "description": "Create, edit, and delete employee records"},
     
-    # Roles & Permissions
-    {"name": "Manage Roles", "slug": "role:manage", "module": "Access Control", "description": "Create, Edit, and Delete system roles"},
-    {"name": "Manage Permissions", "slug": "permission:manage", "module": "Access Control", "description": "Complete control over the permissions list"},
-    
-    # Department -seeder updated
-    {"name": "View Departments", "slug": "department:view", "module": "Organization", "description": "View company organizational structure"},
-    {"name": "Submit Departments", "slug": "department:submit", "module": "Organization", "description": "Create, update, and delete departments"},
-    
-    # Attendance
-    {"name": "View All Attendance", "slug": "attendance:view_all", "module": "Attendance", "description": "View records for all employees (Admin view)"},
-    {"name": "View Own Attendance", "slug": "attendance:view_self", "module": "Attendance", "description": "View only personal personal attendance records"},
-    {"name": "Manage Attendance", "slug": "attendance:manage", "module": "Attendance", "description": "Manually adjust or approve attendance logs"},
-    
+    # Roles & Permissions -seeder updated
+    {"name": "View Roles", "slug": "role:view", "module": "Access Control", "description": "View system roles"},
+    {"name": "Submit Roles", "slug": "role:submit", "module": "Access Control", "description": "Create, Edit, and Delete system roles"},
+    {"name": "View Permissions", "slug": "permission:view", "module": "Access Control", "description": "View available permissions"},
+    {"name": "Submit Permissions", "slug": "permission:submit", "module": "Access Control", "description": "Manage permissions list"},
+     
     # Leave Management
     {"name": "View Leave Requests", "slug": "leave:view", "module": "Leave", "description": "See leave applications"},
     {"name": "Apply for Leave", "slug": "leave:apply", "module": "Leave", "description": "Submit personal leave requests"},
     {"name": "Approve Leaves", "slug": "leave:approve", "module": "Leave", "description": "Approve or reject team leave requests"},
-    {"name": "Manage Leave Types", "slug": "leave_type:manage", "module": "Leave", "description": "Configure leave types (Sick, Casual, etc.)"},
-    
-    # Task Management
-    {"name": "View Task Board", "slug": "task:view", "module": "Tasks", "description": "Access the Kanban / Calendar task views"},
-    {"name": "Create Task", "slug": "task:create", "module": "Tasks", "description": "Assign tasks to self or others"},
-    {"name": "Edit Task", "slug": "task:edit", "module": "Tasks", "description": "Update task progress, status, and details"},
-    {"name": "View EOD Reports", "slug": "eod:view", "module": "Tasks", "description": "View submitted End-of-Day reports"},
-    
+     
     # Project Management -seeder updated
     {"name": "View Projects", "slug": "project:view", "module": "Projects", "description": "Access project details and status"},
     {"name": "Submit Project", "slug": "project:submit", "module": "Projects", "description": "Create and manage project lifecycles"},
@@ -71,19 +57,6 @@ permissions_data = [
     {"name": "Manage Blogs", "slug": "blog:manage", "module": "Settings", "description": "Create and publish internal blog posts"},
 
     # Navigation (Sidebar) Permissions
-    {"name": "Nav Dashboard", "slug": "nav:dashboard", "module": "Navigation", "description": "View Dashboard in sidebar"},
-    {"name": "Nav Employee", "slug": "nav:employee", "module": "Navigation", "description": "View Employee menu in sidebar"},
-    {"name": "Nav Attendance", "slug": "nav:attendance", "module": "Navigation", "description": "View Attendance menu in sidebar"},
-    {"name": "Nav Leave", "slug": "nav:leave", "module": "Navigation", "description": "View Leave Management menu in sidebar"},
-    {"name": "Nav Holiday", "slug": "nav:holiday", "module": "Navigation", "description": "View Holiday menu in sidebar"},
-    {"name": "Nav Project", "slug": "nav:project", "module": "Navigation", "description": "View Project menu in sidebar"},
-    {"name": "Nav Task", "slug": "nav:task", "module": "Navigation", "description": "View Task Management menu in sidebar"},
-    {"name": "Nav Client", "slug": "nav:client", "module": "Navigation", "description": "View Client/Vendor menu in sidebar"},
-    {"name": "Nav Asset", "slug": "nav:asset", "module": "Navigation", "description": "View Asset Management menu in sidebar"},
-    {"name": "Nav Expense", "slug": "nav:expense", "module": "Navigation", "description": "View Expense Management menu in sidebar"},
-    {"name": "Nav Document", "slug": "nav:document", "module": "Navigation", "description": "View Document Management menu in sidebar"},
-    {"name": "Nav Blog", "slug": "nav:blog", "module": "Navigation", "description": "View Blog menu in sidebar"},
-    {"name": "Nav Feeds", "slug": "nav:feeds", "module": "Navigation", "description": "View Feeds menu in sidebar"},
     {"name": "Nav Milestone", "slug": "nav:milestone", "module": "Navigation", "description": "View Milestone Roadmap menu in sidebar"},
 ]
 
