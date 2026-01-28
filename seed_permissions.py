@@ -49,9 +49,9 @@ permissions_data = [
     {"name": "Edit Task", "slug": "task:edit", "module": "Tasks", "description": "Update task progress, status, and details"},
     {"name": "View EOD Reports", "slug": "eod:view", "module": "Tasks", "description": "View submitted End-of-Day reports"},
     
-    # Project Management
-    {"name": "Manage Projects", "slug": "project:manage", "module": "Projects", "description": "Create and manage project lifecycles"},
+    # Project Management -seeder updated
     {"name": "View Projects", "slug": "project:view", "module": "Projects", "description": "Access project details and status"},
+    {"name": "Submit Project", "slug": "project:submit", "module": "Projects", "description": "Create and manage project lifecycles"},
     
     # expense -seeder updated
     {"name": "View Expenses", "slug": "expense:view", "module": "Finance", "description": "View expense records"},

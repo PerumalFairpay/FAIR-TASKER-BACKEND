@@ -6,11 +6,11 @@ from app.helper.file_handler import file_handler
 from typing import List, Optional
 import json
 
-from app.auth import verify_token
+from app.auth import verify_token, require_permission
 
 router = APIRouter(prefix="/projects", tags=["projects"], dependencies=[Depends(verify_token)])
 
-@router.post("/create")
+@router.post("/create", dependencies=[Depends(require_permission("project:submit"))])
 async def create_project(
     name: str = Form(...),
     client_id: str = Form(...),
@@ -61,7 +61,7 @@ async def create_project(
             content={"message": f"Failed to create project: {str(e)}", "success": False}
         )
 
-@router.get("/all")
+@router.get("/all", dependencies=[Depends(require_permission("project:view"))])
 async def get_projects():
     try:
         projects = await repo.get_projects()
@@ -75,7 +75,7 @@ async def get_projects():
             content={"message": f"Failed to fetch projects: {str(e)}", "success": False}
         )
 
-@router.get("/{project_id}")
+@router.get("/{project_id}", dependencies=[Depends(require_permission("project:view"))])
 async def get_project(project_id: str):
     try:
         project = await repo.get_project(project_id)
@@ -94,7 +94,7 @@ async def get_project(project_id: str):
             content={"message": f"Failed to fetch project: {str(e)}", "success": False}
         )
 
-@router.put("/update/{project_id}")
+@router.put("/update/{project_id}", dependencies=[Depends(require_permission("project:submit"))])
 async def update_project(
     project_id: str,
     name: Optional[str] = Form(None),
@@ -151,7 +151,7 @@ async def update_project(
             content={"message": f"Failed to update project: {str(e)}", "success": False}
         )
 
-@router.delete("/delete/{project_id}")
+@router.delete("/delete/{project_id}", dependencies=[Depends(require_permission("project:submit"))])
 async def delete_project(project_id: str):
     try:
         success = await repo.delete_project(project_id)
