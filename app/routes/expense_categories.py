@@ -3,11 +3,11 @@ from fastapi.responses import JSONResponse
 from app.crud.repository import repository as repo
 from app.models import ExpenseCategoryCreate, ExpenseCategoryUpdate
 from typing import List
-from app.auth import verify_token
+from app.auth import verify_token, require_permission
 
 router = APIRouter(prefix="/expense-categories", tags=["expense-categories"], dependencies=[Depends(verify_token)])
 
-@router.post("/create")
+@router.post("/create", dependencies=[Depends(require_permission("expense:submit"))])
 async def create_category(category: ExpenseCategoryCreate):
     try:
         new_category = await repo.create_expense_category(category)
@@ -21,7 +21,7 @@ async def create_category(category: ExpenseCategoryCreate):
             content={"message": f"Failed to create category: {str(e)}", "success": False}
         )
 
-@router.get("/all")
+@router.get("/all", dependencies=[Depends(require_permission("expense:view"))])
 async def get_categories():
     try:
         categories = await repo.get_expense_categories()
@@ -35,7 +35,7 @@ async def get_categories():
             content={"message": f"Failed to fetch categories: {str(e)}", "success": False}
         )
 
-@router.get("/{category_id}")
+@router.get("/{category_id}", dependencies=[Depends(require_permission("expense:view"))])
 async def get_category(category_id: str):
     try:
         category = await repo.get_expense_category(category_id)
@@ -54,7 +54,7 @@ async def get_category(category_id: str):
             content={"message": f"Failed to fetch category: {str(e)}", "success": False}
         )
 
-@router.put("/update/{category_id}")
+@router.put("/update/{category_id}", dependencies=[Depends(require_permission("expense:submit"))])
 async def update_category(category_id: str, category: ExpenseCategoryUpdate):
     try:
         updated_category = await repo.update_expense_category(category_id, category)
@@ -73,7 +73,7 @@ async def update_category(category_id: str, category: ExpenseCategoryUpdate):
             content={"message": f"Failed to update category: {str(e)}", "success": False}
         )
 
-@router.delete("/delete/{category_id}")
+@router.delete("/delete/{category_id}", dependencies=[Depends(require_permission("expense:submit"))])
 async def delete_category(category_id: str):
     try:
         success = await repo.delete_expense_category(category_id)

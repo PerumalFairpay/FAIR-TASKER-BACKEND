@@ -6,11 +6,11 @@ from app.helper.file_handler import file_handler
 from typing import List, Optional
 import json
 
-from app.auth import verify_token
+from app.auth import verify_token, require_permission
 
 router = APIRouter(prefix="/expenses", tags=["expenses"], dependencies=[Depends(verify_token)])
 
-@router.post("/create")
+@router.post("/create", dependencies=[Depends(require_permission("expense:submit"))])
 async def create_expense(
     expense_category_id: str = Form(...),
     amount: float = Form(...),
@@ -47,7 +47,7 @@ async def create_expense(
             content={"message": f"Failed to create expense: {str(e)}", "success": False}
         )
 
-@router.get("/all")
+@router.get("/all", dependencies=[Depends(require_permission("expense:view"))])
 async def get_expenses():
     try:
         expenses = await repo.get_expenses()
@@ -61,7 +61,7 @@ async def get_expenses():
             content={"message": f"Failed to fetch expenses: {str(e)}", "success": False}
         )
 
-@router.get("/{expense_id}")
+@router.get("/{expense_id}", dependencies=[Depends(require_permission("expense:view"))])
 async def get_expense(expense_id: str):
     try:
         expense = await repo.get_expense(expense_id)
@@ -80,7 +80,7 @@ async def get_expense(expense_id: str):
             content={"message": f"Failed to fetch expense: {str(e)}", "success": False}
         )
 
-@router.put("/update/{expense_id}")
+@router.put("/update/{expense_id}", dependencies=[Depends(require_permission("expense:submit"))])
 async def update_expense(
     expense_id: str,
     expense_category_id: Optional[str] = Form(None),
@@ -123,7 +123,7 @@ async def update_expense(
             content={"message": f"Failed to update expense: {str(e)}", "success": False}
         )
 
-@router.delete("/delete/{expense_id}")
+@router.delete("/delete/{expense_id}", dependencies=[Depends(require_permission("expense:submit"))])
 async def delete_expense(expense_id: str):
     try:
         # Check if exists to maybe delete file?

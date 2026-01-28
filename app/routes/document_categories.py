@@ -4,11 +4,11 @@ from app.crud.repository import repository as repo
 from app.models import DocumentCategoryCreate, DocumentCategoryUpdate
 from typing import List, Optional
 
-from app.auth import verify_token
+from app.auth import verify_token, require_permission
 
 router = APIRouter(prefix="/document-categories", tags=["document-categories"], dependencies=[Depends(verify_token)])
 
-@router.post("/create")
+@router.post("/create", dependencies=[Depends(require_permission("document:submit"))])
 async def create_document_category(category: DocumentCategoryCreate):
     try:
         new_category = await repo.create_document_category(category)
@@ -22,7 +22,7 @@ async def create_document_category(category: DocumentCategoryCreate):
             content={"message": f"Failed to create document category: {str(e)}", "success": False}
         )
 
-@router.get("/all")
+@router.get("/all", dependencies=[Depends(require_permission("document:view"))])
 async def get_document_categories():
     try:
         categories = await repo.get_document_categories()
@@ -36,7 +36,7 @@ async def get_document_categories():
             content={"message": f"Failed to fetch document categories: {str(e)}", "success": False}
         )
 
-@router.get("/{category_id}")
+@router.get("/{category_id}", dependencies=[Depends(require_permission("document:view"))])
 async def get_document_category(category_id: str):
     try:
         category = await repo.get_document_category(category_id)
@@ -55,7 +55,7 @@ async def get_document_category(category_id: str):
             content={"message": f"Failed to fetch document category: {str(e)}", "success": False}
         )
 
-@router.put("/update/{category_id}")
+@router.put("/update/{category_id}", dependencies=[Depends(require_permission("document:submit"))])
 async def update_document_category(category_id: str, category: DocumentCategoryUpdate):
     try:
         updated_category = await repo.update_document_category(category_id, category)
@@ -74,7 +74,7 @@ async def update_document_category(category_id: str, category: DocumentCategoryU
             content={"message": f"Failed to update document category: {str(e)}", "success": False}
         )
 
-@router.delete("/delete/{category_id}")
+@router.delete("/delete/{category_id}", dependencies=[Depends(require_permission("document:submit"))])
 async def delete_document_category(category_id: str):
     try:
         success = await repo.delete_document_category(category_id)

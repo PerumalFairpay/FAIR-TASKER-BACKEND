@@ -9,7 +9,7 @@ from app.auth import verify_token, require_permission
 
 router = APIRouter(prefix="/employees", tags=["employees"], dependencies=[Depends(verify_token)])
 
-@router.post("/create", dependencies=[Depends(require_permission("employee:create"))])
+@router.post("/create", dependencies=[Depends(require_permission("employee:submit"))])
 async def create_employee(
     first_name: str = Form(...),
     last_name: str = Form(...),
@@ -141,7 +141,7 @@ async def get_employees(
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
-@router.get("/summary", dependencies=[Depends(require_permission("employee:view"))])
+@router.get("/summary")
 async def get_employees_summary():
     try:
         employees = await repo.get_all_employees_summary()
@@ -165,7 +165,7 @@ async def get_employee(employee_id: str):
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
-@router.put("/update/{employee_id}", dependencies=[Depends(require_permission("employee:edit"))])
+@router.put("/update/{employee_id}", dependencies=[Depends(require_permission("employee:submit"))])
 async def update_employee(
     employee_id: str,
     first_name: Optional[str] = Form(None),
@@ -268,7 +268,7 @@ async def update_employee(
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
-@router.delete("/delete/{employee_id}", dependencies=[Depends(require_permission("employee:delete"))])
+@router.delete("/delete/{employee_id}", dependencies=[Depends(require_permission("employee:submit"))])
 async def delete_employee(employee_id: str):
     try:
         success = await repo.delete_employee(employee_id)
@@ -280,7 +280,7 @@ async def delete_employee(employee_id: str):
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
-@router.put("/{employee_id}/permissions", dependencies=[Depends(require_permission("permission:manage"))])
+@router.put("/{employee_id}/permissions", dependencies=[Depends(require_permission("permission:submit"))])
 async def update_permissions(employee_id: str, permissions_data: UserPermissionsUpdate):
     try:
         success = await repo.update_user_permissions(employee_id, permissions_data.permissions)
@@ -297,7 +297,7 @@ async def update_permissions(employee_id: str, permissions_data: UserPermissions
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
-@router.get("/{employee_id}/permissions", dependencies=[Depends(require_permission("permission:manage"))])
+@router.get("/{employee_id}/permissions", dependencies=[Depends(require_permission("permission:view"))])
 async def get_permissions(employee_id: str):
     try:
         data = await repo.get_user_permissions(employee_id)

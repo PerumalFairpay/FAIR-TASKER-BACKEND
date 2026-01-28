@@ -6,11 +6,11 @@ from app.helper.file_handler import file_handler
 from typing import List, Optional
 import json
 
-from app.auth import verify_token
+from app.auth import verify_token, require_permission
 
 router = APIRouter(prefix="/documents", tags=["documents"], dependencies=[Depends(verify_token)])
 
-@router.post("/create")
+@router.post("/create", dependencies=[Depends(require_permission("document:submit"))])
 async def create_document(
     name: str = Form(...),
     document_category_id: str = Form(...),
@@ -47,7 +47,7 @@ async def create_document(
             content={"message": f"Failed to create document: {str(e)}", "success": False}
         )
 
-@router.get("/all")
+@router.get("/all", dependencies=[Depends(require_permission("document:view"))])
 async def get_documents():
     try:
         documents = await repo.get_documents()
@@ -61,7 +61,7 @@ async def get_documents():
             content={"message": f"Failed to fetch documents: {str(e)}", "success": False}
         )
 
-@router.get("/{document_id}")
+@router.get("/{document_id}", dependencies=[Depends(require_permission("document:view"))])
 async def get_document(document_id: str):
     try:
         document = await repo.get_document(document_id)
@@ -80,7 +80,7 @@ async def get_document(document_id: str):
             content={"message": f"Failed to fetch document: {str(e)}", "success": False}
         )
 
-@router.put("/update/{document_id}")
+@router.put("/update/{document_id}", dependencies=[Depends(require_permission("document:submit"))])
 async def update_document(
     document_id: str,
     name: Optional[str] = Form(None),
@@ -123,7 +123,7 @@ async def update_document(
             content={"message": f"Failed to update document: {str(e)}", "success": False}
         )
 
-@router.delete("/delete/{document_id}")
+@router.delete("/delete/{document_id}", dependencies=[Depends(require_permission("document:submit"))])
 async def delete_document(document_id: str):
     try:
         success = await repo.delete_document(document_id)

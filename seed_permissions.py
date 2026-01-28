@@ -15,75 +15,39 @@ if not os.path.exists('/.dockerenv') and "mongodb://db:" in DATABASE_URL:
     
 DATABASE_NAME = os.getenv("DATABASE_NAME", "fairpay_hrm_db")
 
-permissions_data = [
-    # Dashboard
-    {"name": "View Dashboard", "slug": "dashboard:view", "module": "Dashboard", "description": "Access to the main dashboard statistics and charts"},
-    
-    # Employee Management
+permissions_data = [ 
+    # Employee Management -seeder updated
     {"name": "View Employees", "slug": "employee:view", "module": "Employee", "description": "Can see the list of all staff members"},
-    {"name": "Create Employee", "slug": "employee:create", "module": "Employee", "description": "Can add new employees to the system"},
-    {"name": "Edit Employee", "slug": "employee:edit", "module": "Employee", "description": "Can update existing employee details"},
-    {"name": "Delete Employee", "slug": "employee:delete", "module": "Employee", "description": "Can remove employees from the system"},
+    {"name": "Submit Employee", "slug": "employee:submit", "module": "Employee", "description": "Create, edit, and delete employee records"},
     
-    # Roles & Permissions
-    {"name": "Manage Roles", "slug": "role:manage", "module": "Access Control", "description": "Create, Edit, and Delete system roles"},
-    {"name": "Manage Permissions", "slug": "permission:manage", "module": "Access Control", "description": "Complete control over the permissions list"},
-    
-    # Department
-    {"name": "Manage Departments", "slug": "department:manage", "module": "Organization", "description": "Manage company structural hierarchy"},
-    
-    # Attendance
-    {"name": "View All Attendance", "slug": "attendance:view_all", "module": "Attendance", "description": "View records for all employees (Admin view)"},
-    {"name": "View Own Attendance", "slug": "attendance:view_self", "module": "Attendance", "description": "View only personal personal attendance records"},
-    {"name": "Manage Attendance", "slug": "attendance:manage", "module": "Attendance", "description": "Manually adjust or approve attendance logs"},
-    
-    # Leave Management
+    # Roles & Permissions -seeder updated
+    {"name": "View Roles", "slug": "role:view", "module": "Access Control", "description": "View system roles"},
+    {"name": "Submit Roles", "slug": "role:submit", "module": "Access Control", "description": "Create, Edit, and Delete system roles"},
+    {"name": "View Permissions", "slug": "permission:view", "module": "Access Control", "description": "View available permissions"},
+    {"name": "Submit Permissions", "slug": "permission:submit", "module": "Access Control", "description": "Manage permissions list"},
+     
+    # Leave Management -seeder updated
     {"name": "View Leave Requests", "slug": "leave:view", "module": "Leave", "description": "See leave applications"},
-    {"name": "Apply for Leave", "slug": "leave:apply", "module": "Leave", "description": "Submit personal leave requests"},
     {"name": "Approve Leaves", "slug": "leave:approve", "module": "Leave", "description": "Approve or reject team leave requests"},
-    {"name": "Manage Leave Types", "slug": "leave_type:manage", "module": "Leave", "description": "Configure leave types (Sick, Casual, etc.)"},
-    
-    # Task Management
-    {"name": "View Task Board", "slug": "task:view", "module": "Tasks", "description": "Access the Kanban / Calendar task views"},
-    {"name": "Create Task", "slug": "task:create", "module": "Tasks", "description": "Assign tasks to self or others"},
-    {"name": "Edit Task", "slug": "task:edit", "module": "Tasks", "description": "Update task progress, status, and details"},
-    {"name": "View EOD Reports", "slug": "eod:view", "module": "Tasks", "description": "View submitted End-of-Day reports"},
-    
-    # Project Management
-    {"name": "Manage Projects", "slug": "project:manage", "module": "Projects", "description": "Create and manage project lifecycles"},
+     
+    # Project Management -seeder updated
     {"name": "View Projects", "slug": "project:view", "module": "Projects", "description": "Access project details and status"},
+    {"name": "Submit Project", "slug": "project:submit", "module": "Projects", "description": "Create and manage project lifecycles"},
     
-    # Finance
-    {"name": "View All Expenses", "slug": "expense:view_all", "module": "Finance", "description": "View company-wide expense records"},
+    # expense -seeder updated
+    {"name": "View Expenses", "slug": "expense:view", "module": "Finance", "description": "View expense records"},
     {"name": "Submit Expense", "slug": "expense:submit", "module": "Finance", "description": "Submit personal expense claims"},
     {"name": "Approve Expenses", "slug": "expense:approve", "module": "Finance", "description": "Financial approval of expense claims"},
     
-    # Assets
-    {"name": "Manage Assets", "slug": "asset:manage", "module": "Assets", "description": "Full control over company asset tracking"},
+    # Assets -seeder updated
     {"name": "View Assets", "slug": "asset:view", "module": "Assets", "description": "View list of assigned or available assets"},
+    {"name": "Submit Asset Request", "slug": "asset:submit", "module": "Assets", "description": "Request new assets or return existing ones"},
     
-    # Document Management
-    {"name": "Manage Documents", "slug": "document:manage", "module": "Documents", "description": "Upload and organize company documents"},
-    
-    # Miscellaneous
-    {"name": "Manage Holidays", "slug": "holiday:manage", "module": "Settings", "description": "Manage the annual holiday calendar"},
-    {"name": "Manage Clients", "slug": "client:manage", "module": "Settings", "description": "Create and edit client/vendor profiles"},
-    {"name": "Manage Blogs", "slug": "blog:manage", "module": "Settings", "description": "Create and publish internal blog posts"},
-
+    # Document Management -seeder updated
+    {"name": "View Documents", "slug": "document:view", "module": "Documents", "description": "View company documents"},
+    {"name": "Submit Document", "slug": "document:submit", "module": "Documents", "description": "Upload and manage documents"},
+     
     # Navigation (Sidebar) Permissions
-    {"name": "Nav Dashboard", "slug": "nav:dashboard", "module": "Navigation", "description": "View Dashboard in sidebar"},
-    {"name": "Nav Employee", "slug": "nav:employee", "module": "Navigation", "description": "View Employee menu in sidebar"},
-    {"name": "Nav Attendance", "slug": "nav:attendance", "module": "Navigation", "description": "View Attendance menu in sidebar"},
-    {"name": "Nav Leave", "slug": "nav:leave", "module": "Navigation", "description": "View Leave Management menu in sidebar"},
-    {"name": "Nav Holiday", "slug": "nav:holiday", "module": "Navigation", "description": "View Holiday menu in sidebar"},
-    {"name": "Nav Project", "slug": "nav:project", "module": "Navigation", "description": "View Project menu in sidebar"},
-    {"name": "Nav Task", "slug": "nav:task", "module": "Navigation", "description": "View Task Management menu in sidebar"},
-    {"name": "Nav Client", "slug": "nav:client", "module": "Navigation", "description": "View Client/Vendor menu in sidebar"},
-    {"name": "Nav Asset", "slug": "nav:asset", "module": "Navigation", "description": "View Asset Management menu in sidebar"},
-    {"name": "Nav Expense", "slug": "nav:expense", "module": "Navigation", "description": "View Expense Management menu in sidebar"},
-    {"name": "Nav Document", "slug": "nav:document", "module": "Navigation", "description": "View Document Management menu in sidebar"},
-    {"name": "Nav Blog", "slug": "nav:blog", "module": "Navigation", "description": "View Blog menu in sidebar"},
-    {"name": "Nav Feeds", "slug": "nav:feeds", "module": "Navigation", "description": "View Feeds menu in sidebar"},
     {"name": "Nav Milestone", "slug": "nav:milestone", "module": "Navigation", "description": "View Milestone Roadmap menu in sidebar"},
 ]
 
@@ -98,13 +62,13 @@ async def seed_permissions():
         # Update if exists (by slug), insert if not
         result = await collection.update_one(
             {"slug": perm["slug"]},
-            {"$set": perm},
+            {"$setOnInsert": perm},
             upsert=True
         )
         if result.upserted_id:
             print(f"Inserted: {perm['slug']}")
         else:
-            print(f"Updated: {perm['slug']}")
+            print(f"Skipped (Exists): {perm['slug']}")
             
     print("\nPermissions seeding completed.")
 
@@ -126,22 +90,14 @@ async def seed_permissions():
         {
             "name": "employee",
             "description": "Standard employee access",
-            "permissions": [
-                perm_map.get("dashboard:view"),
-                perm_map.get("attendance:view_self"),
-                perm_map.get("leave:apply"),
-                perm_map.get("task:view"),
+            "permissions": [  
                 perm_map.get("project:view"),
                 perm_map.get("expense:submit"),
                 perm_map.get("asset:view"),
-                perm_map.get("employee:view"), # Often employees can see the directory
+                perm_map.get("employee:view"), 
+                perm_map.get("document:view"),
                 
                 # Nav Permissions
-                perm_map.get("nav:dashboard"),
-                perm_map.get("nav:attendance"),
-                perm_map.get("nav:leave"),
-                perm_map.get("nav:task"),
-                perm_map.get("nav:feeds"),
                 # perm_map.get("nav:milestone"),
             ]
         }
@@ -154,10 +110,10 @@ async def seed_permissions():
     for role in roles_data:
         await roles_collection.update_one(
             {"name": role["name"]},
-            {"$set": role},
+            {"$setOnInsert": role},
             upsert=True
         )
-        print(f"Role seeded/updated: {role['name']}")
+        print(f"Role checked/seeded: {role['name']}")
             
     print("\nAll seeding completed successfully!")
     client.close()
