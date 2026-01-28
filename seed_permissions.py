@@ -99,13 +99,13 @@ async def seed_permissions():
         # Update if exists (by slug), insert if not
         result = await collection.update_one(
             {"slug": perm["slug"]},
-            {"$set": perm},
+            {"$setOnInsert": perm},
             upsert=True
         )
         if result.upserted_id:
             print(f"Inserted: {perm['slug']}")
         else:
-            print(f"Updated: {perm['slug']}")
+            print(f"Skipped (Exists): {perm['slug']}")
             
     print("\nPermissions seeding completed.")
 
@@ -155,10 +155,10 @@ async def seed_permissions():
     for role in roles_data:
         await roles_collection.update_one(
             {"name": role["name"]},
-            {"$set": role},
+            {"$setOnInsert": role},
             upsert=True
         )
-        print(f"Role seeded/updated: {role['name']}")
+        print(f"Role checked/seeded: {role['name']}")
             
     print("\nAll seeding completed successfully!")
     client.close()
