@@ -19,11 +19,9 @@ permissions_data = [
     # Dashboard
     {"name": "View Dashboard", "slug": "dashboard:view", "module": "Dashboard", "description": "Access to the main dashboard statistics and charts"},
     
-    # Employee Management
+    # Employee Management -seeder updated
     {"name": "View Employees", "slug": "employee:view", "module": "Employee", "description": "Can see the list of all staff members"},
-    {"name": "Create Employee", "slug": "employee:create", "module": "Employee", "description": "Can add new employees to the system"},
-    {"name": "Edit Employee", "slug": "employee:edit", "module": "Employee", "description": "Can update existing employee details"},
-    {"name": "Delete Employee", "slug": "employee:delete", "module": "Employee", "description": "Can remove employees from the system"},
+    {"name": "Submit Employee", "slug": "employee:submit", "module": "Employee", "description": "Create, edit, and delete employee records"},
     
     # Roles & Permissions
     {"name": "Manage Roles", "slug": "role:manage", "module": "Access Control", "description": "Create, Edit, and Delete system roles"},
