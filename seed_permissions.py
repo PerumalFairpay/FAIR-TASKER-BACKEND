@@ -15,10 +15,7 @@ if not os.path.exists('/.dockerenv') and "mongodb://db:" in DATABASE_URL:
     
 DATABASE_NAME = os.getenv("DATABASE_NAME", "fairpay_hrm_db")
 
-permissions_data = [
-    # Dashboard
-    {"name": "View Dashboard", "slug": "dashboard:view", "module": "Dashboard", "description": "Access to the main dashboard statistics and charts"},
-    
+permissions_data = [ 
     # Employee Management -seeder updated
     {"name": "View Employees", "slug": "employee:view", "module": "Employee", "description": "Can see the list of all staff members"},
     {"name": "Submit Employee", "slug": "employee:submit", "module": "Employee", "description": "Create, edit, and delete employee records"},
@@ -29,9 +26,8 @@ permissions_data = [
     {"name": "View Permissions", "slug": "permission:view", "module": "Access Control", "description": "View available permissions"},
     {"name": "Submit Permissions", "slug": "permission:submit", "module": "Access Control", "description": "Manage permissions list"},
      
-    # Leave Management
+    # Leave Management -seeder updated
     {"name": "View Leave Requests", "slug": "leave:view", "module": "Leave", "description": "See leave applications"},
-    {"name": "Apply for Leave", "slug": "leave:apply", "module": "Leave", "description": "Submit personal leave requests"},
     {"name": "Approve Leaves", "slug": "leave:approve", "module": "Leave", "description": "Approve or reject team leave requests"},
      
     # Project Management -seeder updated
@@ -50,12 +46,7 @@ permissions_data = [
     # Document Management -seeder updated
     {"name": "View Documents", "slug": "document:view", "module": "Documents", "description": "View company documents"},
     {"name": "Submit Document", "slug": "document:submit", "module": "Documents", "description": "Upload and manage documents"},
-    
-    # Miscellaneous
-    {"name": "Manage Holidays", "slug": "holiday:manage", "module": "Settings", "description": "Manage the annual holiday calendar"},
-    {"name": "Manage Clients", "slug": "client:manage", "module": "Settings", "description": "Create and edit client/vendor profiles"},
-    {"name": "Manage Blogs", "slug": "blog:manage", "module": "Settings", "description": "Create and publish internal blog posts"},
-
+     
     # Navigation (Sidebar) Permissions
     {"name": "Nav Milestone", "slug": "nav:milestone", "module": "Navigation", "description": "View Milestone Roadmap menu in sidebar"},
 ]
@@ -99,22 +90,14 @@ async def seed_permissions():
         {
             "name": "employee",
             "description": "Standard employee access",
-            "permissions": [
-                perm_map.get("dashboard:view"),
-                perm_map.get("attendance:view_self"),
-                perm_map.get("leave:apply"),
-                perm_map.get("task:view"),
+            "permissions": [  
                 perm_map.get("project:view"),
                 perm_map.get("expense:submit"),
                 perm_map.get("asset:view"),
-                perm_map.get("employee:view"), # Often employees can see the directory
+                perm_map.get("employee:view"), 
+                perm_map.get("document:view"),
                 
                 # Nav Permissions
-                perm_map.get("nav:dashboard"),
-                perm_map.get("nav:attendance"),
-                perm_map.get("nav:leave"),
-                perm_map.get("nav:task"),
-                perm_map.get("nav:feeds"),
                 # perm_map.get("nav:milestone"),
             ]
         }
