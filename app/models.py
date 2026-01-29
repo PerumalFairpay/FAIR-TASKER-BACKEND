@@ -693,3 +693,12 @@ class AttendanceResponse(AttendanceBase):
 
     class Config:
         from_attributes = True
+
+class BiometricLogItem(BaseModel):
+    user_id: str
+    timestamp: str
+    status: Optional[Union[int, str]] = None 
+    punch: Optional[Union[int, str]] = None   
+
+class BiometricSyncRequest(BaseModel):
+    data: List[BiometricLogItem]

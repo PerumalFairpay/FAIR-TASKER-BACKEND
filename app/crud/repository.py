@@ -16,7 +16,8 @@ from app.models import (
     LeaveRequestCreate, LeaveRequestUpdate,
     TaskCreate, TaskUpdate, EODReportItem,
     AttendanceCreate, AttendanceUpdate,
-    EmployeeChecklistTemplateCreate, EmployeeChecklistTemplateUpdate
+    EmployeeChecklistTemplateCreate, EmployeeChecklistTemplateUpdate,
+    BiometricLogItem
 )
 from app.utils import normalize, get_password_hash
 from bson import ObjectId
@@ -1853,4 +1854,113 @@ class Repository:
         except Exception as e:
             raise e
 
+
+    async def bulk_sync_biometric_logs(self, logs: List[BiometricLogItem]) -> dict:
+        try:
+            processed_count = 0
+            errors = []
+            
+            # Sort logs by timestamp to process in order
+            sorted_logs = sorted(logs, key=lambda x: x.timestamp)
+
+            for log in sorted_logs:
+                try:
+                    # 1. Parse Timestamp
+                    try:
+                        log_time = datetime.fromisoformat(log.timestamp)
+                    except:
+                        # Try parsing various formats if ISO fails, or skip
+                        try:
+                            log_time = datetime.strptime(log.timestamp, "%Y-%m-%d %H:%M:%S")
+                        except:
+                            if 'T' in log.timestamp:
+                                 # Fallback manual parse if needed
+                                 pass
+                            continue # Skip invalid dates
+
+                    date_str = log_time.strftime("%Y-%m-%d")
+                    time_str = log_time.isoformat()
+
+                    # 2. Find Employee
+                    # Match user_id from device to employee_no_id OR attendance_id
+                    # IMPORTANT: Biometric usually uses integer IDs (1, 2, 3), need to ensure string match
+                    employee = await self.employees.find_one({"employee_no_id": str(log.user_id)})
+                    if not employee:
+                        employee = await self.employees.find_one({"attendance_id": str(log.user_id)})
+                    
+                    if not employee:
+                        # Try int -> str conversion just in case
+                         employee = await self.employees.find_one({"attendance_id": int(log.user_id)})
+                         
+                    if not employee:
+                        # Log error or skip? Skipping for now to avoid clutter
+                        continue
+                    
+                    employee_id = str(employee["_id"])
+
+                    # 3. Check for existing attendance record for this date
+                    attendance = await self.attendance.find_one({
+                        "employee_id": employee_id,
+                        "date": date_str
+                    })
+
+                    if not attendance:
+                        # CREATE (Clock In)
+                        # Assume first punch of the day is Clock In
+                        new_record = {
+                            "employee_id": employee_id,
+                            "date": date_str,
+                            "clock_in": time_str,
+                            "device_type": "Biometric",
+                            "status": "Present",
+                            "created_at": datetime.utcnow()
+                        }
+                        await self.attendance.insert_one(new_record)
+                        processed_count += 1
+                    else:
+                        # UPDATE (Clock Out)
+                        # Logic: If new time is later than current clock_in, update clock_out
+                        # If existing clock_out exists, only update if new time is later check-out
+                        
+                        clock_in_time = datetime.fromisoformat(attendance["clock_in"])
+                        
+                        if log_time > clock_in_time:
+                            # It's a potential clock-out
+                            should_update = True
+                            if attendance.get("clock_out"):
+                                current_clock_out = datetime.fromisoformat(attendance["clock_out"])
+                                if log_time <= current_clock_out:
+                                    should_update = False # Already have a later or equal clock out
+                            
+                            if should_update:
+                                # Calculate hours
+                                work_duration = log_time - clock_in_time
+                                total_hours = round(work_duration.total_seconds() / 3600, 2)
+                                
+                                await self.attendance.update_one(
+                                    {"_id": attendance["_id"]},
+                                    {
+                                        "$set": {
+                                            "clock_out": time_str,
+                                            "total_work_hours": total_hours,
+                                            "device_type": "Biometric", # Update source
+                                            "updated_at": datetime.utcnow()
+                                        }
+                                    }
+                                )
+                                processed_count += 1
+
+                except Exception as e:
+                    errors.append(f"Error processing log for {log.user_id}: {str(e)}")
+                    continue
+
+            return {
+                "processed": processed_count,
+                "total_received": len(logs),
+                "errors": errors
+            }
+        except Exception as e:
+            raise e
+
 repository = Repository()
+

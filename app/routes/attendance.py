@@ -1,16 +1,17 @@
 from fastapi import APIRouter, HTTPException, Depends, File, UploadFile
 from fastapi.responses import JSONResponse
 from app.crud.repository import repository as repo
-from app.models import AttendanceCreate, AttendanceUpdate, AttendanceStatusUpdate
+from app.models import AttendanceCreate, AttendanceUpdate, AttendanceStatusUpdate, BiometricSyncRequest
 from typing import List, Optional
 from app.auth import verify_token, get_current_user
 import pandas as pd
 import io
 from datetime import datetime
 
-router = APIRouter(prefix="/attendance", tags=["attendance"], dependencies=[Depends(verify_token)])
 
-@router.post("/clock-in")
+router = APIRouter(prefix="/attendance", tags=["attendance"])
+
+@router.post("/clock-in", dependencies=[Depends(verify_token)])
 async def clock_in(attendance: AttendanceCreate, current_user: dict = Depends(get_current_user)):
     try:
         employee_id = current_user.get("employee_id") or current_user.get("id")
@@ -28,7 +29,7 @@ async def clock_in(attendance: AttendanceCreate, current_user: dict = Depends(ge
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": f"Server Error: {str(e)}", "success": False})
 
-@router.put("/clock-out")
+@router.put("/clock-out", dependencies=[Depends(verify_token)])
 async def clock_out(attendance: AttendanceUpdate, current_user: dict = Depends(get_current_user)):
     try:
         employee_id = current_user.get("employee_id") or current_user.get("id")
@@ -49,7 +50,7 @@ async def clock_out(attendance: AttendanceUpdate, current_user: dict = Depends(g
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": f"Server Error: {str(e)}", "success": False})
 
-@router.patch("/update-status/{attendance_id}")
+@router.patch("/update-status/{attendance_id}", dependencies=[Depends(verify_token)])
 async def update_attendance_status(
     attendance_id: str,
     status_update: AttendanceStatusUpdate,
@@ -86,7 +87,7 @@ async def update_attendance_status(
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": f"Server Error: {str(e)}", "success": False})
 
-@router.get("/my-history")
+@router.get("/my-history", dependencies=[Depends(verify_token)])
 async def get_my_history(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
@@ -102,7 +103,7 @@ async def get_my_history(
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": f"Server Error: {str(e)}", "success": False})
 
-@router.get("/")
+@router.get("/", dependencies=[Depends(verify_token)])
 async def get_all_attendance(
     date: Optional[str] = None,
     start_date: Optional[str] = None,
@@ -119,7 +120,7 @@ async def get_all_attendance(
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": f"Server Error: {str(e)}", "success": False})
 
-@router.post("/generate-records")
+@router.post("/generate-records", dependencies=[Depends(verify_token)])
 async def generate_attendance_records(date: Optional[str] = None, preplanned_only: bool = False):
     """
     Manual trigger to generate attendance records for a specific date.
@@ -147,7 +148,33 @@ async def generate_attendance_records(date: Optional[str] = None, preplanned_onl
         return JSONResponse(status_code=500, content={"message": f"Server Error: {str(e)}", "success": False})
 
 
-@router.post("/import")
+@router.post("/biometric/sync")
+async def sync_biometric_data(
+    payload: BiometricSyncRequest,
+    # current_user: dict = Depends(get_current_user) # Disable auth for initial test or use API Key later if needed
+):
+    """
+    Endpoint for Biometric Script to push logs.
+    Receives a list of attendance records.
+    """
+    try:
+        if not payload.data:
+            return JSONResponse(status_code=400, content={"message": "No data provided", "success": False})
+
+        result = await repo.bulk_sync_biometric_logs(payload.data)
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": f"Processed {result['processed']} records", 
+                "success": True, 
+                "data": result
+            }
+        )
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"message": f"Server Error: {str(e)}", "success": False})
+
+@router.post("/import", dependencies=[Depends(verify_token)])
 async def import_attendance(file: UploadFile = File(...)):
     try:
         contents = await file.read()
