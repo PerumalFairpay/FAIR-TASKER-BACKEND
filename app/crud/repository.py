@@ -1770,7 +1770,19 @@ class Repository:
                 query["date"] = {"$gte": start_date}
                 
             if employee_id:
-                query["employee_id"] = employee_id
+                # Try to find employee to get both IDs
+                emp = await self.employees.find_one({"$or": [
+                    {"_id": ObjectId(employee_id) if ObjectId.is_valid(employee_id) else "000000000000000000000000"},
+                    {"employee_no_id": employee_id}
+                ]})
+                
+                if emp:
+                    # Search by both Mongo ID (str) and Biometric ID (str or int)
+                    emp_mongo_id = str(emp.get("_id"))
+                    emp_bio_id = str(emp.get("employee_no_id"))
+                    query["employee_id"] = {"$in": [emp_mongo_id, emp_bio_id]}
+                else:
+                    query["employee_id"] = employee_id
                 
             # Status filter for all attendance statuses
             if status:
@@ -1784,7 +1796,15 @@ class Repository:
             
             # Fetch employee details for mapping
             employees = await self.employees.find().to_list(length=None)
-            emp_map = {str(e.get("employee_no_id")): normalize(e) for e in employees if e.get("employee_no_id")}
+            emp_map = {}
+            for e in employees:
+                e_norm = normalize(e)
+                # Map by ID (ObjectId string)
+                if e_norm.get("id"):
+                    emp_map[str(e_norm["id"])] = e_norm
+                # Map by Employee No ID (Biometric ID)
+                if e_norm.get("employee_no_id"):
+                    emp_map[str(e_norm["employee_no_id"])] = e_norm
             
             result = []
             
