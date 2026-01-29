@@ -197,11 +197,21 @@ async def import_attendance(file: UploadFile = File(...)):
         df = df.dropna(subset=['Employee ID'])
         df = df[df['Employee ID'].astype(str).str.lower() != 'total']
         
+        # Fetch valid employees for validation
+        all_employees = await repo.get_all_employees_summary()
+        valid_employee_ids = {str(emp.get('employee_no_id')).strip() for emp in all_employees if emp.get('employee_no_id')}
+
         records = []
+        skipped_count = 0
         for _, row in df.iterrows():
             try:
                 emp_no_id = str(row['Employee ID']).split('.')[0].strip()
                 
+                # VALIDATION: Check if employee exists
+                if emp_no_id not in valid_employee_ids:
+                    skipped_count += 1
+                    continue
+
                 # Parse Date
                 date_val = row['Date']
                 if isinstance(date_val, datetime):
@@ -270,11 +280,11 @@ async def import_attendance(file: UploadFile = File(...)):
                 continue
                 
         if not records:
-             return JSONResponse(status_code=400, content={"message": "No valid records found in file", "success": False})
+             return JSONResponse(status_code=400, content={"message": f"No valid records found in file. Skipped {skipped_count} invalid employees.", "success": False})
 
         result = await repo.bulk_import_attendance(records)
         return JSONResponse(status_code=200, content={
-            "message": f"Successfully imported {result.get('upserted', 0) + result.get('matched', 0)} records", 
+            "message": f"Successfully imported {result.get('upserted', 0) + result.get('matched', 0)} records. Skipped {skipped_count} records for non-existent employees.", 
             "success": True, 
             "data": result
         })
