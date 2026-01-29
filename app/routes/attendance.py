@@ -109,10 +109,12 @@ async def get_all_attendance(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     employee_id: Optional[str] = None,
-    status: Optional[str] = None
+    status: Optional[str] = None,
+    page: int = 1,
+    limit: int = 20
 ):
     try:
-        result = await repo.get_all_attendance(date, start_date, end_date, employee_id, status)
+        result = await repo.get_all_attendance(date, start_date, end_date, employee_id, status, page, limit)
         return JSONResponse(
             status_code=200,
             content={"message": "Attendance records fetched", "success": True, **result}

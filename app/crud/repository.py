@@ -1758,7 +1758,8 @@ class Repository:
         except Exception as e:
             raise e
 
-    async def get_all_attendance(self, date: str = None, start_date: str = None, end_date: str = None, employee_id: str = None, status: str = None) -> dict:
+
+    async def get_all_attendance(self, date: str = None, start_date: str = None, end_date: str = None, employee_id: str = None, status: str = None, page: int = 1, limit: int = 20) -> dict:
         try:
             query = {}
             if date:
@@ -1774,8 +1775,12 @@ class Repository:
             # Status filter for all attendance statuses
             if status:
                 query["status"] = status
-                
-            records = await self.attendance.find(query).sort("date", -1).to_list(length=None)
+            
+            # Pagination Logic
+            skip = (page - 1) * limit
+            total_count = await self.attendance.count_documents(query)
+            
+            records = await self.attendance.find(query).sort("date", -1).skip(skip).limit(limit).to_list(length=limit)
             
             # Fetch employee details for mapping
             employees = await self.employees.find().to_list(length=None)
@@ -1795,25 +1800,78 @@ class Repository:
                 r_norm["employee_details"] = emp_details
                 result.append(r_norm)
             
-            # Sort by date and employee name
-            result.sort(key=lambda x: (x.get("date", ""), (x.get("employee_details") or {}).get("name", "")), reverse=True)
+            # Sort by date and employee name (already sorted by date in DB query, secondary sort in memory if needed but DB sort is better)
+            # result.sort(...) -> DB sort is sufficient for date.
             
-            # Calculate metrics
-            metrics = {
-                "total_records": len(result),
-                "present": len([r for r in result if r.get("status") == "Present"]),
-                "absent": len([r for r in result if r.get("status") == "Absent"]),
-                "leave": len([r for r in result if r.get("status") == "Leave"]),
-                "holiday": len([r for r in result if r.get("status") == "Holiday"]),
-                "late": len([r for r in result if r.get("status") == "Late"]),
-                "overtime": len([r for r in result if r.get("status") == "Overtime"]),
-                "total_work_hours": round(sum([float(r.get("total_work_hours") or 0) for r in result]), 2),
+            # Dashboard Metrics (Global)
+            metrics = await self.get_dashboard_metrics()
+            
+            pagination = {
+                "total_records": total_count,
+                "current_page": page,
+                "limit": limit,
+                "total_pages": (total_count + limit - 1) // limit if limit > 0 else 0
             }
-            metrics["avg_work_hours"] = round(metrics["total_work_hours"] / metrics["present"], 2) if metrics["present"] > 0 else 0
             
-            return {"data": result, "metrics": metrics}
+            return {
+                "data": result, 
+                "metrics": metrics,
+                "pagination": pagination
+            }
         except Exception as e:
+            print(f"Error in get_all_attendance: {e}")
             raise e
+
+
+
+    async def get_dashboard_metrics(self) -> dict:
+        try:
+            today = datetime.now().date()
+            start_of_today = today.strftime("%Y-%m-%d")
+            
+            start_of_month = today.replace(day=1).strftime("%Y-%m-%d")
+            
+            # Simple assumption for start of year
+            start_of_year = today.replace(month=1, day=1).strftime("%Y-%m-%d")
+
+            # Helper to run aggregation
+            async def aggregate_stats(start_date: str, end_date: str = None):
+                match_query = {"date": {"$gte": start_date}}
+                if end_date:
+                    match_query["date"]["$lte"] = end_date
+                
+                pipeline = [
+                    {"$match": match_query},
+                    {"$group": {
+                        "_id": "$status",
+                        "count": {"$sum": 1}
+                    }}
+                ]
+                cursor = self.attendance.aggregate(pipeline)
+                stats = {
+                    "present": 0, "absent": 0, "leave": 0, 
+                    "holiday": 0, "late": 0, "overtime": 0
+                }
+                async for doc in cursor:
+                    status_key = str(doc["_id"]).lower()
+                    if status_key in stats:
+                        stats[status_key] = doc["count"]
+                return stats
+
+            # Run aggregations
+            # Today: Exact match on date, not range
+            today_stats = await aggregate_stats(start_of_today, start_of_today)
+            month_stats = await aggregate_stats(start_of_month)
+            year_stats = await aggregate_stats(start_of_year)
+            
+            return {
+                "today": today_stats,
+                "month": month_stats,
+                "year": year_stats
+            }
+        except Exception as e:
+            print(f"Error calculating metrics: {e}")
+            return {}
 
     # Checklist Template CRUD
     async def create_checklist_template(self, template: EmployeeChecklistTemplateCreate) -> dict:
