@@ -125,29 +125,48 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             start_of_week = (now_utc - timedelta(days=now_utc.weekday())).strftime("%Y-%m-%d")
             start_of_month = now_utc.replace(day=1).strftime("%Y-%m-%d")
             
-            att_today = await repo.get_all_attendance(date=today_str)
-            att_week = await repo.get_all_attendance(start_date=start_of_week, end_date=today_str)
-            att_month = await repo.get_all_attendance(start_date=start_of_month, end_date=today_str)
+            att_today_res = await repo.get_all_attendance(date=today_str, limit=2000)
+            att_week_res = await repo.get_all_attendance(start_date=start_of_week, end_date=today_str, limit=2000)
+            att_month_res = await repo.get_all_attendance(start_date=start_of_month, end_date=today_str, limit=2000)
             
-            today_metrics = (att_today or {}).get("metrics", {})
-            week_metrics = (att_week or {}).get("metrics", {})
-            month_metrics = (att_month or {}).get("metrics", {})
+            # Extract Metrics correctly (nested in repo response)
+            repo_metrics = (att_today_res or {}).get("metrics", {})
+            today_counts = repo_metrics.get("today", {})
+            month_counts = repo_metrics.get("month", {})
             
-            # Punctuality/Attendance Concerns (Mock Logic or simplified)
+            # Extract Data for manual calculations
+            today_data = (att_today_res or {}).get("data", [])
+            week_data = (att_week_res or {}).get("data", [])
+            month_data = (att_month_res or {}).get("data", [])
+
+            # Helper for Avg Hours
+            def calc_avg_hours(data_list):
+                 if not data_list: return 0
+                 total_hours = sum(float(r.get("total_work_hours", 0)) for r in data_list)
+                 return round(total_hours / len(data_list), 1) if len(data_list) > 0 else 0
+
+            today_avg_hours = calc_avg_hours(today_data)
+            
+            # Week Calculations (Manual)
+            week_present = len([r for r in week_data if r.get("status") in ["Present", "Late"]])
+            week_late = len([r for r in week_data if r.get("status") == "Late" or r.get("is_late")])
+            week_avg_hours = calc_avg_hours(week_data)
+            
+            # Punctuality/Attendance Concerns
             attendance_concerns = []
-            att_records_month = (att_month or {}).get("data", [])
+            att_records_month = month_data
             emp_att_summary = {}
             for r in att_records_month:
                 eid = r.get("employee_id")
                 if eid not in emp_att_summary: emp_att_summary[eid] = {"late": 0, "absent": 0, "present": 0}
                 status = r.get("status")
-                if status == "Late": emp_att_summary[eid]["late"] += 1
+                if status == "Late" or r.get("is_late"): emp_att_summary[eid]["late"] += 1
                 elif status == "Absent": emp_att_summary[eid]["absent"] += 1
                 elif status == "Present": emp_att_summary[eid]["present"] += 1
 
             for eid, stats in emp_att_summary.items():
                 if stats["late"] > 3 or stats["absent"] > 2:
-                    emp_info = next((e for e in employees if e.get("employee_no_id") == eid), {})
+                    emp_info = next((e for e in employees if str(e.get("employee_no_id")) == str(eid) or str(e.get("id")) == str(eid)), {})
                     attendance_concerns.append({
                         "employee_id": eid,
                         "name": emp_info.get("name", "Unknown"),
@@ -161,22 +180,22 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                 "today": {
                     "date": today_str,
                     "total_employees": total_employees,
-                    "present": today_metrics.get("present", 0),
-                    "absent": today_metrics.get("absent", 0),
-                    "on_leave": today_metrics.get("leave", 0),
-                    "late": today_metrics.get("late", 0),
-                    "present_percentage": round((today_metrics.get("present", 0) / total_employees) * 100, 1) if total_employees > 0 else 0,
-                    "avg_work_hours": today_metrics.get("avg_work_hours", 0)
+                    "present": today_counts.get("present", 0),
+                    "absent": today_counts.get("absent", 0),
+                    "on_leave": today_counts.get("leave", 0),
+                    "late": today_counts.get("late", 0),
+                    "present_percentage": round((today_counts.get("present", 0) / total_employees) * 100, 1) if total_employees > 0 else 0,
+                    "avg_work_hours": today_avg_hours
                 },
                 "this_week": {
-                    "avg_attendance_percentage": round((week_metrics.get("present", 0) / (total_employees * 5)) * 100, 1) if total_employees > 0 else 0,
-                    "total_late_instances": week_metrics.get("late", 0),
-                    "avg_work_hours_per_day": week_metrics.get("avg_work_hours", 0)
+                    "avg_attendance_percentage": round((week_present / (total_employees * 5)) * 100, 1) if total_employees > 0 else 0,
+                    "total_late_instances": week_late,
+                    "avg_work_hours_per_day": week_avg_hours
                 },
                 "this_month": {
-                    "total_late_instances": month_metrics.get("late", 0),
-                    "total_absences": month_metrics.get("absent", 0),
-                    "avg_work_hours_per_day": month_metrics.get("avg_work_hours", 0)
+                    "total_late_instances": month_counts.get("late", 0),
+                    "total_absences": month_counts.get("absent", 0),
+                    "avg_work_hours_per_day": calc_avg_hours(month_data)
                 },
                 "attendance_concerns": sorted(attendance_concerns, key=lambda x: x["late_count"] + x["absent_days"], reverse=True)[:5]
             }
@@ -529,7 +548,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             start_of_week = (today_dt - timedelta(days=today_dt.weekday())).strftime("%Y-%m-%d")
             
             attendance_cursor = repo.attendance.find({
-                "employee_id": employee_id,
+                "employee_id": str(emp_doc["_id"]),
                 "date": {"$gte": start_of_month}
             })
             month_attendance = await attendance_cursor.to_list(length=None)
@@ -691,7 +710,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             }
 
             # 5. Task Metrics & Recent Tasks
-            my_tasks = await repo.get_tasks(assigned_to=employee_id) 
+            my_tasks = await repo.get_tasks(assigned_to=str(emp_doc["_id"])) 
             
             task_metric_counts = {
                 "total_assigned": len(my_tasks),
