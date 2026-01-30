@@ -1783,7 +1783,48 @@ class Repository:
             attendance_data = attendance.dict()
             attendance_data["employee_id"] = employee_id
             attendance_data["updated_at"] = datetime.utcnow()
-            attendance_data["status"] = "Present"
+            
+            # Fetch system settings for late calculation
+            work_start_time_config = await self.system_configurations.find_one(
+                {"key": "work_start_time"}
+            )
+            late_grace_period_config = await self.system_configurations.find_one(
+                {"key": "late_grace_period_minutes"}
+            )
+            
+            # Default values if settings not found
+            work_start_time = work_start_time_config.get("value", "09:00") if work_start_time_config else "09:00"
+            late_grace_period = late_grace_period_config.get("value", 15) if late_grace_period_config else 15
+            
+            # Parse clock_in time and convert to IST (Asia/Kolkata)
+            from datetime import timezone, timedelta
+            
+            clock_in_dt = datetime.fromisoformat(attendance.clock_in.replace("Z", "+00:00"))
+            
+            # Convert UTC to IST (UTC+5:30)
+            ist_offset = timedelta(hours=5, minutes=30)
+            clock_in_ist = clock_in_dt + ist_offset
+            clock_in_time = clock_in_ist.time()
+            
+            # Parse work start time
+            work_start = datetime.strptime(work_start_time, "%H:%M").time()
+            
+            # Calculate if late
+            is_late = False
+            status = "Present"
+            
+            if clock_in_time > work_start:
+                # Calculate minutes late
+                clock_in_minutes = clock_in_time.hour * 60 + clock_in_time.minute
+                work_start_minutes = work_start.hour * 60 + work_start.minute
+                minutes_late = clock_in_minutes - work_start_minutes
+                
+                if minutes_late > late_grace_period:
+                    is_late = True
+                    status = "Late"
+            
+            attendance_data["is_late"] = is_late
+            attendance_data["status"] = status
 
             if existing:
                 # If they are already marked "Present", "Late", or "Overtime", don't allow double clock-in
@@ -1798,8 +1839,9 @@ class Repository:
                         "$set": {
                             "clock_in": attendance_data["clock_in"],
                             "device_type": attendance_data["device_type"],
-                            "status": "Present",
-                            "notes": f"Overrode {existing.get('status')} - Employee clocked in",
+                            "status": status,
+                            "is_late": is_late,
+                            "notes": f"Overrode {existing.get('status')} - Employee clocked in{' (Late)' if is_late else ''}",
                             "updated_at": datetime.utcnow(),
                         }
                     },
@@ -2215,16 +2257,13 @@ class Repository:
             processed_count = 0
             errors = []
 
-            # Sort logs by timestamp to process in order
             sorted_logs = sorted(logs, key=lambda x: x.timestamp)
 
             for log in sorted_logs:
                 try:
-                    # 1. Parse Timestamp
                     try:
                         log_time = datetime.fromisoformat(log.timestamp)
                     except:
-                        # Try parsing various formats if ISO fails, or skip
                         try:
                             log_time = datetime.strptime(
                                 log.timestamp, "%Y-%m-%d %H:%M:%S"
@@ -2238,9 +2277,6 @@ class Repository:
                     date_str = log_time.strftime("%Y-%m-%d")
                     time_str = log_time.isoformat()
 
-                    # 2. Find Employee
-                    # Match user_id from device to employee_no_id OR attendance_id
-                    # IMPORTANT: Biometric usually uses integer IDs (1, 2, 3), need to ensure string match
                     employee = await self.employees.find_one(
                         {"employee_no_id": str(log.user_id)}
                     )
@@ -2250,44 +2286,61 @@ class Repository:
                         )
 
                     if not employee:
-                        # Try int -> str conversion just in case
                         employee = await self.employees.find_one(
                             {"attendance_id": int(log.user_id)}
                         )
 
                     if not employee:
-                        # Log error or skip? Skipping for now to avoid clutter
                         continue
 
                     employee_id = str(employee["_id"])
 
-                    # 3. Check for existing attendance record for this date
                     attendance = await self.attendance.find_one(
                         {"employee_id": employee_id, "date": date_str}
                     )
 
-                    if not attendance:
-                        # CREATE (Clock In)
-                        # Assume first punch of the day is Clock In
+                    if not attendance: 
+                        work_start_time_config = await self.system_configurations.find_one(
+                            {"key": "work_start_time"}
+                        )
+                        late_grace_period_config = await self.system_configurations.find_one(
+                            {"key": "late_grace_period_minutes"}
+                        )
+                        
+                        work_start_time = work_start_time_config.get("value", "09:00") if work_start_time_config else "09:00"
+                        late_grace_period = late_grace_period_config.get("value", 15) if late_grace_period_config else 15
+                         
+                        work_start = datetime.strptime(work_start_time, "%H:%M").time()
+                        
+                        clock_in_time = log_time.time()
+                         
+                        is_late = False
+                        status = "Present"
+                        
+                        if clock_in_time > work_start: 
+                            clock_in_minutes = clock_in_time.hour * 60 + clock_in_time.minute
+                            work_start_minutes = work_start.hour * 60 + work_start.minute
+                            minutes_late = clock_in_minutes - work_start_minutes
+                            
+                            if minutes_late > late_grace_period:
+                                is_late = True
+                                status = "Late"
+                        
                         new_record = {
                             "employee_id": employee_id,
                             "date": date_str,
                             "clock_in": time_str,
                             "device_type": "Biometric",
-                            "status": "Present",
+                            "status": status,
+                            "is_late": is_late,
                             "created_at": datetime.utcnow(),
                         }
                         await self.attendance.insert_one(new_record)
                         processed_count += 1
-                    else:
-                        # UPDATE (Clock Out)
-                        # Logic: If new time is later than current clock_in, update clock_out
-                        # If existing clock_out exists, only update if new time is later check-out
-
+                    else: 
                         clock_in_time = datetime.fromisoformat(attendance["clock_in"])
 
                         if log_time > clock_in_time:
-                            # It's a potential clock-out
                             should_update = True
                             if attendance.get("clock_out"):
                                 current_clock_out = datetime.fromisoformat(
@@ -2295,11 +2348,10 @@ class Repository:
                                 )
                                 if log_time <= current_clock_out:
                                     should_update = (
-                                        False  # Already have a later or equal clock out
+                                        False  
                                     )
 
                             if should_update:
-                                # Calculate hours
                                 work_duration = log_time - clock_in_time
                                 total_hours = round(
                                     work_duration.total_seconds() / 3600, 2
@@ -2311,7 +2363,7 @@ class Repository:
                                         "$set": {
                                             "clock_out": time_str,
                                             "total_work_hours": total_hours,
-                                            "device_type": "Biometric",  # Update source
+                                            "device_type": "Biometric",  
                                             "updated_at": datetime.utcnow(),
                                         }
                                     },
