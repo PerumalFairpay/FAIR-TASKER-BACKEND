@@ -36,6 +36,8 @@ from app.models import (
     EmployeeChecklistTemplateCreate,
     EmployeeChecklistTemplateUpdate,
     BiometricLogItem,
+    SystemConfigurationCreate,
+    SystemConfigurationUpdate,
 )
 from app.utils import normalize, get_password_hash
 from bson import ObjectId
@@ -66,7 +68,9 @@ class Repository:
         self.leave_types = self.db["leave_types"]
         self.leave_requests = self.db["leave_requests"]
         self.tasks = self.db["tasks"]
+        self.tasks = self.db["tasks"]
         self.attendance = self.db["attendance"]
+        self.system_configurations = self.db["system_configurations"]
 
     async def create_employee(
         self, employee: EmployeeCreate, profile_picture_path: str = None
@@ -2323,6 +2327,27 @@ class Repository:
                 "total_received": len(logs),
                 "errors": errors,
             }
+        except Exception as e:
+            raise e
+
+    # System Configuration CRUD
+    async def get_system_configurations(self) -> List[dict]:
+        try:
+            configs = await self.system_configurations.find().to_list(length=None)
+            return [normalize(conf) for conf in configs]
+        except Exception as e:
+            raise e
+
+    async def update_system_configurations(self, settings: dict) -> List[dict]:
+        try:
+            for key, value in settings.items():
+                existing = await self.system_configurations.find_one({"key": key})
+                if existing:
+                    await self.system_configurations.update_one(
+                        {"key": key},
+                        {"$set": {"value": value, "updated_at": datetime.utcnow()}},
+                    )
+            return await self.get_system_configurations()
         except Exception as e:
             raise e
 

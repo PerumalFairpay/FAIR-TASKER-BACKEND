@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Any
 from datetime import datetime
 
 
@@ -777,3 +777,29 @@ class BiometricLogItem(BaseModel):
 
 class BiometricSyncRequest(BaseModel):
     data: List[BiometricLogItem]
+
+
+class SystemConfigurationBase(BaseModel):
+    key: str
+    label: str
+    value: Any
+    input_type: (
+        str  # "text", "number", "boolean", "time", "date", "select", "multiselect"
+    )
+    group: str
+    options: List[str] = []
+
+
+class SystemConfigurationCreate(SystemConfigurationBase):
+    pass
+
+
+class SystemConfigurationUpdate(BaseModel):
+    value: Any
+
+
+class SystemConfigurationResponse(SystemConfigurationBase):
+    id: str
+
+    class Config:
+        from_attributes = True
