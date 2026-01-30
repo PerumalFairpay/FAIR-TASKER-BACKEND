@@ -7,7 +7,7 @@ from app.models import (
     AttendanceStatusUpdate,
     BiometricSyncRequest,
 )
-from typing import List, Optional
+from typing import Optional
 from app.auth import verify_token, get_current_user
 import pandas as pd
 import io
