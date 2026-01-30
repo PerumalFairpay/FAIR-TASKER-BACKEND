@@ -8,7 +8,10 @@ import json
 
 from app.auth import verify_token
 
-router = APIRouter(prefix="/blogs", tags=["blogs"], dependencies=[Depends(verify_token)])
+router = APIRouter(
+    prefix="/blogs", tags=["blogs"], dependencies=[Depends(verify_token)]
+)
+
 
 @router.post("/create")
 async def create_blog(
@@ -19,7 +22,7 @@ async def create_blog(
     category: str = Form(...),
     tags: Optional[str] = Form("[]"),
     is_published: bool = Form(True),
-    cover_image: Optional[UploadFile] = File(None)
+    cover_image: Optional[UploadFile] = File(None),
 ):
     try:
         image_url = None
@@ -40,42 +43,48 @@ async def create_blog(
             category=category,
             tags=parsed_tags,
             is_published=is_published,
-            cover_image=image_url
+            cover_image=image_url,
         )
 
         new_blog = await repo.create_blog(blog_data)
         return JSONResponse(
             status_code=201,
-            content={"message": "Blog post created successfully", "success": True, "data": new_blog}
+            content={
+                "message": "Blog post created successfully",
+                "success": True,
+                "data": new_blog,
+            },
         )
     except Exception as e:
         return JSONResponse(
             status_code=500,
-            content={"message": f"Failed to create blog: {str(e)}", "success": False}
+            content={"message": f"Failed to create blog: {str(e)}", "success": False},
         )
+
 
 @router.get("/all")
 async def get_blogs(
-    page: int = Query(1, ge=1), 
-    limit: int = Query(10, ge=1), 
-    search: Optional[str] = None
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1),
+    search: Optional[str] = None,
 ):
     try:
         result = await repo.get_blogs(page, limit, search)
         return JSONResponse(
             status_code=200,
             content={
-                "message": "Blogs fetched successfully", 
-                "success": True, 
+                "message": "Blogs fetched successfully",
+                "success": True,
                 "data": result["data"],
-                "meta": result["meta"]
-            }
+                "meta": result["meta"],
+            },
         )
     except Exception as e:
         return JSONResponse(
             status_code=500,
-            content={"message": f"Failed to fetch blogs: {str(e)}", "success": False}
+            content={"message": f"Failed to fetch blogs: {str(e)}", "success": False},
         )
+
 
 @router.get("/{blog_id}")
 async def get_blog(blog_id: str):
@@ -84,17 +93,22 @@ async def get_blog(blog_id: str):
         if not blog:
             return JSONResponse(
                 status_code=404,
-                content={"message": "Blog post not found", "success": False}
+                content={"message": "Blog post not found", "success": False},
             )
         return JSONResponse(
             status_code=200,
-            content={"message": "Blog fetched successfully", "success": True, "data": blog}
+            content={
+                "message": "Blog fetched successfully",
+                "success": True,
+                "data": blog,
+            },
         )
     except Exception as e:
         return JSONResponse(
             status_code=500,
-            content={"message": f"Failed to fetch blog: {str(e)}", "success": False}
+            content={"message": f"Failed to fetch blog: {str(e)}", "success": False},
         )
+
 
 @router.put("/update/{blog_id}")
 async def update_blog(
@@ -106,7 +120,7 @@ async def update_blog(
     category: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
     is_published: Optional[bool] = Form(None),
-    cover_image: Optional[UploadFile] = File(None)
+    cover_image: Optional[UploadFile] = File(None),
 ):
     try:
         image_url = None
@@ -115,14 +129,21 @@ async def update_blog(
             image_url = uploaded["url"]
 
         update_fields = {}
-        if title is not None: update_fields["title"] = title
-        if slug is not None: update_fields["slug"] = slug
-        if excerpt is not None: update_fields["excerpt"] = excerpt
-        if content is not None: update_fields["content"] = content
-        if category is not None: update_fields["category"] = category
-        if is_published is not None: update_fields["is_published"] = is_published
-        if image_url is not None: update_fields["cover_image"] = image_url
-        
+        if title is not None:
+            update_fields["title"] = title
+        if slug is not None:
+            update_fields["slug"] = slug
+        if excerpt is not None:
+            update_fields["excerpt"] = excerpt
+        if content is not None:
+            update_fields["content"] = content
+        if category is not None:
+            update_fields["category"] = category
+        if is_published is not None:
+            update_fields["is_published"] = is_published
+        if image_url is not None:
+            update_fields["cover_image"] = image_url
+
         if tags is not None:
             try:
                 update_fields["tags"] = json.loads(tags)
@@ -135,17 +156,22 @@ async def update_blog(
         if not updated_blog:
             return JSONResponse(
                 status_code=404,
-                content={"message": "Blog post not found", "success": False}
+                content={"message": "Blog post not found", "success": False},
             )
         return JSONResponse(
             status_code=200,
-            content={"message": "Blog updated successfully", "success": True, "data": updated_blog}
+            content={
+                "message": "Blog updated successfully",
+                "success": True,
+                "data": updated_blog,
+            },
         )
     except Exception as e:
         return JSONResponse(
             status_code=500,
-            content={"message": f"Failed to update blog: {str(e)}", "success": False}
+            content={"message": f"Failed to update blog: {str(e)}", "success": False},
         )
+
 
 @router.delete("/delete/{blog_id}")
 async def delete_blog(blog_id: str):
@@ -154,14 +180,14 @@ async def delete_blog(blog_id: str):
         if not success:
             return JSONResponse(
                 status_code=404,
-                content={"message": "Blog post not found", "success": False}
+                content={"message": "Blog post not found", "success": False},
             )
         return JSONResponse(
             status_code=200,
-            content={"message": "Blog deleted successfully", "success": True}
+            content={"message": "Blog deleted successfully", "success": True},
         )
     except Exception as e:
         return JSONResponse(
             status_code=500,
-            content={"message": f"Failed to delete blog: {str(e)}", "success": False}
+            content={"message": f"Failed to delete blog: {str(e)}", "success": False},
         )

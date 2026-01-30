@@ -10,25 +10,26 @@ from datetime import datetime
 router = APIRouter()
 
 
-
 @router.post("/login")
 async def login(user: UserLogin, response: Response):
     user_record = await users_collection.find_one({"email": user.email})
-    if not user_record or not verify_password(user.password, user_record["hashed_password"]):
+    if not user_record or not verify_password(
+        user.password, user_record["hashed_password"]
+    ):
         raise HTTPException(
-            status_code=400, 
-            detail="We couldn't log you in. Please check your credentials or contact support if your account is inactive."
+            status_code=400,
+            detail="We couldn't log you in. Please check your credentials or contact support if your account is inactive.",
         )
-    
+
     # Create token and set cookie
     token = create_access_token(user_record)
     response.set_cookie(
-        key="token", 
-        value=token, 
-        httponly=True, 
-        max_age=1440 * 60, 
-        samesite="lax", 
-        secure=False # Set to True in production with HTTPS
+        key="token",
+        value=token,
+        httponly=True,
+        max_age=1440 * 60,
+        samesite="lax",
+        secure=False,  # Set to True in production with HTTPS
     )
 
     return {
@@ -42,29 +43,28 @@ async def login(user: UserLogin, response: Response):
             "name": user_record.get("name"),
             "email": user_record.get("email"),
             "mobile": user_record.get("mobile"),
-            "role": user_record.get("role", "employee")
-        }
+            "role": user_record.get("role", "employee"),
+        },
     }
+
 
 @router.post("/logout")
 async def logout(response: Response):
     response.delete_cookie("token")
     return {"message": "Logged out successfully", "success": True}
 
+
 @router.get("/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
     current_user.pop("hashed_password", None)
-    
+
     # Fetch profile picture if linked to an employee
     if "employee_id" in current_user and current_user["employee_id"]:
-        employee = await employees_collection.find_one({"employee_no_id": current_user["employee_id"]})
+        employee = await employees_collection.find_one(
+            {"employee_no_id": current_user["employee_id"]}
+        )
         if employee:
             current_user["profile_picture"] = employee.get("profile_picture")
             current_user["work_mode"] = employee.get("work_mode")
-            
-    return {
-        "message": "Success",
-        "success": True,
-        "data": current_user
-    }
 
+    return {"message": "Success", "success": True, "data": current_user}
