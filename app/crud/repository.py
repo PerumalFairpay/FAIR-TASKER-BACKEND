@@ -2341,13 +2341,33 @@ class Repository:
     async def update_system_configurations(self, settings: dict) -> List[dict]:
         try:
             for key, value in settings.items():
-                existing = await self.system_configurations.find_one({"key": key})
-                if existing:
-                    await self.system_configurations.update_one(
-                        {"key": key},
-                        {"$set": {"value": value, "updated_at": datetime.utcnow()}},
-                    )
+                # Handle is_public fields separately
+                if key.endswith("_is_public"):
+                    actual_key = key.replace("_is_public", "")
+                    existing = await self.system_configurations.find_one({"key": actual_key})
+                    if existing:
+                        await self.system_configurations.update_one(
+                            {"key": actual_key},
+                            {"$set": {"is_public": value, "updated_at": datetime.utcnow()}},
+                        )
+                else:
+                    # Regular value update
+                    existing = await self.system_configurations.find_one({"key": key})
+                    if existing:
+                        await self.system_configurations.update_one(
+                            {"key": key},
+                            {"$set": {"value": value, "updated_at": datetime.utcnow()}},
+                        )
             return await self.get_system_configurations()
+        except Exception as e:
+            raise e
+
+    async def get_public_system_configurations(self) -> List[dict]:
+        try:
+            configs = await self.system_configurations.find(
+                {"is_public": True}
+            ).to_list(length=None)
+            return [normalize(conf) for conf in configs]
         except Exception as e:
             raise e
 

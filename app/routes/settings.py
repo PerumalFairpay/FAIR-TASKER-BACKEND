@@ -7,11 +7,12 @@ from app.auth import verify_token
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 
-@router.get("/", dependencies=[Depends(verify_token)])
-async def get_settings():
+@router.get("/public")
+async def get_public_settings():
+    """Public endpoint - no authentication required"""
     try:
-        configs = await repo.get_system_configurations()
-
+        configs = await repo.get_public_system_configurations()
+        
         # Group settings
         grouped = {}
         for config in configs:
@@ -19,7 +20,31 @@ async def get_settings():
             if group not in grouped:
                 grouped[group] = []
             grouped[group].append(config)
+            
+        return JSONResponse(
+            status_code=200,
+            content={"message": "Public settings fetched", "success": True, "data": grouped},
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"Server Error: {str(e)}", "success": False},
+        )
 
+
+@router.get("/", dependencies=[Depends(verify_token)])
+async def get_settings():
+    try:
+        configs = await repo.get_system_configurations()
+        
+        # Group settings
+        grouped = {}
+        for config in configs:
+            group = config.get("group", "Other")
+            if group not in grouped:
+                grouped[group] = []
+            grouped[group].append(config)
+            
         return JSONResponse(
             status_code=200,
             content={"message": "Settings fetched", "success": True, "data": grouped},

@@ -23,6 +23,7 @@ settings_data = [
         "value": "Fair Tasker",
         "input_type": "text",
         "group": "General",
+        "is_public": True,
     },
     {
         "key": "contact_email",
@@ -30,35 +31,24 @@ settings_data = [
         "value": "",
         "input_type": "text",
         "group": "General",
+        "is_public": False,
     },
+    
     {
-        "key": "date_format",
-        "label": "Date Format",
-        "value": "YYYY-MM-DD",
-        "input_type": "select",
-        "options": ["DD-MM-YYYY", "MM-DD-YYYY", "YYYY-MM-DD"],
-        "group": "General",
-    },
-    {
-        "key": "currency",
-        "label": "Currency",
-        "value": "USD",
-        "input_type": "text",
-        "group": "General",
-    },
-    {
-        "key": "office_start_time",
-        "label": "Office Start Time",
+        "key": "work_start_time",
+        "label": "Work Start Time",
         "value": "09:00",
         "input_type": "time",
         "group": "Attendance",
+        "is_public": True,
     },
     {
-        "key": "office_end_time",
-        "label": "Office End Time",
+        "key": "work_end_time",
+        "label": "Work End Time",
         "value": "18:00",
         "input_type": "time",
         "group": "Attendance",
+        "is_public": True,
     },
     {
         "key": "late_grace_period_minutes",
@@ -66,14 +56,16 @@ settings_data = [
         "value": 15,
         "input_type": "number",
         "group": "Attendance",
+        "is_public": True,
     },
     {
         "key": "work_days",
         "label": "Work Days",
-        "value": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+        "value": ["Mon", "Tue", "Wed", "Thu", "Fri","sat"],
         "input_type": "multiselect",
         "options": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
         "group": "Attendance",
+        "is_public": False,
     },
     {
         "key": "ip_restriction_enabled",
@@ -81,6 +73,7 @@ settings_data = [
         "value": False,
         "input_type": "boolean",
         "group": "Attendance",
+        "is_public": False,
     },
 ]
 

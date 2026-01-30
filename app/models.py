@@ -788,6 +788,7 @@ class SystemConfigurationBase(BaseModel):
     )
     group: str
     options: List[str] = []
+    is_public: bool = False
 
 
 class SystemConfigurationCreate(SystemConfigurationBase):
