@@ -253,6 +253,35 @@ class DocuSignService:
             recipient_view_request=recipient_view_request
         )
         
-        return view_results.url
+        return view_results.url, envelope_id
+
+    def get_envelope_status(self, envelope_id: str):
+        api_client = self._get_authenticated_client()
+        account_id = config.DOCUSIGN_API_ACCOUNT_ID.strip()
+        envelopes_api = EnvelopesApi(api_client)
+        
+        try:
+            envelope = envelopes_api.get_envelope(account_id=account_id, envelope_id=envelope_id)
+            return envelope.status
+        except Exception as e:
+            print(f"Error getting envelope status: {str(e)}")
+            return None
+
+    def get_envelope_document(self, envelope_id: str):
+        api_client = self._get_authenticated_client()
+        account_id = config.DOCUSIGN_API_ACCOUNT_ID.strip()
+        envelopes_api = EnvelopesApi(api_client)
+        
+        try:
+            # 'combined' gets all documents as a single PDF
+            document_data = envelopes_api.get_document(
+                account_id=account_id, 
+                envelope_id=envelope_id, 
+                document_id='combined'
+            )
+            return document_data
+        except Exception as e:
+            print(f"Error getting envelope document: {str(e)}")
+            raise e
 
 docusign_service = DocuSignService()

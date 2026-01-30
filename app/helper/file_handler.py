@@ -66,6 +66,39 @@ class FileHandler:
                 raise Exception(f"Failed to upload {file.filename}: {e}")
         return result
 
+    # --------------- Save Bytes ----------------- #
+    async def save_from_bytes(self, file_bytes: bytes, filename: str, content_type: str = "application/pdf") -> Dict[str, str]:
+        result = None
+        file_id = str(uuid.uuid4())
+        file_ext = os.path.splitext(filename)[1] or ""
+        # Ensure ID is part of filename for uniqueness if needed, or just use ID
+        final_filename = f"{file_id}{file_ext}"
+
+        if self.storage_type == "local":
+            file_path = os.path.join(self.local_dir, final_filename)
+            with open(file_path, "wb") as f:
+                f.write(file_bytes)
+                file_url = f"/files/{final_filename}"
+                result = {"id": file_id, "url": file_url, "name": filename}
+        elif self.storage_type == "s3":
+            try:
+                key = f"dev-uploads/{final_filename}"
+                extra_args = {"ServerSideEncryption": "AES256"}
+                if content_type:
+                    extra_args["ContentType"] = content_type
+                
+                self.s3_client.put_object(
+                    Body=file_bytes,
+                    Bucket=self.aws_bucket,
+                    Key=key,
+                    **extra_args
+                )
+                file_url = self.get_file_api_url(file_id)
+                result = {"id": file_id, "url": file_url, "name": filename}
+            except ClientError as e:
+                raise Exception(f"Failed to upload {filename}: {e}")
+        return result
+
     # ---------------- Upload Files ---------------- #
     async def upload_files(self, files: List[UploadFile]) -> List[Dict[str, str]]:
         results = []
