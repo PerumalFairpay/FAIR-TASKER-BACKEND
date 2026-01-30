@@ -1823,8 +1823,8 @@ class Repository:
             # Sort by date and employee name (already sorted by date in DB query, secondary sort in memory if needed but DB sort is better)
             # result.sort(...) -> DB sort is sufficient for date.
             
-            # Dashboard Metrics (Global)
-            metrics = await self.get_dashboard_metrics()
+            # Dashboard Metrics (Global or User Specific)
+            metrics = await self.get_dashboard_metrics(employee_id=query.get("employee_id"))
             
             pagination = {
                 "total_records": total_count,
@@ -1844,7 +1844,7 @@ class Repository:
 
 
 
-    async def get_dashboard_metrics(self) -> dict:
+    async def get_dashboard_metrics(self, employee_id: str = None) -> dict:
         try:
             today = datetime.now().date()
             start_of_today = today.strftime("%Y-%m-%d")
@@ -1859,6 +1859,14 @@ class Repository:
                 match_query = {"date": {"$gte": start_date}}
                 if end_date:
                     match_query["date"]["$lte"] = end_date
+                
+                if employee_id:
+                    # If employee_id is a dict (from get_all_attendance query logic), use it directly
+                    # Otherwise treat as string
+                    if isinstance(employee_id, dict):
+                        match_query["employee_id"] = employee_id
+                    else:
+                        match_query["employee_id"] = employee_id
                 
                 pipeline = [
                     {"$match": match_query},
