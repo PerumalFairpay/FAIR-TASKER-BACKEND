@@ -60,6 +60,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         employee = await employees_collection.find_one({"employee_no_id": current_user["employee_id"]})
         if employee:
             current_user["profile_picture"] = employee.get("profile_picture")
+            current_user["work_mode"] = employee.get("work_mode")
             
     return {
         "message": "Success",
