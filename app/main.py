@@ -29,6 +29,7 @@ from app.routes import (
     profile,
     checklist_templates,
     settings,
+    digital_signature, 
 )
 
 from app.jobs.scheduler import init_scheduler, shutdown_scheduler
@@ -72,9 +73,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
+    allow_origins=[ 
         "http://localhost:3001",
         "http://127.0.0.1:3001",
         "https://hrm.fairpaytechworks.com",
@@ -110,6 +109,7 @@ api_router.include_router(files.router)
 api_router.include_router(profile.router)
 api_router.include_router(checklist_templates.router)
 api_router.include_router(settings.router)
+api_router.include_router(digital_signature.router)
 
 
 app.include_router(api_router, prefix="/api")
