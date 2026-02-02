@@ -10,6 +10,7 @@ class UserBase(BaseModel):
     email: EmailStr
     mobile: str
     role: Optional[str] = "employee"
+    address: Optional[str] = None
     permissions: List[str] = []
 
 
@@ -169,6 +170,7 @@ class EmployeeBase(BaseModel):
     resignation_date: Optional[str] = None
     last_working_day: Optional[str] = None
     exit_interview_notes: Optional[str] = None
+    address: Optional[str] = None
 
 
 class EmployeeCreate(EmployeeBase):
@@ -204,6 +206,7 @@ class EmployeeUpdate(BaseModel):
     resignation_date: Optional[str] = None
     last_working_day: Optional[str] = None
     exit_interview_notes: Optional[str] = None
+    address: Optional[str] = None
 
 
 class EmployeeResponse(EmployeeBase):

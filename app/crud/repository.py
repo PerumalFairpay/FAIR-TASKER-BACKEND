@@ -135,6 +135,7 @@ class Repository:
                 "name": employee.name,
                 "email": employee.email,
                 "mobile": employee.mobile,
+                "address": employee.address,
                 "hashed_password": hashed_password,
                 "role": employee.role or "employee",
                 "created_at": datetime.utcnow(),
@@ -263,6 +264,8 @@ class Repository:
                     user_update["name"] = update_data["name"]
                 if "mobile" in update_data:
                     user_update["mobile"] = update_data["mobile"]
+                if "address" in update_data:
+                    user_update["address"] = update_data["address"]
                 if "role" in update_data:
                     user_update["role"] = update_data["role"]
 

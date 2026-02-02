@@ -58,6 +58,7 @@ async def update_profile(
     emergency_contact_number: Optional[str] = Form(None),
     parent_name: Optional[str] = Form(None),
     marital_status: Optional[str] = Form(None),
+    address: Optional[str] = Form(None),
     profile_picture: Optional[UploadFile] = File(None),
     document_proof: Optional[UploadFile] = File(None)
 ):
@@ -102,6 +103,7 @@ async def update_profile(
             emergency_contact_number=emergency_contact_number,
             parent_name=parent_name,
             marital_status=marital_status,
+            address=address,
             documents=documents_list
         )
         

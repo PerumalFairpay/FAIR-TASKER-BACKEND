@@ -43,6 +43,7 @@ async def login(user: UserLogin, response: Response):
             "name": user_record.get("name"),
             "email": user_record.get("email"),
             "mobile": user_record.get("mobile"),
+            "address": user_record.get("address"),
             "role": user_record.get("role", "employee"),
         },
     }

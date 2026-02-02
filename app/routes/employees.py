@@ -32,7 +32,7 @@ async def create_employee(
     date_of_joining: Optional[str] = Form(None),
     confirmation_date: Optional[str] = Form(None),
     notice_period: Optional[str] = Form(None),
-
+    address: Optional[str] = Form(None),
     work_mode: Optional[str] = Form("Office"),
     document_names: List[str] = Form([]),
     profile_picture: Optional[UploadFile] = File(None),
@@ -87,7 +87,7 @@ async def create_employee(
             date_of_joining=date_of_joining,
             confirmation_date=confirmation_date,
             notice_period=notice_period,
-
+            address=address,
             work_mode=work_mode,
             documents=documents_list,
             onboarding_checklist=json.loads(onboarding_checklist) if onboarding_checklist else [],
@@ -188,7 +188,7 @@ async def update_employee(
     date_of_joining: Optional[str] = Form(None),
     confirmation_date: Optional[str] = Form(None),
     notice_period: Optional[str] = Form(None),
-
+    address: Optional[str] = Form(None),
     work_mode: Optional[str] = Form(None),
     document_names: List[str] = Form([]),
     profile_picture: Optional[UploadFile] = File(None),
@@ -246,7 +246,7 @@ async def update_employee(
             date_of_joining=date_of_joining,
             confirmation_date=confirmation_date,
             notice_period=notice_period,
-
+            address=address,
             work_mode=work_mode,
             documents=documents_list if documents_list else None,
             onboarding_checklist=json.loads(onboarding_checklist) if onboarding_checklist else None,
