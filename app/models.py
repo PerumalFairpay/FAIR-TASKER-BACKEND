@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Any
 from datetime import datetime
 
 
@@ -12,15 +12,19 @@ class UserBase(BaseModel):
     role: Optional[str] = "employee"
     permissions: List[str] = []
 
+
 class UserCreate(UserBase):
     password: str
+
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+
 class UserInDB(UserBase):
     hashed_password: str
+
 
 class UserResponse(UserBase):
     id: str
@@ -28,21 +32,26 @@ class UserResponse(UserBase):
     class Config:
         from_attributes = True
 
+
 class UserPermissionsUpdate(BaseModel):
     permissions: List[str]
+
 
 class RoleBase(BaseModel):
     name: str
     description: Optional[str] = None
-    permissions: List[str] = [] # List of Permission IDs
+    permissions: List[str] = []  # List of Permission IDs
+
 
 class RoleCreate(RoleBase):
     pass
+
 
 class RoleUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     permissions: Optional[List[str]] = None
+
 
 class RoleResponse(RoleBase):
     id: str
@@ -50,14 +59,17 @@ class RoleResponse(RoleBase):
     class Config:
         from_attributes = True
 
+
 class PermissionBase(BaseModel):
     name: str
     slug: str
     description: Optional[str] = None
     module: Optional[str] = None
 
+
 class PermissionCreate(PermissionBase):
     pass
+
 
 class PermissionUpdate(BaseModel):
     name: Optional[str] = None
@@ -65,22 +77,27 @@ class PermissionUpdate(BaseModel):
     description: Optional[str] = None
     module: Optional[str] = None
 
+
 class PermissionResponse(PermissionBase):
     id: str
 
     class Config:
         from_attributes = True
 
+
 class DepartmentBase(BaseModel):
     name: str
     parent_id: Optional[Union[str, int]] = None
 
+
 class DepartmentCreate(DepartmentBase):
     pass
+
 
 class DepartmentUpdate(BaseModel):
     name: Optional[str] = None
     parent_id: Optional[Union[str, int]] = None
+
 
 class DepartmentResponse(DepartmentBase):
     id: str
@@ -88,34 +105,41 @@ class DepartmentResponse(DepartmentBase):
     class Config:
         from_attributes = True
 
+
 class EmployeeDocument(BaseModel):
     document_name: str
     document_proof: str
     file_type: Optional[str] = None
+
 
 class ChecklistItem(BaseModel):
     name: str
     status: str = "Pending"  # Pending, Completed
     completed_at: Optional[str] = None
 
+
 class EmployeeChecklistTemplateBase(BaseModel):
     name: str
     type: str  # "Onboarding", "Offboarding"
     is_default: bool = False
 
+
 class EmployeeChecklistTemplateCreate(EmployeeChecklistTemplateBase):
     pass
+
 
 class EmployeeChecklistTemplateUpdate(BaseModel):
     name: Optional[str] = None
     type: Optional[str] = None
     is_default: Optional[bool] = None
 
+
 class EmployeeChecklistTemplateResponse(EmployeeChecklistTemplateBase):
     id: str
 
     class Config:
         from_attributes = True
+
 
 class EmployeeBase(BaseModel):
     first_name: str
@@ -146,8 +170,10 @@ class EmployeeBase(BaseModel):
     last_working_day: Optional[str] = None
     exit_interview_notes: Optional[str] = None
 
+
 class EmployeeCreate(EmployeeBase):
     password: str
+
 
 class EmployeeUpdate(BaseModel):
     first_name: Optional[str] = None
@@ -179,6 +205,7 @@ class EmployeeUpdate(BaseModel):
     last_working_day: Optional[str] = None
     exit_interview_notes: Optional[str] = None
 
+
 class EmployeeResponse(EmployeeBase):
     id: str
     profile_picture: Optional[str] = None
@@ -186,24 +213,29 @@ class EmployeeResponse(EmployeeBase):
     class Config:
         from_attributes = True
 
+
 class ExpenseCategoryBase(BaseModel):
     name: str
     description: Optional[str] = None
     parent_id: Optional[Union[str, int]] = None
 
+
 class ExpenseCategoryCreate(ExpenseCategoryBase):
     pass
+
 
 class ExpenseCategoryUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     parent_id: Optional[Union[str, int]] = None
 
+
 class ExpenseCategoryResponse(ExpenseCategoryBase):
     id: str
 
     class Config:
         from_attributes = True
+
 
 class ExpenseBase(BaseModel):
     expense_category_id: str
@@ -214,8 +246,10 @@ class ExpenseBase(BaseModel):
     attachment: Optional[str] = None
     file_type: Optional[str] = None
 
+
 class ExpenseCreate(ExpenseBase):
     pass
+
 
 class ExpenseUpdate(BaseModel):
     expense_category_id: Optional[str] = None
@@ -226,30 +260,36 @@ class ExpenseUpdate(BaseModel):
     attachment: Optional[str] = None
     file_type: Optional[str] = None
 
+
 class ExpenseResponse(ExpenseBase):
     id: str
 
     class Config:
         from_attributes = True
 
+
 class DocumentCategoryBase(BaseModel):
     name: str
     description: Optional[str] = None
     parent_id: Optional[Union[str, int]] = None
 
+
 class DocumentCategoryCreate(DocumentCategoryBase):
     pass
+
 
 class DocumentCategoryUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     parent_id: Optional[Union[str, int]] = None
 
+
 class DocumentCategoryResponse(DocumentCategoryBase):
     id: str
 
     class Config:
         from_attributes = True
+
 
 class DocumentBase(BaseModel):
     name: str
@@ -260,8 +300,10 @@ class DocumentBase(BaseModel):
     file_path: Optional[str] = None
     file_type: Optional[str] = None
 
+
 class DocumentCreate(DocumentBase):
     pass
+
 
 class DocumentUpdate(BaseModel):
     name: Optional[str] = None
@@ -272,11 +314,13 @@ class DocumentUpdate(BaseModel):
     file_path: Optional[str] = None
     file_type: Optional[str] = None
 
+
 class DocumentResponse(DocumentBase):
     id: str
 
     class Config:
         from_attributes = True
+
 
 class ClientBase(BaseModel):
     company_name: str
@@ -289,8 +333,10 @@ class ClientBase(BaseModel):
     logo: Optional[str] = None
     status: Optional[str] = "Active"
 
+
 class ClientCreate(ClientBase):
     pass
+
 
 class ClientUpdate(BaseModel):
     company_name: Optional[str] = None
@@ -303,11 +349,13 @@ class ClientUpdate(BaseModel):
     logo: Optional[str] = None
     status: Optional[str] = None
 
+
 class ClientResponse(ClientBase):
     id: str
 
     class Config:
         from_attributes = True
+
 
 class ProjectBase(BaseModel):
     name: str
@@ -325,8 +373,10 @@ class ProjectBase(BaseModel):
     tags: List[str] = []
     logo: Optional[str] = None
 
+
 class ProjectCreate(ProjectBase):
     pass
+
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
@@ -344,22 +394,26 @@ class ProjectUpdate(BaseModel):
     tags: Optional[List[str]] = None
     logo: Optional[str] = None
 
+
 class ProjectResponse(ProjectBase):
     id: str
 
     class Config:
         from_attributes = True
 
+
 class HolidayBase(BaseModel):
     name: str
     date: str  # Format: "YYYY-MM-DD"
     description: Optional[str] = None
     holiday_type: str = "Public"  # e.g., Public, Mandatory, Optional/Restricted
-    is_restricted: bool = False   # True if it's an optional/restricted holiday
-    status: str = "Active"        # Active or Inactive
+    is_restricted: bool = False  # True if it's an optional/restricted holiday
+    status: str = "Active"  # Active or Inactive
+
 
 class HolidayCreate(HolidayBase):
     pass
+
 
 class HolidayUpdate(BaseModel):
     name: Optional[str] = None
@@ -369,30 +423,36 @@ class HolidayUpdate(BaseModel):
     is_restricted: Optional[bool] = None
     status: Optional[str] = None
 
+
 class HolidayResponse(HolidayBase):
     id: str
 
     class Config:
         from_attributes = True
 
+
 class AssetCategoryBase(BaseModel):
     name: str
     description: Optional[str] = None
     parent_id: Optional[Union[str, int]] = None
 
+
 class AssetCategoryCreate(AssetCategoryBase):
     pass
+
 
 class AssetCategoryUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     parent_id: Optional[Union[str, int]] = None
 
+
 class AssetCategoryResponse(AssetCategoryBase):
     id: str
 
     class Config:
         from_attributes = True
+
 
 class AssetBase(BaseModel):
     asset_name: str
@@ -412,8 +472,10 @@ class AssetBase(BaseModel):
     images: List[str] = []
     file_type: Optional[str] = None
 
+
 class AssetCreate(AssetBase):
     pass
+
 
 class AssetUpdate(BaseModel):
     asset_name: Optional[str] = None
@@ -433,14 +495,17 @@ class AssetUpdate(BaseModel):
     images: Optional[List[str]] = None
     file_type: Optional[str] = None
 
+
 class AssetResponse(AssetBase):
     id: str
 
     class Config:
         from_attributes = True
 
+
 class AssetAssignmentRequest(BaseModel):
     employee_id: Optional[str] = None
+
 
 class BlogBase(BaseModel):
     title: str
@@ -452,8 +517,10 @@ class BlogBase(BaseModel):
     is_published: bool = True
     cover_image: Optional[str] = None
 
+
 class BlogCreate(BlogBase):
     pass
+
 
 class BlogUpdate(BaseModel):
     title: Optional[str] = None
@@ -464,6 +531,7 @@ class BlogUpdate(BaseModel):
     tags: Optional[List[str]] = None
     is_published: Optional[bool] = None
     cover_image: Optional[str] = None
+
 
 class BlogResponse(BlogBase):
     id: str
@@ -506,7 +574,6 @@ class LeaveTypeResponse(LeaveTypeBase):
         from_attributes = True
 
 
-
 class LeaveRequestBase(BaseModel):
     employee_id: str
     leave_type_id: str
@@ -514,8 +581,10 @@ class LeaveRequestBase(BaseModel):
     start_date: str
     end_date: str
     half_day_session: Optional[str] = None  # "First Half", "Second Half"
-    start_session: Optional[str] = "Full Day" # "Full Day", "Second Half" (For Multiple)
-    end_session: Optional[str] = "Full Day"   # "Full Day", "First Half" (For Multiple)
+    start_session: Optional[str] = (
+        "Full Day"  # "Full Day", "Second Half" (For Multiple)
+    )
+    end_session: Optional[str] = "Full Day"  # "Full Day", "First Half" (For Multiple)
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     total_days: float
@@ -568,6 +637,7 @@ class TaskAttachment(BaseModel):
     file_name: str
     file_url: str
     file_type: Optional[str] = None
+
 
 class TaskBase(BaseModel):
     project_id: str
@@ -643,10 +713,10 @@ class AttendanceBase(BaseModel):
     employee_id: str
     date: str  # Format: "YYYY-MM-DD"
     clock_in: str  # ISO 8601 timestamp
-    
+
     # New Field
     device_type: str = "Web"  # Options: "Web", "Mobile", "Biometric", "Manual"
-    
+
     clock_out: Optional[str] = None
     break_start: Optional[str] = None
     break_end: Optional[str] = None
@@ -662,6 +732,7 @@ class AttendanceBase(BaseModel):
 
 class AttendanceCreate(BaseModel):
     """Payload for Clock In"""
+
     date: str
     clock_in: str
     device_type: str = "Web"  # Default to Web if not specified
@@ -672,6 +743,7 @@ class AttendanceCreate(BaseModel):
 
 class AttendanceUpdate(BaseModel):
     """Payload for Clock Out"""
+
     clock_out: Optional[str] = None
     break_start: Optional[str] = None
     break_end: Optional[str] = None
@@ -682,6 +754,7 @@ class AttendanceUpdate(BaseModel):
 
 class AttendanceStatusUpdate(BaseModel):
     """Payload for updating attendance status"""
+
     status: str
     reason: Optional[str] = None
     notes: Optional[str] = None
@@ -690,6 +763,44 @@ class AttendanceStatusUpdate(BaseModel):
 class AttendanceResponse(AttendanceBase):
     id: str
     employee_details: Optional[dict] = None
+
+    class Config:
+        from_attributes = True
+
+
+class BiometricLogItem(BaseModel):
+    user_id: str
+    timestamp: str
+    status: Optional[Union[int, str]] = None
+    punch: Optional[Union[int, str]] = None
+
+
+class BiometricSyncRequest(BaseModel):
+    data: List[BiometricLogItem]
+
+
+class SystemConfigurationBase(BaseModel):
+    key: str
+    label: str
+    value: Any
+    input_type: (
+        str  # "text", "number", "boolean", "time", "date", "select", "multiselect"
+    )
+    group: str
+    options: List[str] = []
+    is_public: bool = False
+
+
+class SystemConfigurationCreate(SystemConfigurationBase):
+    pass
+
+
+class SystemConfigurationUpdate(BaseModel):
+    value: Any
+
+
+class SystemConfigurationResponse(SystemConfigurationBase):
+    id: str
 
     class Config:
         from_attributes = True
