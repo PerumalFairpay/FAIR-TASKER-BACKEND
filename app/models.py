@@ -807,3 +807,29 @@ class SystemConfigurationResponse(SystemConfigurationBase):
 
     class Config:
         from_attributes = True
+
+
+class NDADocumentBase(BaseModel):
+    employee_name: str
+    employee_address: str
+    token: str
+    created_at: str
+    expiry_at: str
+    status: str = "Pending"  # Pending, Signed, Expired
+    signature_data: Optional[str] = None  # Base64 string
+
+
+class NDACreate(BaseModel):
+    employee_name: str
+    employee_address: str
+
+
+class NDADocumentResponse(NDADocumentBase):
+    id: str
+
+    class Config:
+        from_attributes = True
+
+
+class NDASignRequest(BaseModel):
+    signature_data: str

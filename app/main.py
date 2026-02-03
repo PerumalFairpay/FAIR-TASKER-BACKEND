@@ -29,6 +29,7 @@ from app.routes import (
     profile,
     checklist_templates,
     settings,
+    nda,
 )
 
 from app.jobs.scheduler import init_scheduler, shutdown_scheduler
