@@ -94,13 +94,32 @@ async def sign_nda(token: str, sign_request: NDASignRequest):
         raise HTTPException(status_code=400, detail="NDA is already signed")
 
     # Update with signature
-    await collection.update_one(
-        {"token": token},
-        {"$set": {
+    new_values = {
             "status": "Signed",
             "signature_data": sign_request.signature_data,
             "signed_at": datetime.utcnow().isoformat()
-        }}
+        }
+    
+    await collection.update_one(
+        {"token": token},
+        {"$set": new_values}
     )
     
-    return {"message": "NDA signed successfully"}
+    # Re-render HTML with signature
+    template = env.get_template("nda_form.html")
+    readable_date = datetime.fromisoformat(nda["created_at"]).strftime("%B %d, %Y")
+    
+    html_content = template.render(
+        date=readable_date,
+        employee_name=nda["employee_name"],
+        employee_role=nda.get("employee_role", ""),
+        employee_address=nda["employee_address"],
+        signature_data=sign_request.signature_data
+    )
+    
+    return {
+        "message": "NDA signed successfully",
+        "html_content": html_content,
+        "status": "Signed",
+        "signature_data": sign_request.signature_data
+    }
