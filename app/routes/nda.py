@@ -57,10 +57,7 @@ async def get_nda_details(token: str):
 
     # Render HTML using Jinja2
     template = env.get_template("nda_form.html")
-    
-    # Prepare context for template
-    # Note: nda_form.html expects {{date}}, {{employee_name}}, {{employee_address}}
-    # Converting date to a readable format
+     
     readable_date = datetime.fromisoformat(nda["created_at"]).strftime("%B %d, %Y")
     
     html_content = template.render(
