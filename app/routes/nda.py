@@ -65,7 +65,8 @@ async def get_nda_details(token: str):
     html_content = template.render(
         date=readable_date,
         employee_name=nda["employee_name"],
-        employee_address=nda["employee_address"]
+        employee_address=nda["employee_address"],
+        signature_data=nda.get("signature_data")
     )
     
     return JSONResponse(content={
