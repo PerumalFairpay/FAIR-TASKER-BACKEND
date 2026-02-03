@@ -27,6 +27,7 @@ async def create_nda_request(nda_data: NDACreate):
     
     new_nda = {
         "employee_name": nda_data.employee_name,
+        "employee_role": nda_data.employee_role,
         "employee_address": nda_data.employee_address,
         "token": token,
         "created_at": created_at.isoformat(),
@@ -65,6 +66,7 @@ async def get_nda_details(token: str):
     html_content = template.render(
         date=readable_date,
         employee_name=nda["employee_name"],
+        employee_role=nda.get("employee_role", ""),
         employee_address=nda["employee_address"],
         signature_data=nda.get("signature_data")
     )

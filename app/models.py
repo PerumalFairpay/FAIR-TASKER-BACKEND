@@ -811,6 +811,7 @@ class SystemConfigurationResponse(SystemConfigurationBase):
 
 class NDADocumentBase(BaseModel):
     employee_name: str
+    employee_role: str
     employee_address: str
     token: str
     created_at: str
@@ -821,6 +822,7 @@ class NDADocumentBase(BaseModel):
 
 class NDACreate(BaseModel):
     employee_name: str
+    employee_role: str
     employee_address: str
 
 

@@ -11,6 +11,12 @@
             padding: 20px;
             background-color: #f3f4f6;
             color: #000;
+            overflow: hidden; /* Hide scrollbar */
+            scrollbar-width: none;  /* Firefox */
+            -ms-overflow-style: none;  /* IE and Edge */
+        }
+        body::-webkit-scrollbar {
+            display: none;
         }
         .page-container {
             max-width: 210mm;
