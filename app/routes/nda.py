@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Request, Depends, status
-from app.database import database
+from app.database import db
 from app.models import NDACreate, NDADocumentResponse, NDASignRequest, NDADocumentBase
 from datetime import datetime, timedelta
 import secrets
@@ -15,7 +15,7 @@ templates_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"
 env = Environment(loader=FileSystemLoader(templates_dir))
 
 def get_nda_collection():
-    return database.get_collection("nda_documents")
+    return db["nda_documents"]
 
 @router.post("/", response_model=NDADocumentResponse)
 async def create_nda_request(nda_data: NDACreate):

@@ -111,6 +111,7 @@ api_router.include_router(files.router)
 api_router.include_router(profile.router)
 api_router.include_router(checklist_templates.router)
 api_router.include_router(settings.router)
+api_router.include_router(nda.router, prefix="/nda", tags=["nda"])
 
 
 app.include_router(api_router, prefix="/api")
