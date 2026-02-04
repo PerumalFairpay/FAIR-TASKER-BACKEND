@@ -135,11 +135,19 @@ async def upload_documents(token: str, files: List[UploadFile] = File(...)):
         
         # Upload files using file_handler
         uploaded_results = await file_handler.upload_files(files)
-        document_urls = [res["url"] for res in uploaded_results]
+        
+        # Create document objects with metadata
+        new_documents = []
+        for i, result in enumerate(uploaded_results):
+            new_documents.append({
+                "document_name": result["name"],
+                "document_proof": result["url"],
+                "file_type": files[i].content_type
+            })
         
         # Update documents
         existing_docs = nda_request.get("documents", [])
-        existing_docs.extend(document_urls)
+        existing_docs.extend(new_documents)
         
         updated_nda = await repository.update_nda_request(token, {"documents": existing_docs})
         
