@@ -163,7 +163,7 @@ async def upload_documents(token: str, files: List[UploadFile] = File(...)):
 async def sign_nda(token: str, request_body: NDASignatureRequest):
     """
     Accept signature and update NDA status to Signed.
-    Signature should be a Base64 encoded string.
+    Automatically generates and stores the signed PDF.
     """
     try:
         # Get NDA request
@@ -180,14 +180,34 @@ async def sign_nda(token: str, request_body: NDASignatureRequest):
         if datetime.utcnow() > expires_at:
             return error_response(message="NDA link has expired", status_code=410)
         
-        # Update signature and status
-        updated_nda = await repository.update_nda_request(token, {
+        # Update signature and status first
+        await repository.update_nda_request(token, {
             "signature": request_body.signature,
             "status": "Signed"
         })
         
+        # Fetch updated request with signature
+        nda_request = await repository.get_nda_request_by_token(token)
+        
+        # Generate PDF
+        pdf_bytes = generate_pdf_from_request(nda_request)
+        
+        # Upload PDF to storage
+        employee_name = nda_request.get("employee_name", "Employee")
+        filename = f"NDA_{employee_name.replace(' ', '_')}_{token[:8]}.pdf"
+        upload_result = await file_handler.upload_bytes(
+            file_data=pdf_bytes,
+            filename=filename,
+            content_type="application/pdf"
+        )
+        
+        # Update NDA request with PDF path
+        updated_nda = await repository.update_nda_request(token, {
+            "signed_pdf_path": upload_result["url"]
+        })
+        
         return success_response(
-            message="NDA signed successfully",
+            message="NDA signed successfully and PDF stored",
             data=updated_nda
         )
     except Exception as e:
@@ -197,58 +217,59 @@ from weasyprint import HTML
 from io import BytesIO
 from fastapi.responses import Response
 
-@router.get("/download/{token}")
-async def download_nda_pdf(token: str):
+
+def generate_pdf_from_request(nda_request: dict) -> bytes:
+    """Helper function to generate PDF from NDA request data"""
     pdf_buffer = BytesIO()
     
-    # 1. Fetch Request Details
+    signature_data = nda_request.get("signature")
+    
+    # Parse date
+    created_at = nda_request.get("created_at")
+    if isinstance(created_at, str):
+        try:
+            created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+        except ValueError:
+            created_at = datetime.now()
+    elif not isinstance(created_at, datetime):
+        created_at = datetime.now()
+
+    # Render HTML
+    template = templates.get_template("nda_form.html")
+    html_content = template.render({
+        "request": nda_request, 
+        "employee_name": nda_request.get("employee_name", "_________________"),
+        "employee_address": nda_request.get("address", "_________________"),
+        "role": nda_request.get("role", "_________________"),
+        "date": created_at.strftime("%d/%m/%Y"),
+        "signature_data": signature_data,
+        "token": nda_request.get("token")
+    })
+
+    # Generate PDF
+    HTML(string=html_content, base_url="").write_pdf(pdf_buffer)
+    pdf_buffer.seek(0)
+    return pdf_buffer.read()
+
+
+@router.get("/download/{token}")
+async def download_nda_pdf(token: str):
+    # Fetch Request Details
     request = await repository.get_nda_request_by_token(token)
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    # 2. Prepare Data for Template
-    data = request
-    employee_name = "N/A"
-    signature_data = request.get("signature")
+    # Check if signed PDF already exists
+    if request.get("signed_pdf_path"):
+        # TODO: Stream the file from storage instead of regenerating
+        # For now, we'll regenerate to maintain compatibility
+        pass
     
-    if "employee_id" in request:
-         # Ideally fetch employee details, but for now use what's available or fetching logic if needed.
-         # Assuming request object might have employee details joined or we ignore for now as per current view logic.
-         pass
-
-    # The view endpoint logic does something similar, ensuring we pass "signature_data"
+    # Generate PDF
+    pdf_bytes = generate_pdf_from_request(request)
     
-    # Parse date
-    created_at = request.get("created_at")
-    if isinstance(created_at, str):
-        try:
-            # Handle potential millisecond precision or 'Z' suffix
-            created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-        except ValueError:
-            created_at = datetime.now() # Fallback
-    elif not isinstance(created_at, datetime):
-        created_at = datetime.now()
-
-    # 3. Render HTML
-    template = templates.get_template("nda_form.html")
-    # We pass the same context as the view, but ensure signature is present
-    html_content = template.render({
-        "request": request, 
-        "employee_name": request.get("employee_name", "_________________"),
-        "employee_address": request.get("address", "_________________"),
-        "role": request.get("role", "_________________"),
-        "date": created_at.strftime("%d/%m/%Y"),
-        "signature_data": signature_data,
-        "token": token
-    })
-
-    # 4. Generate PDF
-    HTML(string=html_content, base_url="").write_pdf(pdf_buffer)
-    
-    # 5. Return PDF
-    pdf_buffer.seek(0)
     return Response(
-        content=pdf_buffer.read(),
+        content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=NDA_{request.get('employee_name', 'Signed')}.pdf"}
     )
