@@ -1,12 +1,15 @@
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from app.models import NDARequestCreate, NDARequestUpdate, NDARequestResponse
+from app.models import NDARequestCreate, NDARequestUpdate, NDARequestResponse, NDASignatureRequest
 from app.crud.repository import repository
 from app.helper.response_helper import success_response, error_response
 from datetime import datetime, timedelta
 import uuid
 import os
+from typing import List
+from fastapi import UploadFile, File
+from app.helper.file_handler import file_handler
 
 router = APIRouter(prefix="/nda", tags=["NDA"])
 
@@ -58,7 +61,7 @@ async def list_nda_requests():
         return error_response(message=str(e), status_code=500)
 
 
-@router.get("/view/{token}", response_class=HTMLResponse)
+@router.get("/view/{token}")
 async def view_nda_form(token: str, request: Request):
     """
     Serve the NDA form HTML with pre-populated employee data.
@@ -85,8 +88,9 @@ async def view_nda_form(token: str, request: Request):
         current_date = datetime.utcnow()
         formatted_date = current_date.strftime("%d/%m/%Y")
         
-        # Render template with employee data
-        return templates.TemplateResponse("nda_form.html", {
+        # Render template content as string
+        template = templates.get_template("nda_form.html")
+        html_content = template.render({
             "request": request,
             "employee_name": nda_request.get("employee_name"),
             "role": nda_request.get("role"),
@@ -94,6 +98,14 @@ async def view_nda_form(token: str, request: Request):
             "date": formatted_date,
             "token": token
         })
+
+        return success_response(
+            message="NDA details retrieved successfully",
+            data={
+                "html_content": html_content,
+                "nda": nda_request
+            }
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -101,10 +113,10 @@ async def view_nda_form(token: str, request: Request):
 
 
 @router.post("/upload/{token}")
-async def upload_documents(token: str, documents: list[str]):
+async def upload_documents(token: str, files: List[UploadFile] = File(...)):
     """
     Handle document uploads for an NDA request.
-    Accepts list of document URLs.
+    Accepts list of files.
     """
     try:
         # Get NDA request
@@ -121,9 +133,13 @@ async def upload_documents(token: str, documents: list[str]):
         if datetime.utcnow() > expires_at:
             return error_response(message="NDA link has expired", status_code=410)
         
+        # Upload files using file_handler
+        uploaded_results = await file_handler.upload_files(files)
+        document_urls = [res["url"] for res in uploaded_results]
+        
         # Update documents
         existing_docs = nda_request.get("documents", [])
-        existing_docs.extend(documents)
+        existing_docs.extend(document_urls)
         
         updated_nda = await repository.update_nda_request(token, {"documents": existing_docs})
         
@@ -136,7 +152,7 @@ async def upload_documents(token: str, documents: list[str]):
 
 
 @router.post("/sign/{token}")
-async def sign_nda(token: str, signature: str):
+async def sign_nda(token: str, request_body: NDASignatureRequest):
     """
     Accept signature and update NDA status to Signed.
     Signature should be a Base64 encoded string.
@@ -158,7 +174,7 @@ async def sign_nda(token: str, signature: str):
         
         # Update signature and status
         updated_nda = await repository.update_nda_request(token, {
-            "signature": signature,
+            "signature": request_body.signature,
             "status": "Signed"
         })
         

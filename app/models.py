@@ -837,3 +837,7 @@ class NDARequestResponse(NDARequestBase):
 
     class Config:
         from_attributes = True
+
+
+class NDASignatureRequest(BaseModel):
+    signature: str
