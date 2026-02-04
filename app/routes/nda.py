@@ -31,8 +31,8 @@ async def generate_nda_link(nda_request: NDARequestCreate):
         # Create NDA request in database
         nda_data = await repository.create_nda_request(nda_request, token, expires_at)
         
-        # Generate link URL
-        link_url = f"/api/nda/view/{token}"
+        # Generate frontend link URL (not backend API URL)
+        link_url = f"/nda/{token}"
         
         return success_response(
             message="NDA link generated successfully",
