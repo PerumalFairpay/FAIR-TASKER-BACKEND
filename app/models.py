@@ -807,3 +807,33 @@ class SystemConfigurationResponse(SystemConfigurationBase):
 
     class Config:
         from_attributes = True
+
+
+# NDA Models
+class NDARequestBase(BaseModel):
+    employee_name: str
+    role: str
+    address: str
+
+
+class NDARequestCreate(NDARequestBase):
+    pass
+
+
+class NDARequestUpdate(BaseModel):
+    status: Optional[str] = None
+    documents: Optional[List[str]] = None
+    signature: Optional[str] = None
+
+
+class NDARequestResponse(NDARequestBase):
+    id: str
+    token: str
+    status: str
+    expires_at: datetime
+    created_at: datetime
+    documents: List[str] = []
+    signature: Optional[str] = None
+
+    class Config:
+        from_attributes = True
