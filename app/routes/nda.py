@@ -192,3 +192,63 @@ async def sign_nda(token: str, request_body: NDASignatureRequest):
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
+
+from weasyprint import HTML
+from io import BytesIO
+from fastapi.responses import Response
+
+@router.get("/download/{token}")
+async def download_nda_pdf(token: str):
+    pdf_buffer = BytesIO()
+    
+    # 1. Fetch Request Details
+    request = await repository.get_nda_request_by_token(token)
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    # 2. Prepare Data for Template
+    data = request
+    employee_name = "N/A"
+    signature_data = request.get("signature")
+    
+    if "employee_id" in request:
+         # Ideally fetch employee details, but for now use what's available or fetching logic if needed.
+         # Assuming request object might have employee details joined or we ignore for now as per current view logic.
+         pass
+
+    # The view endpoint logic does something similar, ensuring we pass "signature_data"
+    
+    # Parse date
+    created_at = request.get("created_at")
+    if isinstance(created_at, str):
+        try:
+            # Handle potential millisecond precision or 'Z' suffix
+            created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+        except ValueError:
+            created_at = datetime.now() # Fallback
+    elif not isinstance(created_at, datetime):
+        created_at = datetime.now()
+
+    # 3. Render HTML
+    template = templates.get_template("nda_form.html")
+    # We pass the same context as the view, but ensure signature is present
+    html_content = template.render({
+        "request": request, 
+        "employee_name": request.get("employee_name", "_________________"),
+        "employee_address": request.get("address", "_________________"),
+        "role": request.get("role", "_________________"),
+        "date": created_at.strftime("%d/%m/%Y"),
+        "signature_data": signature_data,
+        "token": token
+    })
+
+    # 4. Generate PDF
+    HTML(string=html_content, base_url="").write_pdf(pdf_buffer)
+    
+    # 5. Return PDF
+    pdf_buffer.seek(0)
+    return Response(
+        content=pdf_buffer.read(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=NDA_{request.get('employee_name', 'Signed')}.pdf"}
+    )

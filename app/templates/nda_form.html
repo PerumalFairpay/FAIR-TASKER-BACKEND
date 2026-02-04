@@ -11,9 +11,9 @@
             padding: 20px;
             background-color: #f3f4f6;
             color: #000;
-            overflow: hidden; /* Hide scrollbar */
-            scrollbar-width: none;  /* Firefox */
-            -ms-overflow-style: none;  /* IE and Edge */
+            /* overflow: hidden;  
+            scrollbar-width: none;   
+            -ms-overflow-style: none;   */
         }
         body::-webkit-scrollbar {
             display: none;
@@ -46,7 +46,7 @@
             left: 0;
         }
         .footer {
-            height: 250px;
+            height: 190px;
             width: 100%;
             overflow: hidden;
             position: absolute;
@@ -62,7 +62,7 @@
         
         .content {
             /* padding: 180px 100px 260px 100px; */
-            padding: 150px 100px 260px 100px;
+            padding: 120px 100px 260px 100px;
             flex: 1;
             font-size: 11pt;
             line-height: 1.3;
@@ -143,18 +143,26 @@
             font-weight: bold;
         }
         
+        @page {
+            size: A4;
+            margin: 0;
+        }
         @media print {
             body {
                 background: none;
                 padding: 0;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
+                margin: 0;
+                width: 210mm;
+                height: 297mm;
             }
             .page-container {
                 box-shadow: none;
                 margin: 0;
-                page-break-after: always;
+                padding: 0;
+                width: 210mm;
                 height: 297mm;
+                page-break-after: always;
+                position: relative; 
             }
             .page-container:last-child {
                 page-break-after: auto;
@@ -197,6 +205,19 @@
                     <td style="vertical-align: top; width: 30px; padding-bottom: 10px;"><strong>2.</strong></td>
                     <td style="vertical-align: top; padding-bottom: 10px; text-align: justify;"><strong>{{employee_name}}</strong> means: all <strong>Information</strong> in a written, oral, visual or tangible form disclosed to by either party from time to time after the Effective Date of this agreement and the delivery of any proposals to the other party concerning (FairPAY Tech Works, Fairpy Inc, FairReturns & Fairental) whether identified at time of disclosure and marked confidential or not.</td>
                 </tr>
+                <tr>
+                    <td style="vertical-align: top; width: 30px; padding-bottom: 10px;"><strong>3.</strong></td>
+                    <td style="vertical-align: top; padding-bottom: 10px; text-align: justify;">
+                        <strong>{{employee_name}}</strong> agrees that he/she shall:
+                        
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 5px; margin-bottom: 10px;">
+                            <tr>
+                                <td style="vertical-align: top; width: 50px; padding-bottom: 10px; padding-left: 15px;">(i)</td>
+                                <td style="vertical-align: top; padding-bottom: 10px; text-align: justify;">keep Confidential Information and not to share it with any other third party whether orally or in writing without the written consent and prior approval of the other party.</td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
             </table>
             
 
@@ -216,15 +237,9 @@
         <div class="content">
             <table style="width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 10px;">
                 <tr>
-                    <td style="vertical-align: top; width: 30px; padding-bottom: 10px;"><strong>3.</strong></td>
-                    <td style="vertical-align: top; padding-bottom: 10px; text-align: justify;">
-                        <strong>{{employee_name}}</strong> agrees that he/she shall:
+                     
                         
                         <table style="width: 100%; border-collapse: collapse; margin-top: 5px; margin-bottom: 10px;">
-                            <tr>
-                                <td style="vertical-align: top; width: 50px; padding-bottom: 10px; padding-left: 15px;">(i)</td>
-                                <td style="vertical-align: top; padding-bottom: 10px; text-align: justify;">keep Confidential Information and not to share it with any other third party whether orally or in writing without the written consent and prior approval of the other party.</td>
-                            </tr>
                             <tr>
                                 <td style="vertical-align: top; width: 50px; padding-bottom: 10px; padding-left: 15px;">(ii)</td>
                                 <td style="vertical-align: top; padding-bottom: 10px; text-align: justify;">not to use the Confidential Information for any commercial purpose including directly or indirectly.</td>
