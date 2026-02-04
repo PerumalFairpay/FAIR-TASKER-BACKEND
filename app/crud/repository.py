@@ -38,6 +38,8 @@ from app.models import (
     BiometricLogItem,
     SystemConfigurationCreate,
     SystemConfigurationUpdate,
+    NDARequestCreate,
+    NDARequestUpdate,
 )
 from app.utils import normalize, get_password_hash
 from bson import ObjectId
@@ -71,6 +73,7 @@ class Repository:
         self.tasks = self.db["tasks"]
         self.attendance = self.db["attendance"]
         self.system_configurations = self.db["system_configurations"]
+        self.nda_requests = self.db["nda_requests"]
 
     async def create_employee(
         self, employee: EmployeeCreate, profile_picture_path: str = None
@@ -2423,6 +2426,47 @@ class Repository:
                 {"is_public": True}
             ).to_list(length=None)
             return [normalize(conf) for conf in configs]
+        except Exception as e:
+            raise e
+
+    async def create_nda_request(self, nda: NDARequestCreate) -> dict:
+        try:
+            import uuid
+            nda_data = nda.dict()
+            nda_data["token"] = str(uuid.uuid4())
+            nda_data["created_at"] = datetime.utcnow()
+            nda_data["expires_at"] = datetime.utcnow() + timedelta(hours=1)
+            nda_data["status"] = "Pending"
+            nda_data["documents"] = []
+            
+            result = await self.nda_requests.insert_one(nda_data)
+            nda_data["id"] = str(result.inserted_id)
+            return normalize(nda_data)
+        except Exception as e:
+            raise e
+
+    async def get_nda_request(self, token: str) -> dict:
+        try:
+            nda = await self.nda_requests.find_one({"token": token})
+            return normalize(nda) if nda else None
+        except Exception as e:
+            raise e
+
+    async def update_nda_request(self, token: str, update_data: dict) -> dict:
+        try:
+            if update_data:
+                await self.nda_requests.update_one(
+                    {"token": token},
+                    {"$set": update_data}
+                )
+            return await self.get_nda_request(token)
+        except Exception as e:
+            raise e
+
+    async def get_all_nda_requests(self) -> List[dict]:
+        try:
+            ndas = await self.nda_requests.find().to_list(length=None)
+            return [normalize(n) for n in ndas]
         except Exception as e:
             raise e
 

@@ -807,3 +807,40 @@ class SystemConfigurationResponse(SystemConfigurationBase):
 
     class Config:
         from_attributes = True
+
+
+class NDADocument(BaseModel):
+    document_name: str
+    document_url: str
+    file_type: Optional[str] = None
+    uploaded_at: str
+
+
+class NDARequestBase(BaseModel):
+    employee_name: str
+    employee_role: str
+    employee_address: str
+    status: str = "Pending"  # Pending, Documents Submitted, Signed, Expired
+    documents: List[NDADocument] = []
+    created_at: str
+    expires_at: str
+
+
+class NDARequestCreate(BaseModel):
+    employee_name: str
+    employee_role: str
+    employee_address: str
+
+
+class NDARequestUpdate(BaseModel):
+    status: Optional[str] = None
+    documents: Optional[List[NDADocument]] = None
+
+
+class NDARequestResponse(NDARequestBase):
+    id: str
+    token: str
+    link: Optional[str] = None
+
+    class Config:
+        from_attributes = True
