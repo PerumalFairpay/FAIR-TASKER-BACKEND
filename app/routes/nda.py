@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import uuid
 import os
 from typing import List
-from fastapi import UploadFile, File
+from fastapi import UploadFile, File, Form
 from app.helper.file_handler import file_handler
 
 router = APIRouter(prefix="/nda", tags=["NDA"])
@@ -141,7 +141,11 @@ async def view_nda_form(token: str, request: Request):
 
 
 @router.post("/upload/{token}")
-async def upload_documents(token: str, files: List[UploadFile] = File(...)):
+async def upload_documents(
+    token: str, 
+    files: List[UploadFile] = File(...),
+    names: List[str] = Form(...)
+):
     """
     Handle document uploads for an NDA request.
     Accepts list of files.
@@ -161,6 +165,10 @@ async def upload_documents(token: str, files: List[UploadFile] = File(...)):
         if datetime.utcnow() > expires_at:
             return error_response(message="NDA link has expired", status_code=410)
         
+        # Validate matching lengths
+        if len(files) != len(names):
+             return error_response(message="Number of files and names must match", status_code=400)
+
         # Upload files using file_handler
         uploaded_results = await file_handler.upload_files(files)
         
@@ -168,7 +176,7 @@ async def upload_documents(token: str, files: List[UploadFile] = File(...)):
         new_documents = []
         for i, result in enumerate(uploaded_results):
             new_documents.append({
-                "document_name": result["name"],
+                "document_name": names[i],
                 "document_proof": result["url"],
                 "file_type": files[i].content_type
             })

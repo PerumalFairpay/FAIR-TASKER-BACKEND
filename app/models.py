@@ -838,7 +838,7 @@ class NDARequestResponse(NDARequestBase):
     status: str
     expires_at: datetime
     created_at: datetime
-    documents: List[str] = []
+    documents: List[EmployeeDocument] = []
     signature: Optional[str] = None
     signed_pdf_path: Optional[dict] = None
     browser: Optional[str] = None
