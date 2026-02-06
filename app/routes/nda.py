@@ -201,9 +201,13 @@ async def sign_nda(token: str, request_body: NDASignatureRequest):
             content_type="application/pdf"
         )
         
-        # Update NDA request with PDF path
+        # Update NDA request with PDF path in document format
         updated_nda = await repository.update_nda_request(token, {
-            "signed_pdf_path": upload_result["url"]
+            "signed_pdf_path": {
+                "document_name": filename,
+                "document_proof": upload_result["url"],
+                "file_type": "application/pdf"
+            }
         })
         
         return success_response(
@@ -260,7 +264,8 @@ async def download_nda_pdf(token: str):
         raise HTTPException(status_code=404, detail="Request not found")
 
     # Check if signed PDF already exists
-    if request.get("signed_pdf_path"):
+    signed_pdf = request.get("signed_pdf_path")
+    if signed_pdf:
         # TODO: Stream the file from storage instead of regenerating
         # For now, we'll regenerate to maintain compatibility
         pass

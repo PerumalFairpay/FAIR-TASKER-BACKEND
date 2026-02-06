@@ -824,7 +824,7 @@ class NDARequestUpdate(BaseModel):
     status: Optional[str] = None
     documents: Optional[List[str]] = None
     signature: Optional[str] = None
-    signed_pdf_path: Optional[str] = None
+    signed_pdf_path: Optional[dict] = None
 
 
 class NDARequestResponse(NDARequestBase):
@@ -835,7 +835,7 @@ class NDARequestResponse(NDARequestBase):
     created_at: datetime
     documents: List[str] = []
     signature: Optional[str] = None
-    signed_pdf_path: Optional[str] = None
+    signed_pdf_path: Optional[dict] = None
 
     class Config:
         from_attributes = True
