@@ -817,7 +817,7 @@ class NDARequestBase(BaseModel):
 
 
 class NDARequestCreate(NDARequestBase):
-    pass
+    expires_in_hours: Optional[int] = 1
 
 
 class NDARequestUpdate(BaseModel):
@@ -843,3 +843,7 @@ class NDARequestResponse(NDARequestBase):
 
 class NDASignatureRequest(BaseModel):
     signature: str
+
+
+class NDARegenerateRequest(BaseModel):
+    expires_in_hours: Optional[int] = 1

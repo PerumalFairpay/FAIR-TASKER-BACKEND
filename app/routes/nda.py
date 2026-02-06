@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from app.models import NDARequestCreate, NDARequestUpdate, NDARequestResponse, NDASignatureRequest
+from app.models import NDARequestCreate, NDARequestUpdate, NDARequestResponse, NDASignatureRequest, NDARegenerateRequest
 from app.crud.repository import repository
 from app.helper.response_helper import success_response, error_response
 from datetime import datetime, timedelta
@@ -28,8 +28,9 @@ async def generate_nda_link(nda_request: NDARequestCreate):
         # Generate unique token
         token = str(uuid.uuid4())
         
-        # Set expiry to 1 hour from now
-        expires_at = datetime.utcnow() + timedelta(hours=1)
+        # Set expiry based on request, default to 1 hour
+        expiry_hours = nda_request.expires_in_hours if nda_request.expires_in_hours else 1
+        expires_at = datetime.utcnow() + timedelta(hours=expiry_hours)
         
         # Create NDA request in database
         nda_data = await repository.create_nda_request(nda_request, token, expires_at)
@@ -46,7 +47,7 @@ async def generate_nda_link(nda_request: NDARequestCreate):
 
 
 @router.post("/regenerate/{nda_id}")
-async def regenerate_nda_link(nda_id: str):
+async def regenerate_nda_link(nda_id: str, request: NDARegenerateRequest):
     """
     Regenerate an NDA link for an existing request.
     Useful for expired links.
@@ -54,7 +55,8 @@ async def regenerate_nda_link(nda_id: str):
     try: 
         new_token = str(uuid.uuid4())
          
-        expires_at = datetime.utcnow() + timedelta(hours=1)
+        expiry_hours = request.expires_in_hours if request.expires_in_hours else 1
+        expires_at = datetime.utcnow() + timedelta(hours=expiry_hours)
          
         updated_nda = await repository.regenerate_nda_token(nda_id, new_token, expires_at)
         
