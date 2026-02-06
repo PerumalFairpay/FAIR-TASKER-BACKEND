@@ -188,7 +188,7 @@ async def upload_documents(token: str, files: List[UploadFile] = File(...)):
 
 
 @router.post("/sign/{token}")
-async def sign_nda(token: str, request_body: NDASignatureRequest):
+async def sign_nda(token: str, request_body: NDASignatureRequest, request: Request):
     """
     Accept signature and update NDA status to Signed.
     Automatically generates and stores the signed PDF.
@@ -208,10 +208,20 @@ async def sign_nda(token: str, request_body: NDASignatureRequest):
         if datetime.utcnow() > expires_at:
             return error_response(message="NDA link has expired", status_code=410)
         
+        # Capture IP address if not provided
+        ip_address = request_body.ip_address
+        if not ip_address and request.client:
+            ip_address = request.client.host
+            
         # Update signature and status first
         await repository.update_nda_request(token, {
             "signature": request_body.signature,
-            "status": "Signed"
+            "status": "Signed",
+            "browser": request_body.browser,
+            "os": request_body.os,
+            "device_type": request_body.device_type,
+            "user_agent": request_body.user_agent,
+            "ip_address": ip_address
         })
         
         # Fetch updated request with signature
