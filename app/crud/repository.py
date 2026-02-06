@@ -2472,5 +2472,24 @@ class Repository:
         except Exception as e:
             raise e
 
+    async def regenerate_nda_token(self, nda_id: str, new_token: str, expires_at: datetime) -> dict:
+        try:
+            update_data = {
+                "token": new_token,
+                "expires_at": expires_at,
+                "status": "Pending", 
+                "updated_at": datetime.utcnow()
+            }
+            
+            await self.nda_requests.update_one(
+                {"_id": ObjectId(nda_id)},
+                {"$set": update_data}
+            )
+             
+            updated_doc = await self.nda_requests.find_one({"_id": ObjectId(nda_id)})
+            return normalize(updated_doc)
+        except Exception as e:
+            raise e
+
 
 repository = Repository()

@@ -45,6 +45,32 @@ async def generate_nda_link(nda_request: NDARequestCreate):
         return error_response(message=str(e), status_code=500)
 
 
+@router.post("/regenerate/{nda_id}")
+async def regenerate_nda_link(nda_id: str):
+    """
+    Regenerate an NDA link for an existing request.
+    Useful for expired links.
+    """
+    try: 
+        new_token = str(uuid.uuid4())
+         
+        expires_at = datetime.utcnow() + timedelta(hours=1)
+         
+        updated_nda = await repository.regenerate_nda_token(nda_id, new_token, expires_at)
+        
+        if not updated_nda:
+             return error_response(message="NDA request not found", status_code=404)
+ 
+        link_url = f"/nda/{new_token}"
+        
+        return success_response(
+            message="NDA link regenerated successfully",
+            data={"link": link_url, "nda": updated_nda}
+        )
+    except Exception as e:
+        return error_response(message=str(e), status_code=500)
+
+
 @router.get("/list")
 async def list_nda_requests():
     """
