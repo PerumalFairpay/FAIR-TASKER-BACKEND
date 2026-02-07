@@ -815,6 +815,7 @@ class NDARequestBase(BaseModel):
     role: str
     address: str
     residential_address: str
+    required_documents: List[str] = []
 
 
 class NDARequestCreate(NDARequestBase):
