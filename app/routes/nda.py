@@ -279,7 +279,10 @@ async def upload_documents(
         existing_docs = nda_request.get("documents", [])
         existing_docs.extend(new_documents)
         
-        updated_nda = await repository.update_nda_request(token, {"documents": existing_docs})
+        updated_nda = await repository.update_nda_request(token, {
+            "documents": existing_docs,
+            "status": "Document Uploaded"
+        })
         
         return success_response(
             message="Documents uploaded successfully",
