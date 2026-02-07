@@ -31,11 +31,13 @@ async def generate_nda_link(nda_request: NDARequestCreate):
         # Set expiry based on request, default to 1 hour
         expiry_hours = nda_request.expires_in_hours if nda_request.expires_in_hours else 1
         expires_at = datetime.utcnow() + timedelta(hours=expiry_hours)
-        
-        # Create NDA request in database
+         
+        existing_nda = await repository.nda_requests.find_one({"email": nda_request.email})
+        if existing_nda:
+             return error_response(message=f"NDA request already exists for email {nda_request.email}", status_code=400)
+         
         nda_data = await repository.create_nda_request(nda_request, token, expires_at)
-        
-        # Generate frontend link URL (not backend API URL)
+         
         link_url = f"/nda/{token}"
         
         return success_response(

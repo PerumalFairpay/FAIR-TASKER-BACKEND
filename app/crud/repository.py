@@ -91,6 +91,11 @@ class Repository:
             if existing_user:
                 raise ValueError("User with this email or Employee ID already exists")
 
+            if employee.personal_email:
+                existing_personal = await self.employees.find_one({"personal_email": employee.personal_email})
+                if existing_personal:
+                    raise ValueError(f"User with personal email {employee.personal_email} already exists")
+
             # Prepare Employee Data
             employee_data = employee.dict()
             hashed_password = get_password_hash(employee.password)
@@ -270,6 +275,13 @@ class Repository:
             update_data = {k: v for k, v in employee.dict().items() if v is not None}
             if profile_picture_path:
                 update_data["profile_picture"] = profile_picture_path
+
+            if "personal_email" in update_data and update_data["personal_email"]:
+                existing_personal = await self.employees.find_one(
+                    {"personal_email": update_data["personal_email"], "_id": {"$ne": ObjectId(employee_id)}}
+                )
+                if existing_personal:
+                    raise ValueError(f"User with personal email {update_data['personal_email']} already exists")
 
             if "documents" in update_data and update_data["documents"]:
                 update_data["documents"] = [
