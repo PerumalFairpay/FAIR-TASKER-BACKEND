@@ -2447,10 +2447,39 @@ class Repository:
         except Exception as e:
             raise e
 
-    async def get_nda_requests(self) -> List[dict]:
+    async def get_nda_requests(
+        self,
+        page: int = 1,
+        limit: int = 10,
+        search: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> (List[dict], int):
         try:
-            nda_requests = await self.nda_requests.find().to_list(length=None)
-            return [normalize(req) for req in nda_requests]
+            query = {}
+
+            if status and status != "All":
+                query["status"] = status
+
+            if search:
+                regex_pattern = {"$regex": search, "$options": "i"}
+                query["$or"] = [
+                    {"employee_name": regex_pattern},
+                    {"email": regex_pattern},
+                    {"token": regex_pattern},
+                ]
+
+            skip = (page - 1) * limit
+            total_items = await self.nda_requests.count_documents(query)
+
+            nda_requests = (
+                await self.nda_requests.find(query)
+                .sort("created_at", -1)
+                .skip(skip)
+                .limit(limit)
+                .to_list(length=limit)
+            )
+
+            return [normalize(req) for req in nda_requests], total_items
         except Exception as e:
             raise e
 

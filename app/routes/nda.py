@@ -74,16 +74,37 @@ async def regenerate_nda_link(nda_id: str, request: NDARegenerateRequest):
 
 
 @router.get("/list")
-async def list_nda_requests():
+async def list_nda_requests(
+    page: int = 1,
+    limit: int = 10,
+    search: str = None,
+    status: str = None,
+):
     """
     Get list of all NDA requests.
     Returns data in standard response format.
     """
     try:
-        nda_requests = await repository.get_nda_requests()
+        if status == "All":
+             status = None
+
+        nda_requests, total_items = await repository.get_nda_requests(
+            page, limit, search, status
+        )
+        
+        total_pages = (total_items + limit - 1) // limit
+        
+        meta = {
+            "current_page": page,
+            "total_pages": total_pages,
+            "total_items": total_items,
+            "limit": limit
+        }
+        
         return success_response(
             message="NDA requests retrieved successfully",
-            data=nda_requests
+            data=nda_requests,
+            meta=meta
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
