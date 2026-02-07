@@ -73,6 +73,26 @@ async def regenerate_nda_link(nda_id: str, request: NDARegenerateRequest):
         return error_response(message=str(e), status_code=500)
 
 
+@router.delete("/delete/{nda_id}")
+async def delete_nda_request(nda_id: str):
+    """
+    Delete an NDA request.
+    Only admin can delete.
+    """
+    try:
+        success = await repository.delete_nda_request(nda_id)
+        
+        if not success:
+             return error_response(message="NDA request not found", status_code=404)
+        
+        return success_response(
+            message="NDA request deleted successfully",
+            data={"id": nda_id}
+        )
+    except Exception as e:
+        return error_response(message=str(e), status_code=500)
+
+
 @router.get("/list")
 async def list_nda_requests(
     page: int = 1,

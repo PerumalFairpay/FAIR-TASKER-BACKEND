@@ -2520,5 +2520,12 @@ class Repository:
         except Exception as e:
             raise e
 
+    async def delete_nda_request(self, nda_id: str) -> bool:
+        try:
+            result = await self.nda_requests.delete_one({"_id": ObjectId(nda_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
 
 repository = Repository()
