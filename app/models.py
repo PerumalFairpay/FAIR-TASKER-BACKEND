@@ -147,6 +147,7 @@ class EmployeeBase(BaseModel):
     last_name: str
     name: str  # Display name
     email: EmailStr
+    personal_email: Optional[EmailStr] = None
     mobile: str
     date_of_birth: Optional[str] = None
     gender: Optional[str] = None
@@ -182,6 +183,7 @@ class EmployeeUpdate(BaseModel):
     last_name: Optional[str] = None
     name: Optional[str] = None
     email: Optional[EmailStr] = None
+    personal_email: Optional[EmailStr] = None
     mobile: Optional[str] = None
     date_of_birth: Optional[str] = None
     gender: Optional[str] = None
