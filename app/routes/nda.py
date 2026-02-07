@@ -123,6 +123,7 @@ async def view_nda_form(token: str, request: Request):
             "employee_name": nda_request.get("employee_name"),
             "role": nda_request.get("role"),
             "employee_address": nda_request.get("address"),
+            "residential_address": nda_request.get("residential_address"),
             "date": formatted_date,
             "token": token
         })
@@ -290,6 +291,7 @@ def generate_pdf_from_request(nda_request: dict) -> bytes:
         "request": nda_request, 
         "employee_name": nda_request.get("employee_name", "_________________"),
         "employee_address": nda_request.get("address", "_________________"),
+        "residential_address": nda_request.get("residential_address", "_________________"),
         "role": nda_request.get("role", "_________________"),
         "date": created_at.strftime("%d/%m/%Y"),
         "signature_data": signature_data,

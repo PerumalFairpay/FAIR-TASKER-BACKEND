@@ -814,6 +814,7 @@ class NDARequestBase(BaseModel):
     employee_name: str
     role: str
     address: str
+    residential_address: str
 
 
 class NDARequestCreate(NDARequestBase):
