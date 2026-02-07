@@ -89,11 +89,70 @@ async def list_nda_requests():
         return error_response(message=str(e), status_code=500)
 
 
-@router.get("/view/{token}")
-async def view_nda_form(token: str, request: Request):
+@router.post("/access/{token}")
+async def verify_nda_access(token: str, request_body: dict):
     """
-    Serve the NDA form HTML with pre-populated employee data.
-    Checks token expiration before serving.
+    Verify email access to view the full NDA form.
+    Returns the HTML content if email matches.
+    """
+    try:
+        email = request_body.get("email")
+        if not email:
+             raise HTTPException(status_code=400, detail="Email is required")
+
+        # Get NDA request by token
+        nda_request = await repository.get_nda_request_by_token(token)
+        
+        if not nda_request:
+            raise HTTPException(status_code=404, detail="NDA request not found")
+        
+        # Check if expired
+        expires_at = nda_request.get("expires_at")
+        if isinstance(expires_at, str):
+            expires_at = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+        
+        if datetime.utcnow() > expires_at:
+            await repository.update_nda_request(token, {"status": "Expired"})
+            raise HTTPException(status_code=410, detail="NDA link has expired")
+
+        # Verify Email
+        stored_email = nda_request.get("email")
+        if not stored_email or stored_email.lower().strip() != email.lower().strip():
+             raise HTTPException(status_code=403, detail="Invalid Email Address")
+
+        # Render template content as string (Full Access)
+        current_date = datetime.utcnow()
+        formatted_date = current_date.strftime("%d/%m/%Y")
+        
+        template = templates.get_template("nda_form.html")
+        html_content = template.render({
+            "request": nda_request, # Pass full object if needed
+            "employee_name": nda_request.get("employee_name"),
+            "role": nda_request.get("role"),
+            "employee_address": nda_request.get("address"),
+            "residential_address": nda_request.get("residential_address"),
+            "date": formatted_date,
+            "token": token
+        })
+
+        return success_response(
+            message="NDA access granted",
+            data={
+                "html_content": html_content,
+                "nda": nda_request
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/view/{token}")
+async def view_nda_form(token: str):
+    """
+    Serve the NDA status and basic info.
+    DOES NOT RETURN HTML CONTENT or PII.
     """
     try:
         # Get NDA request by token
@@ -112,27 +171,18 @@ async def view_nda_form(token: str, request: Request):
             await repository.update_nda_request(token, {"status": "Expired"})
             raise HTTPException(status_code=410, detail="NDA link has expired")
         
-        # Format date
-        current_date = datetime.utcnow()
-        formatted_date = current_date.strftime("%d/%m/%Y")
-        
-        # Render template content as string
-        template = templates.get_template("nda_form.html")
-        html_content = template.render({
-            "request": request,
+        # Return only safe data used for initial load / login check
+        safe_data = {
             "employee_name": nda_request.get("employee_name"),
-            "role": nda_request.get("role"),
-            "employee_address": nda_request.get("address"),
-            "residential_address": nda_request.get("residential_address"),
-            "date": formatted_date,
-            "token": token
-        })
+            "status": nda_request.get("status"),
+            "requires_auth": True 
+        }
 
         return success_response(
-            message="NDA details retrieved successfully",
+            message="NDA request found",
             data={
-                "html_content": html_content,
-                "nda": nda_request
+                "nda": safe_data,
+                # "html_content": None  <-- Explicitly missing
             }
         )
     except HTTPException:

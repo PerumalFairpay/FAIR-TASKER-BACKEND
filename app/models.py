@@ -812,6 +812,8 @@ class SystemConfigurationResponse(SystemConfigurationBase):
 # NDA Models
 class NDARequestBase(BaseModel):
     employee_name: str
+    email: EmailStr
+    mobile: str
     role: str
     address: str
     residential_address: str
@@ -845,9 +847,11 @@ class NDARequestResponse(NDARequestBase):
     signed_pdf_path: Optional[dict] = None
     browser: Optional[str] = None
     os: Optional[str] = None
-    device_type: Optional[str] = None
+    device_type: Optional[str] = None 
     user_agent: Optional[str] = None
     ip_address: Optional[str] = None
+    email: Optional[EmailStr] = None
+    mobile: Optional[str] = None
 
     class Config:
         from_attributes = True
