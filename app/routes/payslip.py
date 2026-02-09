@@ -9,6 +9,7 @@ from app.helper.pdf_helper import generate_pdf_from_html, encrypt_pdf
 from datetime import datetime
 import os
 import math
+import calendar
 
 router = APIRouter(prefix="/payslip", tags=["Payslip"])
 
@@ -98,8 +99,14 @@ async def generate_payslip(payslip: PayslipCreate):
         total_earnings = sum(float(v) for v in earnings.values())
         total_deductions = sum(float(v) for v in deductions.values())
         net_pay = payslip.net_pay
-        
-        paid_days = 30 
+         
+        try:
+            month_map = {m: i for i, m in enumerate(calendar.month_name) if m}
+            month_num = month_map.get(payslip.month.capitalize(), 1)
+            _, num_days = calendar.monthrange(payslip.year, month_num)
+            paid_days = num_days
+        except Exception:
+            paid_days = 30 # Fallback
         
         password = ""
         if "mobile" in employee and employee["mobile"]:
