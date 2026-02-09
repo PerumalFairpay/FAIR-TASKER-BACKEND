@@ -167,14 +167,15 @@ async def list_payslips(
     limit: int = 10,
     employee_id: str = None,
     month: str = None,
-    year: str = None
+    year: str = None,
+    search: str = None
 ):
     """
     List payslips. Admin sees all (or filtered). Employee sends their ID.
     """
     try:
         data, total = await repository.get_payslips(
-            page=page, limit=limit, employee_id=employee_id, month=month, year=year
+            page=page, limit=limit, employee_id=employee_id, month=month, year=year, search=search
         )
         
         meta = {

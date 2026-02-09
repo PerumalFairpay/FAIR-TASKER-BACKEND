@@ -2630,6 +2630,7 @@ class Repository:
         employee_id: Optional[str] = None,
         month: Optional[str] = None,
         year: Optional[str] = None,
+        search: Optional[str] = None,
     ) -> (List[dict], int):
         try:
             query = {}
@@ -2639,6 +2640,28 @@ class Repository:
                 query["month"] = month
             if year and year != "All":
                 query["year"] = int(year)
+
+            if search:
+                regex_pattern = {"$regex": search, "$options": "i"}
+                matched_employees = await self.employees.find({
+                    "$or": [
+                        {"name": regex_pattern},
+                        {"employee_no_id": regex_pattern},
+                        {"email": regex_pattern}
+                    ]
+                }, {"_id": 1}).to_list(length=None)
+                
+                matched_ids = [str(emp["_id"]) for emp in matched_employees]
+                
+                if employee_id:
+                    # If specific employee_id is already filtered, ensure it matches search
+                    if employee_id in matched_ids:
+                        query["employee_id"] = employee_id
+                    else:
+                        # No intersection, return empty
+                        return [], 0
+                else:
+                    query["employee_id"] = {"$in": matched_ids}
 
             skip = (page - 1) * limit
             total_items = await self.payslips.count_documents(query)
@@ -2650,8 +2673,19 @@ class Repository:
                 .limit(limit)
                 .to_list(length=limit)
             )
+
+            results = []
+            for p in payslips:
+                p_norm = normalize(p)
+                # Fetch employee details
+                emp = await self.employees.find_one({"_id": ObjectId(p_norm["employee_id"])})
+                if emp:
+                    p_norm["employee_name"] = emp.get("name")
+                    p_norm["employee_email"] = emp.get("email")
+                    p_norm["employee_mobile"] = emp.get("mobile")
+                results.append(p_norm)
             
-            return [normalize(p) for p in payslips], total_items
+            return results, total_items
         except Exception as e:
             raise e
 

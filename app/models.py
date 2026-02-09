@@ -904,6 +904,9 @@ class PayslipCreate(PayslipBase):
 
 class PayslipResponse(PayslipBase):
     id: str
+    employee_name: Optional[str] = None
+    employee_email: Optional[str] = None
+    employee_mobile: Optional[str] = None
 
     class Config:
         from_attributes = True
