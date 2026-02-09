@@ -32,6 +32,39 @@ class FileHandler:
         else:
             raise ValueError("Invalid storage_type. Use 'local' or 's3'.")
     
+    # --------------- Upload Bytes ----------------- #
+    async def upload_bytes(self, file_data: bytes, filename: str, content_type: str = "application/pdf") -> Dict[str, str]:
+        """Upload raw bytes (e.g., generated PDF) to storage"""
+        result = None
+        file_id = str(uuid.uuid4())
+        file_ext = os.path.splitext(filename)[1] or ".pdf"
+        file_name = f"{file_id}{file_ext}"
+
+        if self.storage_type == "local":
+            file_path = os.path.join(self.local_dir, file_name)
+            with open(file_path, "wb") as f:
+                f.write(file_data)
+            file_url = f"/files/{file_name}"
+            result = {"id": file_id, "url": file_url, "name": filename}
+        elif self.storage_type == "s3":
+            try:
+                s3_file_name = f"dev-uploads/{file_name}"
+                extra_args = {"ServerSideEncryption": "AES256"}
+                if content_type:
+                    extra_args["ContentType"] = content_type
+                
+                self.s3_client.upload_fileobj(
+                    io.BytesIO(file_data),
+                    self.aws_bucket,
+                    s3_file_name,
+                    ExtraArgs=extra_args,
+                )
+                file_url = self.get_file_api_url(file_id)
+                result = {"id": file_id, "url": file_url, "name": filename}
+            except ClientError as e:
+                raise Exception(f"Failed to upload {filename}: {e}")
+        return result
+
     # --------------- Upload File ----------------- #
     async def upload_file(self, file: UploadFile) -> Dict[str, str]:
         result = None

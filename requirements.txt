@@ -11,3 +11,5 @@ boto3
 pandas
 openpyxl
 apscheduler
+jinja2
+weasyprint

@@ -10,6 +10,7 @@ class UserBase(BaseModel):
     email: EmailStr
     mobile: str
     role: Optional[str] = "employee"
+    address: Optional[str] = None
     permissions: List[str] = []
 
 
@@ -146,6 +147,7 @@ class EmployeeBase(BaseModel):
     last_name: str
     name: str  # Display name
     email: EmailStr
+    personal_email: Optional[EmailStr] = None
     mobile: str
     date_of_birth: Optional[str] = None
     gender: Optional[str] = None
@@ -169,6 +171,7 @@ class EmployeeBase(BaseModel):
     resignation_date: Optional[str] = None
     last_working_day: Optional[str] = None
     exit_interview_notes: Optional[str] = None
+    address: Optional[str] = None
 
 
 class EmployeeCreate(EmployeeBase):
@@ -180,6 +183,7 @@ class EmployeeUpdate(BaseModel):
     last_name: Optional[str] = None
     name: Optional[str] = None
     email: Optional[EmailStr] = None
+    personal_email: Optional[EmailStr] = None
     mobile: Optional[str] = None
     date_of_birth: Optional[str] = None
     gender: Optional[str] = None
@@ -204,6 +208,7 @@ class EmployeeUpdate(BaseModel):
     resignation_date: Optional[str] = None
     last_working_day: Optional[str] = None
     exit_interview_notes: Optional[str] = None
+    address: Optional[str] = None
 
 
 class EmployeeResponse(EmployeeBase):
@@ -804,3 +809,64 @@ class SystemConfigurationResponse(SystemConfigurationBase):
 
     class Config:
         from_attributes = True
+
+
+# NDA Models
+class NDARequestBase(BaseModel):
+    employee_name: str
+    email: EmailStr
+    mobile: str
+    role: str
+    address: str
+    residential_address: str
+    required_documents: List[str] = []
+
+
+class NDARequestCreate(NDARequestBase):
+    expires_in_hours: Optional[int] = 1
+
+
+class NDARequestUpdate(BaseModel):
+    status: Optional[str] = None
+    documents: Optional[List[str]] = None
+    signature: Optional[str] = None
+    signed_pdf_path: Optional[dict] = None
+    browser: Optional[str] = None
+    os: Optional[str] = None
+    device_type: Optional[str] = None
+    user_agent: Optional[str] = None
+    ip_address: Optional[str] = None
+
+
+class NDARequestResponse(NDARequestBase):
+    id: str
+    token: str
+    status: str
+    expires_at: datetime
+    created_at: datetime
+    documents: List[EmployeeDocument] = []
+    signature: Optional[str] = None
+    signed_pdf_path: Optional[dict] = None
+    browser: Optional[str] = None
+    os: Optional[str] = None
+    device_type: Optional[str] = None 
+    user_agent: Optional[str] = None
+    ip_address: Optional[str] = None
+    email: Optional[EmailStr] = None
+    mobile: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class NDASignatureRequest(BaseModel):
+    signature: str
+    browser: Optional[str] = None
+    os: Optional[str] = None
+    device_type: Optional[str] = None
+    user_agent: Optional[str] = None
+    ip_address: Optional[str] = None
+
+
+class NDARegenerateRequest(BaseModel):
+    expires_in_hours: Optional[int] = 1

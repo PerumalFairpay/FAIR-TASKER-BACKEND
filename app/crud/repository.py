@@ -38,6 +38,8 @@ from app.models import (
     BiometricLogItem,
     SystemConfigurationCreate,
     SystemConfigurationUpdate,
+    NDARequestCreate,
+    NDARequestUpdate,
 )
 from app.utils import normalize, get_password_hash
 from bson import ObjectId
@@ -71,6 +73,7 @@ class Repository:
         self.tasks = self.db["tasks"]
         self.attendance = self.db["attendance"]
         self.system_configurations = self.db["system_configurations"]
+        self.nda_requests = self.db["nda_requests"]
 
     async def create_employee(
         self, employee: EmployeeCreate, profile_picture_path: str = None
@@ -87,6 +90,11 @@ class Repository:
             )
             if existing_user:
                 raise ValueError("User with this email or Employee ID already exists")
+
+            if employee.personal_email:
+                existing_personal = await self.employees.find_one({"personal_email": employee.personal_email})
+                if existing_personal:
+                    raise ValueError(f"User with personal email {employee.personal_email} already exists")
 
             # Prepare Employee Data
             employee_data = employee.dict()
@@ -111,10 +119,34 @@ class Repository:
                         }
                     )
                 employee_data["onboarding_checklist"] = checklist
-            # Usually we don't store password in Employee table if User table exists, but user asked for "fields... password" in employee table context.
-            # I will store it in User table primarily. I'll remove plain password from employee_data before saving if implied, but prompt specifically listed password in payload.
-            # I'll keep it hashed in both or just User. Let's put in User and Employee (for safekeeping/redundancy if requested, or just User).
-            # Prompt: "if i create a employee it will also store in the user table"
+
+            # Transfer NDA Documents if personal_email matches
+            if employee_data.get("personal_email"):
+                nda_request = await self.nda_requests.find_one(
+                    {"email": employee_data["personal_email"], "status": "Signed"},
+                    sort=[("created_at", -1)] # Get the latest one if multiple
+                )
+                
+                if nda_request:
+                    existing_docs = employee_data.get("documents", [])
+                     
+                    if "documents" in nda_request and nda_request["documents"]:
+                        for doc in nda_request["documents"]:
+                            existing_docs.append({
+                                "document_name": doc.get("document_name", "NDA Document"),
+                                "document_proof": doc.get("document_proof"),
+                                "file_type": doc.get("file_type")
+                            })
+                             
+                    if "signed_pdf_path" in nda_request and nda_request["signed_pdf_path"]:
+                        pdf_doc = nda_request["signed_pdf_path"]
+                        existing_docs.append({
+                            "document_name": pdf_doc.get("document_name", "Signed NDA"),
+                            "document_proof": pdf_doc.get("document_proof"),
+                            "file_type": pdf_doc.get("file_type", "application/pdf")
+                        })
+                        
+                    employee_data["documents"] = existing_docs
 
             if profile_picture_path:
                 employee_data["profile_picture"] = profile_picture_path
@@ -135,6 +167,7 @@ class Repository:
                 "name": employee.name,
                 "email": employee.email,
                 "mobile": employee.mobile,
+                "address": employee.address,
                 "hashed_password": hashed_password,
                 "role": employee.role or "employee",
                 "created_at": datetime.utcnow(),
@@ -243,11 +276,61 @@ class Repository:
             if profile_picture_path:
                 update_data["profile_picture"] = profile_picture_path
 
+            if "personal_email" in update_data and update_data["personal_email"]:
+                existing_personal = await self.employees.find_one(
+                    {"personal_email": update_data["personal_email"], "_id": {"$ne": ObjectId(employee_id)}}
+                )
+                if existing_personal:
+                    raise ValueError(f"User with personal email {update_data['personal_email']} already exists")
+
             if "documents" in update_data and update_data["documents"]:
                 update_data["documents"] = [
                     doc if isinstance(doc, dict) else doc.dict()
                     for doc in update_data["documents"]
                 ]
+
+            # Transfer NDA Documents if personal_email (or email acting as personal) is updated
+            # User specifically asked for this on creation, but updating is also a valid workflow
+            email_key = "personal_email" if "personal_email" in update_data else None
+            
+            if email_key and update_data[email_key]:
+                nda_request = await self.nda_requests.find_one(
+                    {"email": update_data[email_key], "status": "Signed"},
+                    sort=[("created_at", -1)]
+                )
+                
+                if nda_request:
+                    # Get existing documents if not already in update_data
+                    if "documents" not in update_data:
+                        current_emp = await self.employees.find_one({"_id": ObjectId(employee_id)})
+                        existing_docs = current_emp.get("documents", []) if current_emp else []
+                    else:
+                        existing_docs = update_data["documents"]
+
+                    existing_proofs = {d.get("document_proof") for d in existing_docs}
+
+                    # Append NDA documents
+                    if "documents" in nda_request and nda_request["documents"]:
+                        for doc in nda_request["documents"]:
+                            if doc.get("document_proof") not in existing_proofs:
+                                existing_docs.append({
+                                    "document_name": doc.get("document_name", "NDA Document"),
+                                    "document_proof": doc.get("document_proof"),
+                                    "file_type": doc.get("file_type")
+                                })
+                                existing_proofs.add(doc.get("document_proof"))
+                            
+                    if "signed_pdf_path" in nda_request and nda_request["signed_pdf_path"]:
+                        pdf_doc = nda_request["signed_pdf_path"]
+                        if pdf_doc.get("document_proof") not in existing_proofs:
+                            existing_docs.append({
+                                "document_name": pdf_doc.get("document_name", "Signed NDA"),
+                                "document_proof": pdf_doc.get("document_proof"),
+                                "file_type": pdf_doc.get("file_type", "application/pdf")
+                            })
+                            existing_proofs.add(pdf_doc.get("document_proof"))
+                    
+                    update_data["documents"] = existing_docs
 
             if update_data:
                 update_data["updated_at"] = datetime.utcnow()
@@ -263,6 +346,8 @@ class Repository:
                     user_update["name"] = update_data["name"]
                 if "mobile" in update_data:
                     user_update["mobile"] = update_data["mobile"]
+                if "address" in update_data:
+                    user_update["address"] = update_data["address"]
                 if "role" in update_data:
                     user_update["role"] = update_data["role"]
 
@@ -2420,6 +2505,104 @@ class Repository:
                 {"is_public": True}
             ).to_list(length=None)
             return [normalize(conf) for conf in configs]
+        except Exception as e:
+            raise e
+
+
+    # NDA Request CRUD
+    async def create_nda_request(self, nda_request: "NDARequestCreate", token: str, expires_at: datetime) -> dict:
+        try:
+            nda_data = nda_request.dict()
+            nda_data["token"] = token
+            nda_data["status"] = "Pending"
+            nda_data["expires_at"] = expires_at
+            nda_data["created_at"] = datetime.utcnow()
+            nda_data["documents"] = []
+            nda_data["signature"] = None
+
+            result = await self.nda_requests.insert_one(nda_data)
+            nda_data["id"] = str(result.inserted_id)
+            return normalize(nda_data)
+        except Exception as e:
+            raise e
+
+    async def get_nda_requests(
+        self,
+        page: int = 1,
+        limit: int = 10,
+        search: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> (List[dict], int):
+        try:
+            query = {}
+
+            if status and status != "All":
+                query["status"] = status
+
+            if search:
+                regex_pattern = {"$regex": search, "$options": "i"}
+                query["$or"] = [
+                    {"employee_name": regex_pattern},
+                    {"email": regex_pattern},
+                    {"token": regex_pattern},
+                ]
+
+            skip = (page - 1) * limit
+            total_items = await self.nda_requests.count_documents(query)
+
+            nda_requests = (
+                await self.nda_requests.find(query)
+                .sort("created_at", -1)
+                .skip(skip)
+                .limit(limit)
+                .to_list(length=limit)
+            )
+
+            return [normalize(req) for req in nda_requests], total_items
+        except Exception as e:
+            raise e
+
+    async def get_nda_request_by_token(self, token: str) -> dict:
+        try:
+            nda_request = await self.nda_requests.find_one({"token": token})
+            return normalize(nda_request) if nda_request else None
+        except Exception as e:
+            raise e
+
+    async def update_nda_request(self, token: str, update_data: dict) -> dict:
+        try:
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.nda_requests.update_one(
+                    {"token": token}, {"$set": update_data}
+                )
+            return await self.get_nda_request_by_token(token)
+        except Exception as e:
+            raise e
+
+    async def regenerate_nda_token(self, nda_id: str, new_token: str, expires_at: datetime) -> dict:
+        try:
+            update_data = {
+                "token": new_token,
+                "expires_at": expires_at,
+                "status": "Pending", 
+                "updated_at": datetime.utcnow()
+            }
+            
+            await self.nda_requests.update_one(
+                {"_id": ObjectId(nda_id)},
+                {"$set": update_data}
+            )
+             
+            updated_doc = await self.nda_requests.find_one({"_id": ObjectId(nda_id)})
+            return normalize(updated_doc)
+        except Exception as e:
+            raise e
+
+    async def delete_nda_request(self, nda_id: str) -> bool:
+        try:
+            result = await self.nda_requests.delete_one({"_id": ObjectId(nda_id)})
+            return result.deleted_count > 0
         except Exception as e:
             raise e
 
