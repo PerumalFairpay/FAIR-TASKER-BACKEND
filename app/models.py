@@ -172,6 +172,11 @@ class EmployeeBase(BaseModel):
     last_working_day: Optional[str] = None
     exit_interview_notes: Optional[str] = None
     address: Optional[str] = None
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    ifsc_code: Optional[str] = None
+    pf_account_number: Optional[str] = None
+    pan_number: Optional[str] = None
 
 
 class EmployeeCreate(EmployeeBase):
@@ -209,6 +214,11 @@ class EmployeeUpdate(BaseModel):
     last_working_day: Optional[str] = None
     exit_interview_notes: Optional[str] = None
     address: Optional[str] = None
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    ifsc_code: Optional[str] = None
+    pf_account_number: Optional[str] = None
+    pan_number: Optional[str] = None
 
 
 class EmployeeResponse(EmployeeBase):
@@ -870,3 +880,27 @@ class NDASignatureRequest(BaseModel):
 
 class NDARegenerateRequest(BaseModel):
     expires_in_hours: Optional[int] = 1
+
+
+class PayslipBase(BaseModel):
+    employee_id: str
+    month: str
+    year: int
+    earnings: dict
+    deductions: dict
+    net_pay: float
+    status: str = "Generated"  # Generated, Viewed
+    file_path: Optional[str] = None
+    generated_at: Optional[datetime] = None
+
+
+class PayslipCreate(PayslipBase):
+    pass
+
+
+class PayslipResponse(PayslipBase):
+    id: str
+
+    class Config:
+        from_attributes = True
+

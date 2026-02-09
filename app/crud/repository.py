@@ -40,6 +40,7 @@ from app.models import (
     SystemConfigurationUpdate,
     NDARequestCreate,
     NDARequestUpdate,
+    PayslipCreate,
 )
 from app.utils import normalize, get_password_hash
 from bson import ObjectId
@@ -74,6 +75,7 @@ class Repository:
         self.attendance = self.db["attendance"]
         self.system_configurations = self.db["system_configurations"]
         self.nda_requests = self.db["nda_requests"]
+        self.payslips = self.db["payslips"]
 
     async def create_employee(
         self, employee: EmployeeCreate, profile_picture_path: str = None
@@ -2603,6 +2605,60 @@ class Repository:
         try:
             result = await self.nda_requests.delete_one({"_id": ObjectId(nda_id)})
             return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+
+    # Payslip CRUD
+    async def create_payslip(self, payslip_data: dict, file_path: str) -> dict:
+        try:
+            # payslip_data includes month, year, earnings, deductions, net_pay, employee_id
+            payslip_data["file_path"] = file_path
+            payslip_data["generated_at"] = datetime.utcnow()
+            payslip_data["status"] = "Generated"
+            
+            result = await self.payslips.insert_one(payslip_data)
+            payslip_data["id"] = str(result.inserted_id)
+            return normalize(payslip_data)
+        except Exception as e:
+            raise e
+
+    async def get_payslips(
+        self,
+        page: int = 1,
+        limit: int = 10,
+        employee_id: Optional[str] = None,
+        month: Optional[str] = None,
+        year: Optional[str] = None,
+    ) -> (List[dict], int):
+        try:
+            query = {}
+            if employee_id:
+                query["employee_id"] = employee_id
+            if month and month != "All":
+                query["month"] = month
+            if year and year != "All":
+                query["year"] = int(year)
+
+            skip = (page - 1) * limit
+            total_items = await self.payslips.count_documents(query)
+            
+            payslips = (
+                await self.payslips.find(query)
+                .sort("generated_at", -1)
+                .skip(skip)
+                .limit(limit)
+                .to_list(length=limit)
+            )
+            
+            return [normalize(p) for p in payslips], total_items
+        except Exception as e:
+            raise e
+
+    async def get_payslip(self, payslip_id: str) -> dict:
+        try:
+            payslip = await self.payslips.find_one({"_id": ObjectId(payslip_id)})
+            return normalize(payslip)
         except Exception as e:
             raise e
 

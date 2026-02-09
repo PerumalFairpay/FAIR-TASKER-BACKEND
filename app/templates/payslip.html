@@ -1,0 +1,220 @@
+<!doctype html>
+<html>
+  <head>
+    <style>
+      @page {
+        size: A4;
+        margin: 20mm;
+      }
+      body {
+        font-family: Arial, sans-serif;
+        font-size: 10pt;
+        color: #000;
+      }
+      .header {
+        border: 1px solid #000;
+        padding: 10px;
+        margin-bottom: 0;
+        display: flex;
+        align-items: center;
+      }
+      .logo {
+        width: 150px;
+        height: auto;
+        margin-right: 20px;
+      }
+      h1 {
+        font-size: 16pt;
+        margin: 0;
+        font-weight: bold;
+      }
+      .company-address {
+        font-size: 9pt;
+        margin-top: 5px;
+      }
+      .month-header {
+        border: 1px solid #000;
+        border-top: none;
+        padding: 5px;
+        text-align: center;
+        font-weight: bold;
+        background-color: #f0f0f0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        border: 1px solid #000;
+        border-top: none;
+      }
+      th,
+      td {
+        border: 1px solid #000;
+        padding: 5px;
+        text-align: left;
+        vertical-align: top;
+      }
+      .th-label {
+        font-weight: bold;
+        width: 25%;
+        background-color: #f9f9f9;
+      }
+      .section-header {
+        background-color: #f0f0f0;
+        font-weight: bold;
+        text-align: center;
+      }
+      .amount-col {
+        text-align: right;
+        width: 20%;
+      }
+      .total-row td {
+        font-weight: bold;
+        background-color: #f0f0f0;
+      }
+      .net-pay-row td {
+        font-weight: bold;
+        font-size: 11pt;
+        background-color: #e0e0e0;
+      }
+      .amount-words {
+        border: 1px solid #000;
+        border-top: none;
+        padding: 10px;
+        min-height: 40px;
+      }
+      .footer {
+        margin-top: 20px;
+        text-align: center;
+        font-size: 8pt;
+        color: #555;
+      }
+      .logo-container {
+        float: left;
+        width: 160px;
+      }
+      .company-info {
+        float: left;
+      }
+      .clearfix::after {
+        content: "";
+        clear: both;
+        display: table;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header clearfix">
+      <div class="logo-container">
+        <!-- Ideally replace with actual logo path relevant to WeasyPrint base_url -->
+        <img
+          src="https://fairpaytechworks.com/static/logo.png"
+          alt="FairPAY TechWorks"
+          class="logo"
+        />
+      </div>
+      <div class="company-info">
+        <h1>FairPAY Tech Works</h1>
+        <div class="company-address">
+          T P Nagar, Plot No 222 Door No 33, 2nd Floor, Buddhar Street<br />
+          Taramani, Chennai – 600 113
+        </div>
+      </div>
+    </div>
+
+    <div class="month-header">Pay Slip for the Month of {{ month_year }}</div>
+
+    <table>
+      <tr>
+        <td class="th-label">EMPLOYEE CODE</td>
+        <td>{{ employee.employee_no_id }}</td>
+        <td class="th-label">NAME</td>
+        <td>{{ employee.name }}</td>
+      </tr>
+      <tr>
+        <td class="th-label">DESIGNATION</td>
+        <td>{{ employee.designation }}</td>
+        <td class="th-label">PAID DAYS</td>
+        <td>{{ paid_days }}</td>
+      </tr>
+      <tr>
+        <td class="th-label">BANK NAME<br />ACCOUNT NUMBER</td>
+        <td>
+          {{ employee.bank_name or 'N/A' }}<br />{{ employee.account_number or
+          'N/A' }}
+        </td>
+        <td class="th-label">PF ACCOUNT<br />NUMBER</td>
+        <!-- Assuming same field name or similar -->
+        <td>{{ employee.pf_account_number or 'N/A' }}</td>
+      </tr>
+    </table>
+
+    <!-- Leave details can be added here if available in context, simplified for now based on image structure -->
+    <table>
+      <tr>
+        <td class="th-label">CL AVAILED</td>
+        <td>{{ leaves.cl_availed | default(0) }}</td>
+        <td class="th-label">PL AVAILED</td>
+        <td>{{ leaves.pl_availed | default(0) }}</td>
+      </tr>
+      <tr>
+        <td class="th-label">SL AVAILED</td>
+        <td>{{ leaves.sl_availed | default(0) }}</td>
+        <td class="th-label">EL AVAILED</td>
+        <td>{{ leaves.el_availed | default(0) }}</td>
+      </tr>
+    </table>
+
+    <table>
+      <tr class="section-header">
+        <td style="width: 40%">EARNINGS</td>
+        <td class="amount-col">AMOUNT</td>
+        <td style="width: 40%">DEDUCTIONS</td>
+        <td class="amount-col">AMOUNT</td>
+      </tr>
+
+      {% for row in payslip_rows %}
+      <tr>
+        <td>{{ row.earning_name }}</td>
+        <td class="amount-col">{{ row.earning_amount }}</td>
+        <td>{{ row.deduction_name }}</td>
+        <td class="amount-col">{{ row.deduction_amount }}</td>
+      </tr>
+      {% endfor %}
+
+      <!-- Fill empty rows if needed for visual balance is optional, CSS handles borders -->
+
+      <tr class="total-row">
+        <td>GROSS TOTAL</td>
+        <td class="amount-col">{{ "%.2f"|format(total_earnings) }}</td>
+        <td>DEDUCTION TOTAL</td>
+        <td class="amount-col">{{ "%.2f"|format(total_deductions) }}</td>
+      </tr>
+
+      <tr class="net-pay-row">
+        <td colspan="2" style="text-align: right; padding-right: 20px">
+          NET PAY
+        </td>
+        <td colspan="2" style="text-align: center">
+          {{ "%.2f"|format(net_pay) }}
+        </td>
+      </tr>
+    </table>
+
+    <div class="amount-words">
+      <span style="font-weight: bold; text-decoration: underline"
+        >Amount in Words</span
+      ><br />
+      {{ net_pay_words }} Only
+    </div>
+
+    <div class="footer">
+      Any queries please e-mail to
+      <a href="mailto:hr@fairpaytechworks.com">hr@fairpaytechworks.com</a> or
+      call us<br />
+      +91-9840498216 Business hours: 9.00 a.m. to 6.30 p.m. [IST], Monday –
+      Friday<br />
+      <br />
+      This is computer generated payslip and needs no signature.
+    </div>
+  </body>
+</html>
