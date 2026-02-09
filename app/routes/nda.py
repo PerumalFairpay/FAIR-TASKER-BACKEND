@@ -38,7 +38,7 @@ async def generate_nda_link(nda_request: NDARequestCreate):
          
         nda_data = await repository.create_nda_request(nda_request, token, expires_at)
          
-        link_url = f"/nda/{token}"
+        link_url = f"/employee/nda/{token}"
         
         return success_response(
             message="NDA link generated successfully",
@@ -65,7 +65,7 @@ async def regenerate_nda_link(nda_id: str, request: NDARegenerateRequest):
         if not updated_nda:
              return error_response(message="NDA request not found", status_code=404)
  
-        link_url = f"/nda/{new_token}"
+        link_url = f"/employee/nda/{new_token}"
         
         return success_response(
             message="NDA link regenerated successfully",
