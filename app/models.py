@@ -172,6 +172,7 @@ class EmployeeBase(BaseModel):
     last_working_day: Optional[str] = None
     exit_interview_notes: Optional[str] = None
     address: Optional[str] = None
+    account_name: Optional[str] = None
     bank_name: Optional[str] = None
     account_number: Optional[str] = None
     ifsc_code: Optional[str] = None
@@ -214,6 +215,7 @@ class EmployeeUpdate(BaseModel):
     last_working_day: Optional[str] = None
     exit_interview_notes: Optional[str] = None
     address: Optional[str] = None
+    account_name: Optional[str] = None
     bank_name: Optional[str] = None
     account_number: Optional[str] = None
     ifsc_code: Optional[str] = None

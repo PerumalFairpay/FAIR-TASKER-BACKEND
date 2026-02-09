@@ -17,25 +17,12 @@ templates_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templa
 templates = Jinja2Templates(directory=templates_dir)
 
 def num_to_words(num):
-    # improved basic implementation or use num2words package if available
-    # For now, simple mock or basic implementation. 
-    # If num2words is not installed, we can't rely on it.
-    # I'll implement a very tailored basic version for currency.
     units = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"]
     teens = ["", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
     tens = ["", "Ten", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
     thousands = ["", "Thousand", "Lakh", "Crore"]
     
-    # This is a complex task to do perfectly without a library. 
-    # I will assume the user has `num2words` or I'll add a simplified string.
-    # Let's try to do a robust enough version for typical salaries.
-    
-    # Placeholder: "Rupees X Only"
     return f"Rupees {num} Only" 
-
-    # Note: Proper implementation requires recursive logic. 
-    # Given the constraint, I'll use a placeholder or ask to install num2words?
-    # I'll stick to a simple placeholder for now or checking if I can implement a quick one.
     
 @router.post("/generate")
 async def generate_payslip(payslip: PayslipCreate):
@@ -76,21 +63,14 @@ async def generate_payslip(payslip: PayslipCreate):
         total_deductions = sum(float(v) for v in deductions.values())
         net_pay = payslip.net_pay
         
-        # Calculate Paid Days (assuming 30 or simplified input)
-        # Often paid days is an input. If not, default to 30.
         paid_days = 30 
         
-        # Password Strategy: Mobile Last 4 digits or DOB (DDMMYYYY)
-        # Defaulting to Mobile Last 4
         password = ""
         if "mobile" in employee and employee["mobile"]:
             password = employee["mobile"][-4:]
         else:
             password = "0000" # Fallback
             
-        # Or use full mobile number as per plan "Employee Mobile"
-        # "Use Employee's Mobile Number (last 4 digits) or DOB... Refinement: Use Employee's mobile number"
-        # Let's use Full Mobile Number for better security than just 4 digits
         if "mobile" in employee:
             password = employee["mobile"]
             
@@ -150,20 +130,8 @@ async def list_payslips(
     List payslips. Admin sees all (or filtered). Employee sends their ID.
     """
     try:
-        real_employee_id = employee_id
-        if employee_id:
-            # Check if this is an employee_no_id (business ID)
-            # Try exact match first
-            emp = await repository.employees.find_one({"employee_no_id": employee_id})
-            if not emp:
-                 # Try case-insensitive
-                 emp = await repository.employees.find_one({"employee_no_id": {"$regex": f"^{employee_id}$", "$options": "i"}})
-            
-            if emp:
-                real_employee_id = str(emp["_id"])
-
         data, total = await repository.get_payslips(
-            page=page, limit=limit, employee_id=real_employee_id, month=month, year=year
+            page=page, limit=limit, employee_id=employee_id, month=month, year=year
         )
         
         meta = {
