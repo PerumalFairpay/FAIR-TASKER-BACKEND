@@ -177,6 +177,7 @@ class EmployeeBase(BaseModel):
     account_number: Optional[str] = None
     ifsc_code: Optional[str] = None
     pf_account_number: Optional[str] = None
+    esic_number: Optional[str] = None
     pan_number: Optional[str] = None
 
 
@@ -220,6 +221,7 @@ class EmployeeUpdate(BaseModel):
     account_number: Optional[str] = None
     ifsc_code: Optional[str] = None
     pf_account_number: Optional[str] = None
+    esic_number: Optional[str] = None
     pan_number: Optional[str] = None
 
 

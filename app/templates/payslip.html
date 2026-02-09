@@ -26,7 +26,6 @@
       h1 {
         font-size: 14pt;
         margin: 0;
-        font-weight: bold;
       }
       .company-address {
         font-size: 8pt;
@@ -44,24 +43,19 @@
       th,
       td {
         border: 1px solid #000;
-        padding: 4px 6px;
+        padding: 8px 10px;
         text-align: left;
         vertical-align: middle;
         font-size: 9pt;
       } 
       .section-header {
-        font-weight: bold;
         text-align: center;
       }
       .amount-col {
         text-align: right;
         width: 20%;
       }
-      .total-row td {
-        font-weight: bold;
-      }
       .net-pay-row td {
-        font-weight: bold;
         font-size: 10pt;
       }
       .earnings-table tr:not(.section-header):not(.total-row):not(.net-pay-row) td {
@@ -73,8 +67,7 @@
       .earnings-table tr:not(.section-header):not(.total-row):not(.net-pay-row) td:nth-child(3) {
         border-left: 1px solid #000;
       }
-      .amount-words {
-        border: 1px solid #000;
+      .amount-words { 
         padding: 8px;
         min-height: 35px;
         margin-top: 10px;
@@ -120,7 +113,7 @@
       </div>
     </div>
 
-    <div style="font-size: 10pt; font-weight: bold; text-align: center; margin-bottom: 10px;">Pay Slip for the Month of {{ month_year }}</div>
+    <div style="font-size: 10pt; text-align: center; margin-bottom: 10px;"><strong>Pay Slip for the Month of {{ month_year }}</strong></div>
 
     <table>
       <tr>
@@ -136,10 +129,16 @@
         <td>{{ paid_days }}</td>
       </tr>
       <tr>
-        <td >BANK NAME<br />ACCOUNT NUMBER</td>
-        <td>{{ employee.bank_name or 'XXXXXXXX' }}<br />{{ employee.account_number or 'XXXXX' }}</td>
-        <td >PF ACCOUNT<br />NUMBER</td>
+        <td>BANK ACCOUNT NAME</td>
+        <td>{{ employee.account_name or 'XXXXXXXX' }}</td>
+        <td>ACCOUNT NUMBER</td>
+        <td>{{ employee.account_number or 'XXXXX' }}</td>
+      </tr>
+      <tr>
+        <td>PF ACCOUNT NUMBER</td>
         <td>{{ employee.pf_account_number or 'xxxxxxxxx' }}</td>
+        <td>ESIC NUMBER</td>
+        <td>{{ employee.esic_number or 'xxxxxxxxx' }}</td>
       </tr>
       <tr>
         <td >CL AVAILED</td>
@@ -157,10 +156,10 @@
 
     <table class="earnings-table">
       <tr class="section-header">
-        <td style="width: 40%">EARNINGS</td>
-        <td class="amount-col">AMOUNT</td>
-        <td style="width: 40%">DEDUCTIONS</td>
-        <td class="amount-col">AMOUNT</td>
+        <td style="width: 40%"><strong>EARNINGS</strong></td>
+        <td class="amount-col"><strong>AMOUNT</strong></td>
+        <td style="width: 40%"><strong>DEDUCTIONS</strong></td>
+        <td class="amount-col"><strong>AMOUNT</strong></td>
       </tr>
 
       {% for row in payslip_rows %}
@@ -173,24 +172,24 @@
       {% endfor %}
 
       <tr class="total-row">
-        <td>GROSS TOTAL</td>
-        <td class="amount-col">{{ "%.2f"|format(total_earnings) }}</td>
-        <td>DEDUCTION TOTAL</td>
-        <td class="amount-col">{{ "%.2f"|format(total_deductions) }}</td>
+        <td><strong>GROSS TOTAL</strong></td>
+        <td class="amount-col"><strong>{{ "%.2f"|format(total_earnings) }}</strong></td>
+        <td><strong>DEDUCTION TOTAL</strong></td>
+        <td class="amount-col"><strong>{{ "%.2f"|format(total_deductions) }}</strong></td>
       </tr>
 
       <tr class="net-pay-row">
         <td colspan="2" style="text-align: center">
-          NET PAY
+          <strong>NET PAY</strong>
         </td>
         <td colspan="2" style="text-align: center">
-          {{ "%.2f"|format(net_pay) }}
+          <strong>{{ "%.2f"|format(net_pay) }}</strong>
         </td>
       </tr>
     </table>
 
     <div class="amount-words">
-      <span style="font-weight: bold">Amount in Words</span><br />
+      <span><strong>Amount in Words</strong></span><br />
       {{ net_pay_words }} Rupees Only
     </div>
 
