@@ -17,13 +17,49 @@ templates_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templa
 templates = Jinja2Templates(directory=templates_dir)
 
 def num_to_words(num):
-    units = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"]
-    teens = ["", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
-    tens = ["", "Ten", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
-    thousands = ["", "Thousand", "Lakh", "Crore"]
-    
-    return f"Rupees {num} Only" 
-    
+    try:
+        num = int(float(num))
+        if num == 0:
+            return "Zero"
+            
+        def convert_to_words(n):
+            units = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"]
+            teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
+            tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+            
+            if n < 10:
+                return units[n]
+            elif n < 20:
+                return teens[n-10]
+            elif n < 100:
+                return tens[n//10] + (" " + units[n%10] if n%10 != 0 else "")
+            elif n < 1000:
+                return units[n//100] + " Hundred" + (" " + convert_to_words(n%100) if n%100 != 0 else "")
+            return ""
+
+        def process_indian_system(n):
+            if n == 0: return ""
+            
+            # Parts: Crore, Lakh, Thousand, Hundred+Rest
+            res = ""
+            if n >= 10000000:
+                res += convert_to_words(n // 10000000) + " Crore "
+                n %= 10000000
+            if n >= 100000:
+                res += convert_to_words(n // 100000) + " Lakh "
+                n %= 100000
+            if n >= 1000:
+                res += convert_to_words(n // 1000) + " Thousand "
+                n %= 1000
+            if n > 0:
+                res += convert_to_words(n)
+                
+            return res.strip()
+
+        words = process_indian_system(num)
+        return f"Rupees {words}"
+    except:
+        return f"Rupees {num}"    
 @router.post("/generate")
 async def generate_payslip(payslip: PayslipCreate):
     """
