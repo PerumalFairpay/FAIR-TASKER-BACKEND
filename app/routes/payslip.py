@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import Response
 from fastapi.templating import Jinja2Templates
-from app.models import PayslipCreate, PayslipResponse
+from app.models import PayslipCreate, PayslipResponse, PayslipUpdate
 from app.crud.repository import repository
 from app.helper.response_helper import success_response, error_response
 from app.helper.file_handler import file_handler
@@ -215,3 +215,112 @@ async def download_payslip(payslip_id: str):
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
+
+@router.put("/update/{payslip_id}")
+async def update_payslip(payslip_id: str, payslip: PayslipUpdate):
+    """
+    Update an existing payslip and regenerate the PDF.
+    """
+    try:
+        # 1. Get existing payslip
+        existing = await repository.get_payslip(payslip_id)
+        if not existing:
+            return error_response(message="Payslip not found", status_code=404)
+        
+        # 2. Prepare update data
+        update_dict = {k: v for k, v in payslip.dict().items() if v is not None}
+        
+        # 3. Merge with existing data for PDF generation
+        merged_data = {**existing, **update_dict}
+        
+        # 4. Fetch Employee Details
+        employee = await repository.get_employee(merged_data["employee_id"])
+        if not employee:
+            return error_response(message="Employee not found", status_code=404)
+        
+        # 5. Regenerate PDF with updated data
+        earnings = merged_data.get("earnings", {})
+        deductions = merged_data.get("deductions", {})
+        
+        # Prepare Rows for template
+        payslip_rows = []
+        earning_keys = list(earnings.keys())
+        deduction_keys = list(deductions.keys())
+        max_rows = max(len(earning_keys), len(deduction_keys))
+        
+        for i in range(max_rows):
+            e_key = earning_keys[i] if i < len(earning_keys) else ""
+            e_val = f"{earnings[e_key]:.2f}" if e_key else ""
+            
+            d_key = deduction_keys[i] if i < len(deduction_keys) else ""
+            d_val = f"{deductions[d_key]:.2f}" if d_key else ""
+            
+            payslip_rows.append({
+                "earning_name": e_key,
+                "earning_amount": e_val,
+                "deduction_name": d_key,
+                "deduction_amount": d_val
+            })
+        
+        total_earnings = sum(float(v) for v in earnings.values())
+        total_deductions = sum(float(v) for v in deductions.values())
+        net_pay = merged_data.get("net_pay", total_earnings - total_deductions)
+        
+        try:
+            month_map = {m: i for i, m in enumerate(calendar.month_name) if m}
+            month_num = month_map.get(merged_data["month"].capitalize(), 1)
+            _, num_days = calendar.monthrange(merged_data["year"], month_num)
+            paid_days = num_days
+        except Exception:
+            paid_days = 30
+        
+        password = ""
+        if "mobile" in employee and employee["mobile"]:
+            password = employee["mobile"][-4:]
+        else:
+             password = "0000"
+             
+        if "mobile" in employee:
+             password = employee["mobile"]
+
+        # 6. Render HTML and Generate PDF
+        template_data = {
+            "employee": employee,
+            "month_year": f"{merged_data['month']} {merged_data['year']}",
+            "earnings": earnings,
+            "deductions": deductions,
+            "payslip_rows": payslip_rows,
+            "total_earnings": total_earnings,
+            "total_deductions": total_deductions,
+            "net_pay": net_pay,
+            "net_pay_words": num_to_words(net_pay),
+            "paid_days": paid_days,
+            "leaves": {}
+        }
+        
+        template = templates.get_template("payslip.html")
+        html_content = template.render(template_data)
+        
+        # 7. Generate & Encrypt PDF
+        pdf_bytes = generate_pdf_from_html(html_content, base_url=str(templates_dir))
+        encrypted_pdf = encrypt_pdf(pdf_bytes, password)
+        
+        # 8. Upload new PDF (overwrites old one)
+        filename = f"Payslip_{employee.get('name', 'Emp').replace(' ', '_')}_{merged_data['month']}_{merged_data['year']}.pdf"
+        upload_result = await file_handler.upload_bytes(
+            file_data=encrypted_pdf,
+            filename=filename,
+            content_type="application/pdf"
+        )
+        
+        # 9. Update database with new file path
+        update_dict["file_path"] = upload_result["url"]
+        result = await repository.update_payslip(payslip_id, update_dict)
+        
+        return success_response(
+            message="Payslip updated successfully",
+            data=result
+        )
+        
+    except Exception as e:
+        return error_response(message=str(e), status_code=500)

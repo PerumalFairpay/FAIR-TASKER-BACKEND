@@ -2696,5 +2696,30 @@ class Repository:
         except Exception as e:
             raise e
 
+    async def update_payslip(self, payslip_id: str, update_data: dict) -> dict:
+        try:
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.payslips.update_one(
+                    {"_id": ObjectId(payslip_id)},
+                    {"$set": update_data}
+                )
+            
+            updated_payslip = await self.payslips.find_one({"_id": ObjectId(payslip_id)})
+            if not updated_payslip:
+                return None
+                
+            # Fetch employee details
+            emp = await self.employees.find_one({"_id": ObjectId(updated_payslip["employee_id"])})
+            payslip_norm = normalize(updated_payslip)
+            if emp:
+                payslip_norm["employee_name"] = emp.get("name")
+                payslip_norm["employee_email"] = emp.get("email")
+                payslip_norm["employee_mobile"] = emp.get("mobile")
+            
+            return payslip_norm
+        except Exception as e:
+            raise e
+
 
 repository = Repository()

@@ -902,6 +902,14 @@ class PayslipCreate(PayslipBase):
     pass
 
 
+class PayslipUpdate(BaseModel):
+    month: Optional[str] = None
+    year: Optional[int] = None
+    earnings: Optional[dict] = None
+    deductions: Optional[dict] = None
+    net_pay: Optional[float] = None
+
+
 class PayslipResponse(PayslipBase):
     id: str
     employee_name: Optional[str] = None
