@@ -1,12 +1,15 @@
-from fastapi import APIRouter, HTTPException, Depends, Request
-from fastapi.responses import Response
+from fastapi import APIRouter, HTTPException, Depends, Request, status
+from fastapi.responses import Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from app.models import PayslipCreate, PayslipResponse, PayslipUpdate
 from app.crud.repository import repository
 from app.helper.response_helper import success_response, error_response
 from app.helper.file_handler import file_handler
-from app.helper.pdf_helper import generate_pdf_from_html, encrypt_pdf
+from app.helper.pdf_helper import generate_pdf_from_html, encrypt_pdf, decrypt_pdf
+from app.auth import get_current_user
+from app.core.config import API_URL
 from datetime import datetime
+from io import BytesIO
 import os
 import math
 import calendar
@@ -203,26 +206,71 @@ async def list_payslips(
         return error_response(message=str(e), status_code=500)
 
 @router.get("/download/{payslip_id}")
-async def download_payslip(payslip_id: str):
+async def download_payslip(payslip_id: str, current_user: dict = Depends(get_current_user)):
     """
     Proxy to download the file.
-    Note: The file itself is encrypted, so we can serve it directly.
+    Note: Admin gets unencrypted view link, Employee gets encrypted file link.
     """
     try:
         payslip = await repository.get_payslip(payslip_id)
         if not payslip:
              return error_response(message="Payslip not found", status_code=404)
+        
+        # If Admin, return link to on-the-fly decrypted view
+        if current_user.get("role") == "admin":
+            return success_response(
+                message="Download link",
+                data={"url": f"{API_URL}/api/payslip/admin/view/{payslip_id}"}
+            )
              
         file_url = payslip.get("file_path")
-        # If it's a relative URL (local storage), we might need to construct full path or redirect
-        # But file_handler returns a URL that is accessible via API usually.
-        
         return success_response(
             message="Download link",
             data={"url": file_url}
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
+
+@router.get("/admin/view/{payslip_id}")
+async def view_payslip_admin(payslip_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Admin only: Decrypt the payslip on-the-fly and stream it to the browser.
+    """
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code= status.HTTP_403_FORBIDDEN, detail="Not authorized")
+        
+    try:
+        # 1. Get Payslip and Employee details
+        payslip = await repository.get_payslip(payslip_id)
+        if not payslip:
+            raise HTTPException(status_code=404, detail="Payslip not found")
+            
+        employee = await repository.get_employee(payslip["employee_id"])
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee not found")
+             
+        file_url = payslip["file_path"]
+        # Assuming local files are in "/files/{file_id}" and S3 are via view API
+        # We need the relative file path for file_handler to read it
+        file_id = file_url.split("/")[-1]
+        
+        file_data = file_handler.get_file(file_id)
+        if not file_data:
+             raise HTTPException(status_code=404, detail="PDF file not found")
+        
+        # 3. Decrypt the PDF
+        password = employee.get("mobile", "0000")
+        decrypted_pdf = decrypt_pdf(file_data["Body"].read(), password)
+        
+        filename = f"Payslip_{employee.get('name', 'Emp').replace(' ', '_')}_{payslip['month']}_{payslip['year']}.pdf"
+        
+        return StreamingResponse(
+            BytesIO(decrypted_pdf),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="{filename}"'}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.put("/update/{payslip_id}")

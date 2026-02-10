@@ -31,3 +31,23 @@ def encrypt_pdf(pdf_bytes: bytes, password: str) -> bytes:
     writer.write(output_buffer)
     output_buffer.seek(0)
     return output_buffer.read()
+
+def decrypt_pdf(pdf_bytes: bytes, password: str) -> bytes:
+    """
+    Decrypts PDF bytes using a password.
+    """
+    if not password:
+        return pdf_bytes
+
+    reader = PdfReader(BytesIO(pdf_bytes))
+    if reader.is_encrypted:
+        reader.decrypt(password)
+
+    writer = PdfWriter()
+    for page in reader.pages:
+        writer.add_page(page)
+
+    output_buffer = BytesIO()
+    writer.write(output_buffer)
+    output_buffer.seek(0)
+    return output_buffer.read()
