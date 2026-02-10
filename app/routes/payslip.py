@@ -72,6 +72,15 @@ async def generate_payslip(payslip: PayslipCreate):
         if not employee:
             return error_response(message="Employee not found", status_code=404)
 
+        # Check if payslip already exists
+        existing_payslips, _ = await repository.get_payslips(
+            employee_id=payslip.employee_id,
+            month=payslip.month,
+            year=str(payslip.year)
+        )
+        if existing_payslips:
+            return error_response(message=f"Payslip already exists for {payslip.month} {payslip.year}", status_code=400)
+
         # 2. Prepare Data for Template
         earnings = payslip.earnings or {}
         deductions = payslip.deductions or {}
