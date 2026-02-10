@@ -426,7 +426,6 @@ class HolidayBase(BaseModel):
     date: str  # Format: "YYYY-MM-DD"
     description: Optional[str] = None
     holiday_type: str = "Public"  # e.g., Public, Mandatory, Optional/Restricted
-    is_restricted: bool = False  # True if it's an optional/restricted holiday
     status: str = "Active"  # Active or Inactive
 
 
@@ -439,7 +438,6 @@ class HolidayUpdate(BaseModel):
     date: Optional[str] = None
     description: Optional[str] = None
     holiday_type: Optional[str] = None
-    is_restricted: Optional[bool] = None
     status: Optional[str] = None
 
 
