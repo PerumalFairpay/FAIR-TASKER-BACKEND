@@ -128,10 +128,11 @@ async def get_eod_reports(
     project_id: Optional[str] = None, 
     assigned_to: Optional[str] = None, 
     date: Optional[str] = None,
-    priority: Optional[str] = None
+    priority: Optional[str] = None,
+    search: Optional[str] = None,
 ):
     try:
-        reports = await repo.get_eod_reports(project_id, assigned_to, date, priority)
+        reports = await repo.get_eod_reports(project_id, assigned_to, date, priority, search)
         return JSONResponse(
             status_code=200,
             content={"message": "EOD reports fetched successfully", "success": True, "data": reports}

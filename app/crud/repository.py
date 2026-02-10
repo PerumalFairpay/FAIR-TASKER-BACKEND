@@ -1753,6 +1753,7 @@ class Repository:
         assigned_to: Optional[str] = None,
         date: Optional[str] = None,
         priority: Optional[str] = None,
+        search: Optional[str] = None,
     ) -> List[dict]:
         try:
             query = {"eod_history": {"$exists": True, "$not": {"$size": 0}}}
@@ -1793,6 +1794,20 @@ class Repository:
                 for entry in task_norm.get("eod_history", []):
                     if date and entry.get("date") != date:
                         continue
+                    
+                    # Search Filtering
+                    if search:
+                        search_lower = search.lower()
+                        task_name = (task_norm.get("task_name") or task_norm.get("name") or "").lower()
+                        summary = (entry.get("summary") or "").lower()
+                        emp_name = employee_display.lower()
+                        
+                        if (
+                            search_lower not in task_name
+                            and search_lower not in summary
+                            and search_lower not in emp_name
+                        ):
+                            continue
 
                     report_entry = {
                         "task_id": task_norm["id"],
