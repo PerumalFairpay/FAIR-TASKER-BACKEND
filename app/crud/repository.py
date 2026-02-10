@@ -2619,7 +2619,15 @@ class Repository:
             
             result = await self.payslips.insert_one(payslip_data)
             payslip_data["id"] = str(result.inserted_id)
-            return normalize(payslip_data)
+             
+            emp = await self.employees.find_one({"_id": ObjectId(payslip_data["employee_id"])})
+            payslip_norm = normalize(payslip_data)
+            if emp:
+                payslip_norm["employee_name"] = emp.get("name")
+                payslip_norm["employee_email"] = emp.get("email")
+                payslip_norm["employee_mobile"] = emp.get("mobile")
+            
+            return payslip_norm
         except Exception as e:
             raise e
 
