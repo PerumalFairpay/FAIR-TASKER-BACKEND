@@ -44,7 +44,16 @@ async def create_employee(
     offboarding_checklist: Optional[str] = Form(None), # JSON String
     resignation_date: Optional[str] = Form(None),
     last_working_day: Optional[str] = Form(None),
-    exit_interview_notes: Optional[str] = Form(None) 
+    exit_interview_notes: Optional[str] = Form(None),
+
+    # Bank Details
+    account_name: Optional[str] = Form(None),
+    bank_name: Optional[str] = Form(None),
+    account_number: Optional[str] = Form(None),
+    ifsc_code: Optional[str] = Form(None),
+    pf_account_number: Optional[str] = Form(None),
+    esic_number: Optional[str] = Form(None),
+    pan_number: Optional[str] = Form(None)
 ):
     try:
         profile_pic_path = None
@@ -96,7 +105,14 @@ async def create_employee(
             offboarding_checklist=json.loads(offboarding_checklist) if offboarding_checklist else [],
             resignation_date=resignation_date,
             last_working_day=last_working_day,
-            exit_interview_notes=exit_interview_notes
+            exit_interview_notes=exit_interview_notes,
+            account_name=account_name,
+            bank_name=bank_name,
+            account_number=account_number,
+            ifsc_code=ifsc_code,
+            pf_account_number=pf_account_number,
+            esic_number=esic_number,
+            pan_number=pan_number
         )
 
         # Call repository. Note: repo signature change pending. passing profile_pic_path.
@@ -202,7 +218,16 @@ async def update_employee(
     offboarding_checklist: Optional[str] = Form(None), # JSON String
     resignation_date: Optional[str] = Form(None),
     last_working_day: Optional[str] = Form(None),
-    exit_interview_notes: Optional[str] = Form(None) 
+    exit_interview_notes: Optional[str] = Form(None),
+
+    # Bank Details
+    account_name: Optional[str] = Form(None),
+    bank_name: Optional[str] = Form(None),
+    account_number: Optional[str] = Form(None),
+    ifsc_code: Optional[str] = Form(None),
+    pf_account_number: Optional[str] = Form(None),
+    esic_number: Optional[str] = Form(None),
+    pan_number: Optional[str] = Form(None)
 ):
     try:
         profile_pic_path = None
@@ -257,7 +282,14 @@ async def update_employee(
             offboarding_checklist=json.loads(offboarding_checklist) if offboarding_checklist else None,
             resignation_date=resignation_date,
             last_working_day=last_working_day,
-            exit_interview_notes=exit_interview_notes
+            exit_interview_notes=exit_interview_notes,
+            account_name=account_name,
+            bank_name=bank_name,
+            account_number=account_number,
+            ifsc_code=ifsc_code,
+            pf_account_number=pf_account_number,
+            esic_number=esic_number,
+            pan_number=pan_number
         )
         
         updated_employee = await repo.update_employee(employee_id, update_data, profile_pic_path)
