@@ -258,6 +258,7 @@ class ExpenseCategoryResponse(ExpenseCategoryBase):
 
 class ExpenseBase(BaseModel):
     expense_category_id: str
+    expense_subcategory_id: Optional[str] = None
     amount: float
     purpose: str
     payment_mode: str
@@ -272,6 +273,7 @@ class ExpenseCreate(ExpenseBase):
 
 class ExpenseUpdate(BaseModel):
     expense_category_id: Optional[str] = None
+    expense_subcategory_id: Optional[str] = None
     amount: Optional[float] = None
     purpose: Optional[str] = None
     payment_mode: Optional[str] = None
