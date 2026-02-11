@@ -13,3 +13,5 @@ openpyxl
 apscheduler
 jinja2
 weasyprint
+pypdf
+redis

@@ -13,6 +13,7 @@ router = APIRouter(prefix="/expenses", tags=["expenses"], dependencies=[Depends(
 @router.post("/create", dependencies=[Depends(require_permission("expense:submit"))])
 async def create_expense(
     expense_category_id: str = Form(...),
+    expense_subcategory_id: Optional[str] = Form(None),
     amount: float = Form(...),
     purpose: str = Form(...),
     payment_mode: str = Form(...),
@@ -29,6 +30,7 @@ async def create_expense(
 
         expense_data = ExpenseCreate(
             expense_category_id=expense_category_id,
+            expense_subcategory_id=expense_subcategory_id,
             amount=amount,
             purpose=purpose,
             payment_mode=payment_mode,
@@ -84,6 +86,7 @@ async def get_expense(expense_id: str):
 async def update_expense(
     expense_id: str,
     expense_category_id: Optional[str] = Form(None),
+    expense_subcategory_id: Optional[str] = Form(None),
     amount: Optional[float] = Form(None),
     purpose: Optional[str] = Form(None),
     payment_mode: Optional[str] = Form(None),
@@ -100,6 +103,7 @@ async def update_expense(
 
         expense_update_data = ExpenseUpdate(
             expense_category_id=expense_category_id,
+            expense_subcategory_id=expense_subcategory_id,
             amount=amount,
             purpose=purpose,
             payment_mode=payment_mode,
@@ -126,8 +130,6 @@ async def update_expense(
 @router.delete("/delete/{expense_id}", dependencies=[Depends(require_permission("expense:submit"))])
 async def delete_expense(expense_id: str):
     try:
-        # Check if exists to maybe delete file?
-        # Skipping file deletion for now to keep it simple unless requested, or if save_file/delete_file logic is robust.
         success = await repo.delete_expense(expense_id)
         if not success:
             return JSONResponse(

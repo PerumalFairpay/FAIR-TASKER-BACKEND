@@ -30,10 +30,12 @@ from app.routes import (
     checklist_templates,
     settings,
     nda,
+    payslip,
 )
 
 from app.jobs.scheduler import init_scheduler, shutdown_scheduler
 import logging
+from app.cookies.cookies import get_manager
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +52,8 @@ app = FastAPI(
 async def startup_event():
     """Initialize background jobs on application startup"""
     try:
+        manager = get_manager()
+        await manager.init_redis()
         logger.info("Application starting up...")
         init_scheduler()
         logger.info("Background scheduler initialized successfully")
@@ -62,6 +66,8 @@ async def startup_event():
 async def shutdown_event():
     """Gracefully shutdown background jobs"""
     try:
+        manager = get_manager()
+        await manager.close_redis()
         logger.info("Application shutting down...")
         shutdown_scheduler()
         logger.info("Background scheduler stopped successfully")
@@ -112,6 +118,7 @@ api_router.include_router(profile.router)
 api_router.include_router(checklist_templates.router)
 api_router.include_router(settings.router)
 api_router.include_router(nda.router)
+api_router.include_router(payslip.router)
 
 
 app.include_router(api_router, prefix="/api")

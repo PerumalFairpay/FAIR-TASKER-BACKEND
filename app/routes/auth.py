@@ -32,14 +32,25 @@ async def login(user: UserLogin, response: Response):
         secure=False,  # Set to True in production with HTTPS
     )
 
+    # Fetch employee record for ID mapping
+    business_id = user_record.get("employee_id")
+    db_employee_id = None
+    employee_no_id = business_id
+    
+    if business_id:
+        employee = await employees_collection.find_one({"employee_no_id": business_id})
+        if employee:
+            db_employee_id = str(employee["_id"])
+            employee_no_id = employee.get("employee_no_id")
+
     return {
         "message": "Login successful",
         "success": True,
         "token": token,
         "data": {
             "id": str(user_record["_id"]),
-            "employee_id": user_record.get("employee_id"),
-            "attendance_id": user_record.get("attendance_id"),
+            "employee_id": db_employee_id,
+            "employee_no_id": employee_no_id,
             "name": user_record.get("name"),
             "email": user_record.get("email"),
             "mobile": user_record.get("mobile"),
@@ -59,13 +70,20 @@ async def logout(response: Response):
 async def get_me(current_user: dict = Depends(get_current_user)):
     current_user.pop("hashed_password", None)
 
-    # Fetch profile picture if linked to an employee
+    # Fetch profile picture and map IDs if linked to an employee
     if "employee_id" in current_user and current_user["employee_id"]:
+        # current_user["employee_id"] is the business ID here from the user record
+        business_id = current_user["employee_id"]
         employee = await employees_collection.find_one(
-            {"employee_no_id": current_user["employee_id"]}
+            {"employee_no_id": business_id}
         )
         if employee:
             current_user["profile_picture"] = employee.get("profile_picture")
             current_user["work_mode"] = employee.get("work_mode")
+            # Swap: employee_id becomes DB ID, employee_no_id becomes business ID
+            current_user["employee_id"] = str(employee["_id"])
+            current_user["employee_no_id"] = employee.get("employee_no_id")
+            # Remove legacy field
+            current_user.pop("attendance_id", None)
 
     return {"message": "Success", "success": True, "data": current_user}

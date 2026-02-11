@@ -40,6 +40,7 @@ from app.models import (
     SystemConfigurationUpdate,
     NDARequestCreate,
     NDARequestUpdate,
+    PayslipCreate,
 )
 from app.utils import normalize, get_password_hash
 from bson import ObjectId
@@ -74,6 +75,7 @@ class Repository:
         self.attendance = self.db["attendance"]
         self.system_configurations = self.db["system_configurations"]
         self.nda_requests = self.db["nda_requests"]
+        self.payslips = self.db["payslips"]
 
     async def create_employee(
         self, employee: EmployeeCreate, profile_picture_path: str = None
@@ -544,22 +546,52 @@ class Repository:
             expense_data["created_at"] = datetime.utcnow()
             result = await self.expenses.insert_one(expense_data)
             expense_data["id"] = str(result.inserted_id)
-            return normalize(expense_data)
+            return await self.get_expense(expense_data["id"])
         except Exception as e:
             raise e
 
     async def get_expenses(self) -> List[dict]:
         try:
             expenses = await self.expenses.find().to_list(length=None)
-            # Normalize and potentially fetch category name if needed, but basic normalize for now
-            return [normalize(exp) for exp in expenses]
+            categories = await self.expense_categories.find().to_list(length=None)
+            category_map = {str(cat["_id"]): cat["name"] for cat in categories}
+
+            result = []
+            for exp in expenses:
+                exp_norm = normalize(exp)
+                exp_norm["category_name"] = category_map.get(
+                    exp_norm.get("expense_category_id"), "Unknown"
+                )
+                exp_norm["subcategory_name"] = category_map.get(
+                    exp_norm.get("expense_subcategory_id")
+                )
+                result.append(exp_norm)
+            return result
         except Exception as e:
             raise e
 
     async def get_expense(self, expense_id: str) -> dict:
         try:
             expense = await self.expenses.find_one({"_id": ObjectId(expense_id)})
-            return normalize(expense)
+            if not expense:
+                return None
+
+            exp_norm = normalize(expense)
+
+            # Fetch category names
+            if exp_norm.get("expense_category_id"):
+                cat = await self.expense_categories.find_one(
+                    {"_id": ObjectId(exp_norm["expense_category_id"])}
+                )
+                exp_norm["category_name"] = cat["name"] if cat else "Unknown"
+
+            if exp_norm.get("expense_subcategory_id"):
+                subcat = await self.expense_categories.find_one(
+                    {"_id": ObjectId(exp_norm["expense_subcategory_id"])}
+                )
+                exp_norm["subcategory_name"] = subcat["name"] if subcat else None
+
+            return exp_norm
         except Exception as e:
             raise e
 
@@ -1751,6 +1783,7 @@ class Repository:
         assigned_to: Optional[str] = None,
         date: Optional[str] = None,
         priority: Optional[str] = None,
+        search: Optional[str] = None,
     ) -> List[dict]:
         try:
             query = {"eod_history": {"$exists": True, "$not": {"$size": 0}}}
@@ -1791,6 +1824,20 @@ class Repository:
                 for entry in task_norm.get("eod_history", []):
                     if date and entry.get("date") != date:
                         continue
+                    
+                    # Search Filtering
+                    if search:
+                        search_lower = search.lower()
+                        task_name = (task_norm.get("task_name") or task_norm.get("name") or "").lower()
+                        summary = (entry.get("summary") or "").lower()
+                        emp_name = employee_display.lower()
+                        
+                        if (
+                            search_lower not in task_name
+                            and search_lower not in summary
+                            and search_lower not in emp_name
+                        ):
+                            continue
 
                     report_entry = {
                         "task_id": task_norm["id"],
@@ -2603,6 +2650,127 @@ class Repository:
         try:
             result = await self.nda_requests.delete_one({"_id": ObjectId(nda_id)})
             return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+
+    # Payslip CRUD
+    async def create_payslip(self, payslip_data: dict, file_path: str) -> dict:
+        try:
+            # payslip_data includes month, year, earnings, deductions, net_pay, employee_id
+            payslip_data["file_path"] = file_path
+            payslip_data["generated_at"] = datetime.utcnow()
+            payslip_data["status"] = "Generated"
+            
+            result = await self.payslips.insert_one(payslip_data)
+            payslip_data["id"] = str(result.inserted_id)
+             
+            emp = await self.employees.find_one({"_id": ObjectId(payslip_data["employee_id"])})
+            payslip_norm = normalize(payslip_data)
+            if emp:
+                payslip_norm["employee_name"] = emp.get("name")
+                payslip_norm["employee_email"] = emp.get("email")
+                payslip_norm["employee_mobile"] = emp.get("mobile")
+            
+            return payslip_norm
+        except Exception as e:
+            raise e
+
+    async def get_payslips(
+        self,
+        page: int = 1,
+        limit: int = 10,
+        employee_id: Optional[str] = None,
+        month: Optional[str] = None,
+        year: Optional[str] = None,
+        search: Optional[str] = None,
+    ) -> (List[dict], int):
+        try:
+            query = {}
+            if employee_id:
+                query["employee_id"] = employee_id
+            if month and month != "All":
+                query["month"] = month
+            if year and year != "All":
+                query["year"] = int(year)
+
+            if search:
+                regex_pattern = {"$regex": search, "$options": "i"}
+                matched_employees = await self.employees.find({
+                    "$or": [
+                        {"name": regex_pattern},
+                        {"employee_no_id": regex_pattern},
+                        {"email": regex_pattern}
+                    ]
+                }, {"_id": 1}).to_list(length=None)
+                
+                matched_ids = [str(emp["_id"]) for emp in matched_employees]
+                
+                if employee_id:
+                    # If specific employee_id is already filtered, ensure it matches search
+                    if employee_id in matched_ids:
+                        query["employee_id"] = employee_id
+                    else:
+                        # No intersection, return empty
+                        return [], 0
+                else:
+                    query["employee_id"] = {"$in": matched_ids}
+
+            skip = (page - 1) * limit
+            total_items = await self.payslips.count_documents(query)
+            
+            payslips = (
+                await self.payslips.find(query)
+                .sort("generated_at", -1)
+                .skip(skip)
+                .limit(limit)
+                .to_list(length=limit)
+            )
+
+            results = []
+            for p in payslips:
+                p_norm = normalize(p)
+                # Fetch employee details
+                emp = await self.employees.find_one({"_id": ObjectId(p_norm["employee_id"])})
+                if emp:
+                    p_norm["employee_name"] = emp.get("name")
+                    p_norm["employee_email"] = emp.get("email")
+                    p_norm["employee_mobile"] = emp.get("mobile")
+                results.append(p_norm)
+            
+            return results, total_items
+        except Exception as e:
+            raise e
+
+    async def get_payslip(self, payslip_id: str) -> dict:
+        try:
+            payslip = await self.payslips.find_one({"_id": ObjectId(payslip_id)})
+            return normalize(payslip)
+        except Exception as e:
+            raise e
+
+    async def update_payslip(self, payslip_id: str, update_data: dict) -> dict:
+        try:
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.payslips.update_one(
+                    {"_id": ObjectId(payslip_id)},
+                    {"$set": update_data}
+                )
+            
+            updated_payslip = await self.payslips.find_one({"_id": ObjectId(payslip_id)})
+            if not updated_payslip:
+                return None
+                
+            # Fetch employee details
+            emp = await self.employees.find_one({"_id": ObjectId(updated_payslip["employee_id"])})
+            payslip_norm = normalize(updated_payslip)
+            if emp:
+                payslip_norm["employee_name"] = emp.get("name")
+                payslip_norm["employee_email"] = emp.get("email")
+                payslip_norm["employee_mobile"] = emp.get("mobile")
+            
+            return payslip_norm
         except Exception as e:
             raise e
 

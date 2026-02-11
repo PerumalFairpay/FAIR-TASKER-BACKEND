@@ -172,6 +172,13 @@ class EmployeeBase(BaseModel):
     last_working_day: Optional[str] = None
     exit_interview_notes: Optional[str] = None
     address: Optional[str] = None
+    account_name: Optional[str] = None
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    ifsc_code: Optional[str] = None
+    pf_account_number: Optional[str] = None
+    esic_number: Optional[str] = None
+    pan_number: Optional[str] = None
 
 
 class EmployeeCreate(EmployeeBase):
@@ -209,6 +216,13 @@ class EmployeeUpdate(BaseModel):
     last_working_day: Optional[str] = None
     exit_interview_notes: Optional[str] = None
     address: Optional[str] = None
+    account_name: Optional[str] = None
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    ifsc_code: Optional[str] = None
+    pf_account_number: Optional[str] = None
+    esic_number: Optional[str] = None
+    pan_number: Optional[str] = None
 
 
 class EmployeeResponse(EmployeeBase):
@@ -244,6 +258,7 @@ class ExpenseCategoryResponse(ExpenseCategoryBase):
 
 class ExpenseBase(BaseModel):
     expense_category_id: str
+    expense_subcategory_id: Optional[str] = None
     amount: float
     purpose: str
     payment_mode: str
@@ -258,6 +273,7 @@ class ExpenseCreate(ExpenseBase):
 
 class ExpenseUpdate(BaseModel):
     expense_category_id: Optional[str] = None
+    expense_subcategory_id: Optional[str] = None
     amount: Optional[float] = None
     purpose: Optional[str] = None
     payment_mode: Optional[str] = None
@@ -268,6 +284,8 @@ class ExpenseUpdate(BaseModel):
 
 class ExpenseResponse(ExpenseBase):
     id: str
+    category_name: Optional[str] = None
+    subcategory_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -412,7 +430,6 @@ class HolidayBase(BaseModel):
     date: str  # Format: "YYYY-MM-DD"
     description: Optional[str] = None
     holiday_type: str = "Public"  # e.g., Public, Mandatory, Optional/Restricted
-    is_restricted: bool = False  # True if it's an optional/restricted holiday
     status: str = "Active"  # Active or Inactive
 
 
@@ -425,7 +442,6 @@ class HolidayUpdate(BaseModel):
     date: Optional[str] = None
     description: Optional[str] = None
     holiday_type: Optional[str] = None
-    is_restricted: Optional[bool] = None
     status: Optional[str] = None
 
 
@@ -870,3 +886,38 @@ class NDASignatureRequest(BaseModel):
 
 class NDARegenerateRequest(BaseModel):
     expires_in_hours: Optional[int] = 1
+
+
+class PayslipBase(BaseModel):
+    employee_id: str
+    month: str
+    year: int
+    earnings: dict
+    deductions: dict
+    net_pay: float
+    status: str = "Generated"  # Generated, Viewed
+    file_path: Optional[str] = None
+    generated_at: Optional[datetime] = None
+
+
+class PayslipCreate(PayslipBase):
+    pass
+
+
+class PayslipUpdate(BaseModel):
+    month: Optional[str] = None
+    year: Optional[int] = None
+    earnings: Optional[dict] = None
+    deductions: Optional[dict] = None
+    net_pay: Optional[float] = None
+
+
+class PayslipResponse(PayslipBase):
+    id: str
+    employee_name: Optional[str] = None
+    employee_email: Optional[str] = None
+    employee_mobile: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
