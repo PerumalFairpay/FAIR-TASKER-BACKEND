@@ -35,6 +35,7 @@ from app.routes import (
 
 from app.jobs.scheduler import init_scheduler, shutdown_scheduler
 import logging
+from app.cookies.cookies import get_manager
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,8 @@ app = FastAPI(
 async def startup_event():
     """Initialize background jobs on application startup"""
     try:
+        manager = get_manager()
+        await manager.init_redis()
         logger.info("Application starting up...")
         init_scheduler()
         logger.info("Background scheduler initialized successfully")
@@ -63,6 +66,8 @@ async def startup_event():
 async def shutdown_event():
     """Gracefully shutdown background jobs"""
     try:
+        manager = get_manager()
+        await manager.close_redis()
         logger.info("Application shutting down...")
         shutdown_scheduler()
         logger.info("Background scheduler stopped successfully")
