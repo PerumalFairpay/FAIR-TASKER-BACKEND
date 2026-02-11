@@ -323,6 +323,7 @@ class DocumentCategoryResponse(DocumentCategoryBase):
 class DocumentBase(BaseModel):
     name: str
     document_category_id: str
+    document_subcategory_id: Optional[str] = None
     description: Optional[str] = None
     expiry_date: Optional[str] = None
     status: Optional[str] = "Active"
@@ -337,6 +338,7 @@ class DocumentCreate(DocumentBase):
 class DocumentUpdate(BaseModel):
     name: Optional[str] = None
     document_category_id: Optional[str] = None
+    document_subcategory_id: Optional[str] = None
     description: Optional[str] = None
     expiry_date: Optional[str] = None
     status: Optional[str] = None
@@ -484,6 +486,7 @@ class AssetCategoryResponse(AssetCategoryBase):
 class AssetBase(BaseModel):
     asset_name: str
     asset_category_id: str
+    asset_subcategory_id: Optional[str] = None
     manufacturer: Optional[str] = None
     supplier: Optional[str] = None
     purchase_from: Optional[str] = None
@@ -507,6 +510,7 @@ class AssetCreate(AssetBase):
 class AssetUpdate(BaseModel):
     asset_name: Optional[str] = None
     asset_category_id: Optional[str] = None
+    asset_subcategory_id: Optional[str] = None
     manufacturer: Optional[str] = None
     supplier: Optional[str] = None
     purchase_from: Optional[str] = None
