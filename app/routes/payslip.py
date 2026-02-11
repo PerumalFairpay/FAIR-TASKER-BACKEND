@@ -120,14 +120,26 @@ async def generate_payslip(payslip: PayslipCreate):
         except Exception:
             paid_days = 30 # Fallback
         
-        password = ""
-        if "mobile" in employee and employee["mobile"]:
-            password = employee["mobile"][-4:]
-        else:
-            password = "0000" # Fallback
-            
-        if "mobile" in employee:
-            password = employee["mobile"]
+        # Password Strategy: DOB (DDMMYYYY) is REQUIRED for payslip security
+        if "date_of_birth" not in employee or not employee["date_of_birth"]:
+            return error_response(
+                message="Employee Date of Birth is required to generate payslip. Please update employee profile.",
+                status_code=400
+            )
+        
+        try:
+            # Convert date_of_birth (YYYY-MM-DD) to DDMMYYYY format
+            dob = employee["date_of_birth"]
+            if "-" in dob:  # Format: YYYY-MM-DD
+                parts = dob.split("-")
+                password = f"{parts[2]}{parts[1]}{parts[0]}"  # DDMMYYYY
+            else:
+                password = dob.replace("/", "").replace("-", "")  # Remove separators
+        except Exception as e:
+            return error_response(
+                message=f"Invalid Date of Birth format. Please update employee profile with valid DOB (YYYY-MM-DD).",
+                status_code=400
+            )
             
         
         # 3. Render HTML
@@ -259,7 +271,25 @@ async def view_payslip_admin(payslip_id: str, current_user: dict = Depends(get_c
              raise HTTPException(status_code=404, detail="PDF file not found")
         
         # 3. Decrypt the PDF
-        password = employee.get("mobile", "0000")
+        # Use same password strategy as generation - DOB is REQUIRED
+        if "date_of_birth" not in employee or not employee["date_of_birth"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Employee Date of Birth is required to decrypt payslip."
+            )
+        
+        try:
+            dob = employee["date_of_birth"]
+            if "-" in dob:  # Format: YYYY-MM-DD
+                parts = dob.split("-")
+                password = f"{parts[2]}{parts[1]}{parts[0]}"  # DDMMYYYY
+            else:
+                password = dob.replace("/", "").replace("-", "")  # Remove separators
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid Date of Birth format for decryption."
+            )
         decrypted_pdf = decrypt_pdf(file_data["Body"].read(), password)
         
         filename = f"Payslip_{employee.get('name', 'Emp').replace(' ', '_')}_{payslip['month']}_{payslip['year']}.pdf"
@@ -331,14 +361,27 @@ async def update_payslip(payslip_id: str, payslip: PayslipUpdate):
         except Exception:
             paid_days = 30
         
-        password = ""
-        if "mobile" in employee and employee["mobile"]:
-            password = employee["mobile"][-4:]
-        else:
-             password = "0000"
-             
-        if "mobile" in employee:
-             password = employee["mobile"]
+        # Password Strategy: DOB (DDMMYYYY) is REQUIRED for payslip security
+        if "date_of_birth" not in employee or not employee["date_of_birth"]:
+            return error_response(
+                message="Employee Date of Birth is required to update payslip. Please update employee profile.",
+                status_code=400
+            )
+        
+        try:
+            # Convert date_of_birth (YYYY-MM-DD) to DDMMYYYY format
+            dob = employee["date_of_birth"]
+            if "-" in dob:  # Format: YYYY-MM-DD
+                parts = dob.split("-")
+                password = f"{parts[2]}{parts[1]}{parts[0]}"  # DDMMYYYY
+            else:
+                password = dob.replace("/", "").replace("-", "")  # Remove separators
+        except Exception as e:
+            return error_response(
+                message=f"Invalid Date of Birth format. Please update employee profile with valid DOB (YYYY-MM-DD).",
+                status_code=400
+            )
+
 
         # 6. Render HTML and Generate PDF
         template_data = {

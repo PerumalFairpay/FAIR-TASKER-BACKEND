@@ -155,7 +155,7 @@ class EmployeeBase(BaseModel):
     email: EmailStr
     personal_email: Optional[EmailStr] = None
     mobile: str
-    date_of_birth: Optional[str] = None
+    date_of_birth: str  
     gender: Optional[str] = None
     emergency_contact_name: Optional[str] = None
     emergency_contact_number: Optional[str] = None
