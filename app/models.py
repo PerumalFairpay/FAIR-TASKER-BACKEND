@@ -54,8 +54,14 @@ class RoleUpdate(BaseModel):
     permissions: Optional[List[str]] = None
 
 
+class PermissionShortRef(BaseModel):
+    id: str
+    name: str
+
+
 class RoleResponse(RoleBase):
     id: str
+    permissions: List[PermissionShortRef]
 
     class Config:
         from_attributes = True
