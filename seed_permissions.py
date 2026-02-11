@@ -1,5 +1,5 @@
 import asyncio
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 import os
 from dotenv import load_dotenv
 
@@ -52,7 +52,7 @@ permissions_data = [
 ]
 
 async def seed_permissions():
-    client = AsyncIOMotorClient(DATABASE_URL)
+    client = AsyncMongoClient(DATABASE_URL)
     db = client[DATABASE_NAME]
     collection = db["permissions"]
     
@@ -116,7 +116,7 @@ async def seed_permissions():
         print(f"Role checked/seeded: {role['name']}")
             
     print("\nAll seeding completed successfully!")
-    client.close()
+    await client.close()
 
 if __name__ == "__main__":
     asyncio.run(seed_permissions())

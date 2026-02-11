@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-motor
+pymongo[srv]
 pydantic[email]
 passlib[bcrypt]
 bcrypt==3.2.0
