@@ -61,6 +61,21 @@ async def create_project(
             content={"message": f"Failed to create project: {str(e)}", "success": False}
         )
 
+
+@router.get("/list", dependencies=[Depends(require_permission("project:view"))])
+async def get_projects_summary():
+    try:
+        projects = await repo.get_projects_summary()
+        return JSONResponse(
+            status_code=200,
+            content={"message": "Projects summary fetched successfully", "success": True, "data": projects}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"Failed to fetch projects summary: {str(e)}", "success": False}
+        )
+
 @router.get("/all", dependencies=[Depends(require_permission("project:view"))])
 async def get_projects():
     try:

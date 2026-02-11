@@ -839,6 +839,19 @@ class Repository:
         except Exception as e:
             raise e
 
+
+    async def get_projects_summary(self) -> List[dict]:
+        try:
+            projection = {
+                "name": 1,
+                "status": 1,
+                "logo": 1
+            }
+            projects = await self.projects.find({}, projection).to_list(length=None)
+            return [normalize(p) for p in projects]
+        except Exception as e:
+            raise e
+
     async def get_project(self, project_id: str) -> dict:
         try:
             project = await self.projects.find_one({"_id": ObjectId(project_id)})
