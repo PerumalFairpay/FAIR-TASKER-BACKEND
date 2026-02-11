@@ -62,7 +62,7 @@ async def create_project(
         )
 
 
-@router.get("/list", dependencies=[Depends(require_permission("project:view"))])
+@router.get("/project_summary", dependencies=[Depends(require_permission("project:view"))])
 async def get_projects_summary():
     try:
         projects = await repo.get_projects_summary()
