@@ -546,22 +546,52 @@ class Repository:
             expense_data["created_at"] = datetime.utcnow()
             result = await self.expenses.insert_one(expense_data)
             expense_data["id"] = str(result.inserted_id)
-            return normalize(expense_data)
+            return await self.get_expense(expense_data["id"])
         except Exception as e:
             raise e
 
     async def get_expenses(self) -> List[dict]:
         try:
             expenses = await self.expenses.find().to_list(length=None)
-            # Normalize and potentially fetch category name if needed, but basic normalize for now
-            return [normalize(exp) for exp in expenses]
+            categories = await self.expense_categories.find().to_list(length=None)
+            category_map = {str(cat["_id"]): cat["name"] for cat in categories}
+
+            result = []
+            for exp in expenses:
+                exp_norm = normalize(exp)
+                exp_norm["category_name"] = category_map.get(
+                    exp_norm.get("expense_category_id"), "Unknown"
+                )
+                exp_norm["subcategory_name"] = category_map.get(
+                    exp_norm.get("expense_subcategory_id")
+                )
+                result.append(exp_norm)
+            return result
         except Exception as e:
             raise e
 
     async def get_expense(self, expense_id: str) -> dict:
         try:
             expense = await self.expenses.find_one({"_id": ObjectId(expense_id)})
-            return normalize(expense)
+            if not expense:
+                return None
+
+            exp_norm = normalize(expense)
+
+            # Fetch category names
+            if exp_norm.get("expense_category_id"):
+                cat = await self.expense_categories.find_one(
+                    {"_id": ObjectId(exp_norm["expense_category_id"])}
+                )
+                exp_norm["category_name"] = cat["name"] if cat else "Unknown"
+
+            if exp_norm.get("expense_subcategory_id"):
+                subcat = await self.expense_categories.find_one(
+                    {"_id": ObjectId(exp_norm["expense_subcategory_id"])}
+                )
+                exp_norm["subcategory_name"] = subcat["name"] if subcat else None
+
+            return exp_norm
         except Exception as e:
             raise e
 

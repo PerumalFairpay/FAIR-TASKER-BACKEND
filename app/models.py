@@ -284,6 +284,8 @@ class ExpenseUpdate(BaseModel):
 
 class ExpenseResponse(ExpenseBase):
     id: str
+    category_name: Optional[str] = None
+    subcategory_name: Optional[str] = None
 
     class Config:
         from_attributes = True
