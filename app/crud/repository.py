@@ -2326,19 +2326,44 @@ class Repository:
                     {"$group": {"_id": "$status", "count": {"$sum": 1}}},
                 ]
                 cursor = await self.attendance.aggregate(pipeline)
-                stats = {
-                    "present": 0,
-                    "absent": 0,
-                    "leave": 0,
-                    "holiday": 0,
-                    "late": 0,
-                    "overtime": 0,
-                }
+                
+                # Count each status separately
+                on_time = 0  # "Present" status
+                late = 0     # "Late" status
+                absent = 0
+                leave = 0
+                holiday = 0
+                overtime = 0
+                
                 async for doc in cursor:
                     status_key = str(doc["_id"]).lower()
-                    if status_key in stats:
-                        stats[status_key] = doc["count"]
-                return stats
+                    count = doc["count"]
+                    
+                    if status_key == "present":
+                        on_time = count
+                    elif status_key == "late":
+                        late = count
+                    elif status_key == "absent":
+                        absent = count
+                    elif status_key == "leave":
+                        leave = count
+                    elif status_key == "holiday":
+                        holiday = count
+                    elif status_key == "overtime":
+                        overtime = count
+                
+                # Calculate total_present as sum of on_time + late + overtime
+                total_present = on_time + late + overtime
+                
+                return {
+                    "total_present": total_present,
+                    "on_time": on_time,
+                    "late": late,
+                    "absent": absent,
+                    "leave": leave,
+                    "holiday": holiday,
+                    "overtime": overtime,
+                }
 
             # Run aggregations
             # Today: Exact match on date, not range
