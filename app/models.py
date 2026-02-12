@@ -163,6 +163,7 @@ class EmployeeBase(BaseModel):
     marital_status: Optional[str] = None
     employee_type: Optional[str] = None
     employee_no_id: str
+    biometric_id: Optional[str] = None
     department: Optional[str] = None
     designation: Optional[str] = None
     role: Optional[str] = None
@@ -207,6 +208,7 @@ class EmployeeUpdate(BaseModel):
     marital_status: Optional[str] = None
     employee_type: Optional[str] = None
     employee_no_id: Optional[str] = None
+    biometric_id: Optional[str] = None
     department: Optional[str] = None
     designation: Optional[str] = None
     role: Optional[str] = None

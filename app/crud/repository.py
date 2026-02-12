@@ -251,6 +251,7 @@ class Repository:
                 "name": 1,
                 "email": 1,
                 "status": 1,
+                "biometric_id": 1,
             }
             employees = await self.employees.find({}, projection).to_list(length=None)
 
@@ -2324,7 +2325,7 @@ class Repository:
                     {"$match": match_query},
                     {"$group": {"_id": "$status", "count": {"$sum": 1}}},
                 ]
-                cursor = self.attendance.aggregate(pipeline)
+                cursor = await self.attendance.aggregate(pipeline)
                 stats = {
                     "present": 0,
                     "absent": 0,
@@ -2422,19 +2423,17 @@ class Repository:
                     date_str = log_time.strftime("%Y-%m-%d")
                     time_str = log_time.isoformat()
 
+                    # Strict Match: Look for employee with this biometric_id
+                    # We treat log.user_id as the biometric_id (e.g. "101")
+                    # It might be coming as int or str, so we try both strict string match or conversion if needed.
+                    # Since we store biometric_id as String in DB (based on model), we cast log.user_id to string.
+                    
+                    bio_id_str = str(log.user_id).strip()
+                    
                     employee = await self.employees.find_one(
-                        {"employee_no_id": str(log.user_id)}
+                        {"biometric_id": bio_id_str}
                     )
-                    if not employee:
-                        employee = await self.employees.find_one(
-                            {"attendance_id": str(log.user_id)}
-                        )
-
-                    if not employee:
-                        employee = await self.employees.find_one(
-                            {"attendance_id": int(log.user_id)}
-                        )
-
+                    
                     if not employee:
                         continue
 

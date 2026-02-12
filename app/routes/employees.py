@@ -53,7 +53,8 @@ async def create_employee(
     ifsc_code: Optional[str] = Form(None),
     pf_account_number: Optional[str] = Form(None),
     esic_number: Optional[str] = Form(None),
-    pan_number: Optional[str] = Form(None)
+    pan_number: Optional[str] = Form(None),
+    biometric_id: Optional[str] = Form(None)
 ):
     try:
         profile_pic_path = None
@@ -112,7 +113,8 @@ async def create_employee(
             ifsc_code=ifsc_code,
             pf_account_number=pf_account_number,
             esic_number=esic_number,
-            pan_number=pan_number
+            pan_number=pan_number,
+            biometric_id=biometric_id
         )
 
         # Call repository. Note: repo signature change pending. passing profile_pic_path.
@@ -227,7 +229,8 @@ async def update_employee(
     ifsc_code: Optional[str] = Form(None),
     pf_account_number: Optional[str] = Form(None),
     esic_number: Optional[str] = Form(None),
-    pan_number: Optional[str] = Form(None)
+    pan_number: Optional[str] = Form(None),
+    biometric_id: Optional[str] = Form(None)
 ):
     try:
         profile_pic_path = None
@@ -289,7 +292,8 @@ async def update_employee(
             ifsc_code=ifsc_code,
             pf_account_number=pf_account_number,
             esic_number=esic_number,
-            pan_number=pan_number
+            pan_number=pan_number,
+            biometric_id=biometric_id
         )
         
         updated_employee = await repo.update_employee(employee_id, update_data, profile_pic_path)
