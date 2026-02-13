@@ -404,6 +404,8 @@ class ProjectBase(BaseModel):
     budget: Optional[float] = 0.0
     currency: Optional[str] = "USD"
     tags: List[str] = []
+    technical_stacks: List[str] = []
+    third_party_vendors: List[str] = []
     logo: Optional[str] = None
 
 
@@ -425,6 +427,8 @@ class ProjectUpdate(BaseModel):
     budget: Optional[float] = None
     currency: Optional[str] = None
     tags: Optional[List[str]] = None
+    technical_stacks: Optional[List[str]] = None
+    third_party_vendors: Optional[List[str]] = None
     logo: Optional[str] = None
 
 

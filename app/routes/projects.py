@@ -25,6 +25,8 @@ async def create_project(
     budget: Optional[float] = Form(0.0),
     currency: Optional[str] = Form("USD"),
     tags: Optional[str] = Form("[]"),
+    technical_stacks: Optional[str] = Form("[]"),
+    third_party_vendors: Optional[str] = Form("[]"),
     logo: Optional[UploadFile] = File(None)
 ):
     try:
@@ -47,6 +49,8 @@ async def create_project(
             budget=budget,
             currency=currency,
             tags=json.loads(tags),
+            technical_stacks=json.loads(technical_stacks),
+            third_party_vendors=json.loads(third_party_vendors),
             logo=logo_path
         )
 
@@ -125,6 +129,8 @@ async def update_project(
     budget: Optional[float] = Form(None),
     currency: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
+    technical_stacks: Optional[str] = Form(None),
+    third_party_vendors: Optional[str] = Form(None),
     logo: Optional[UploadFile] = File(None)
 ):
     try:
@@ -147,6 +153,8 @@ async def update_project(
             budget=budget,
             currency=currency,
             tags=json.loads(tags) if tags else None,
+            technical_stacks=json.loads(technical_stacks) if technical_stacks else None,
+            third_party_vendors=json.loads(third_party_vendors) if third_party_vendors else None,
             logo=logo_path
         )
 
