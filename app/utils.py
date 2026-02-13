@@ -36,3 +36,24 @@ def normalize(data):
         return data.isoformat()
     
     return data
+
+def get_employee_basic_details(employee_data: dict) -> dict:
+    """
+    Extracts only the basic details required for listing/attendance views.
+    Filters out sensitive and unnecessary heavy fields.
+    """
+    if not employee_data:
+        return None
+        
+    return {
+        "id": str(employee_data.get("id")) if employee_data.get("id") else str(employee_data.get("_id", "")),
+        "first_name": employee_data.get("first_name", ""),
+        "last_name": employee_data.get("last_name", ""),
+        "name": employee_data.get("name", ""),
+        "email": employee_data.get("email", ""),
+        "designation": employee_data.get("designation"),
+        "department": employee_data.get("department"),
+        "profile_picture": employee_data.get("profile_picture"),
+        "status": employee_data.get("status"),
+        "employee_no_id": employee_data.get("employee_no_id", ""), 
+    }

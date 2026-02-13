@@ -797,9 +797,26 @@ class AttendanceStatusUpdate(BaseModel):
     notes: Optional[str] = None
 
 
+
+class EmployeeBasicDetails(BaseModel):
+    id: str
+    first_name: Optional[str] = ""
+    last_name: Optional[str] = ""
+    name: Optional[str] = ""  # Display name
+    email: Optional[EmailStr] = None
+    designation: Optional[str] = None
+    department: Optional[str] = None
+    profile_picture: Optional[str] = None
+    status: Optional[str] = "Active"
+    employee_no_id: Optional[str] = ""
+
+    class Config:
+        from_attributes = True
+
+
 class AttendanceResponse(AttendanceBase):
     id: str
-    employee_details: Optional[dict] = None
+    employee_details: Optional[EmployeeBasicDetails] = None
 
     class Config:
         from_attributes = True

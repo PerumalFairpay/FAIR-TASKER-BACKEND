@@ -42,7 +42,7 @@ from app.models import (
     NDARequestUpdate,
     PayslipCreate,
 )
-from app.utils import normalize, get_password_hash
+from app.utils import normalize, get_password_hash, get_employee_basic_details
 from bson import ObjectId
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -2268,13 +2268,13 @@ class Repository:
             for r in records:
                 r_norm = normalize(r)
                 emp_details = emp_map.get(r_norm.get("employee_id"))
+                
+                # OPTIMIZATION: Use helper to get only basic details
                 if emp_details:
-                    # Remove sensitive data
-                    if "hashed_password" in emp_details:
-                        del emp_details["hashed_password"]
-                    if "password" in emp_details:
-                        del emp_details["password"]
-                r_norm["employee_details"] = emp_details
+                    r_norm["employee_details"] = get_employee_basic_details(emp_details)
+                else:
+                    r_norm["employee_details"] = None
+                    
                 result.append(r_norm)
 
             # Sort by date and employee name (already sorted by date in DB query, secondary sort in memory if needed but DB sort is better)
