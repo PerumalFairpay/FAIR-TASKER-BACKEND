@@ -67,14 +67,6 @@ settings_data = [
         "group": "Attendance",
         "is_public": False,
     },
-    {
-        "key": "ip_restriction_enabled",
-        "label": "Enable IP Restriction",
-        "value": False,
-        "input_type": "boolean",
-        "group": "Attendance",
-        "is_public": False,
-    },
 ]
 
 

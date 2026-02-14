@@ -1245,13 +1245,20 @@ class Repository:
 
             blog_norm = normalize(blog)
 
-            # Recommendations Logic (like in pilot)
+            # Recommendations Logic
             recommendations = []
+            rec_filters = []
             if blog_norm.get("category"):
+                rec_filters.append({"category": blog_norm["category"]})
+            
+            if blog_norm.get("tags") and isinstance(blog_norm["tags"], list) and len(blog_norm["tags"]) > 0:
+                rec_filters.append({"tags": {"$in": blog_norm["tags"]}})
+
+            if rec_filters:
                 rec_query = {
                     "deleted": False,
-                    "category": blog_norm["category"],
                     "_id": {"$ne": ObjectId(blog_norm["id"])},
+                    "$or": rec_filters
                 }
                 cursor = self.blogs.find(rec_query).sort("created_at", -1).limit(3)
                 recs = await cursor.to_list(length=3)
