@@ -335,6 +335,8 @@ async def get_employee_dashboard_data(employee_id: str):
         "recent_tasks": recent_tasks_list,
         "projects": my_projects,
         "recent_activity": recent_activity,
-        "upcoming_events": upcoming_events
+        "upcoming_events": upcoming_events,
+        "upcoming_holidays": upcoming_events.get("holidays", []),
+        "birthdays": upcoming_events.get("birthdays", [])
     }
     return data
