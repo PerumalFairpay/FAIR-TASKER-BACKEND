@@ -185,6 +185,20 @@ async def get_employee(employee_id: str):
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
+@router.get("/{employee_id}/dashboard-summary", dependencies=[Depends(require_permission("employee:view"))])
+async def get_employee_dashboard_summary(employee_id: str):
+    from app.services.dashboard_service import get_employee_dashboard_data
+    try:
+        data = await get_employee_dashboard_data(employee_id)
+        if not data:
+             return error_response(message="Employee not found", status_code=404)
+        return success_response(
+            message="Employee dashboard summary fetched successfully",
+            data=data
+        )
+    except Exception as e:
+        return error_response(message=str(e), status_code=500)
+
 @router.put("/update/{employee_id}", dependencies=[Depends(require_permission("employee:submit"))])
 async def update_employee(
     employee_id: str,
