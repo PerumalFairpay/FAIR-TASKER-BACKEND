@@ -549,8 +549,15 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             today_str = today_dt.strftime("%Y-%m-%d")
             start_of_week = (today_dt - timedelta(days=today_dt.weekday())).strftime("%Y-%m-%d")
             
+            # Use both IDs to find all records (legacy and new)
+            # The user wants to move to MongoID, so we facilitate that by reading both 
+            # but we should ensure writes use MongoID (handled in repository)
+            emp_ids_to_query = [str(emp_doc["_id"])]
+            if emp_doc.get("employee_no_id"):
+                emp_ids_to_query.append(emp_doc.get("employee_no_id"))
+
             attendance_cursor = repo.attendance.find({
-                "employee_id": str(emp_doc["_id"]),
+                "employee_id": {"$in": emp_ids_to_query},
                 "date": {"$gte": start_of_month}
             })
             month_attendance = await attendance_cursor.to_list(length=None)
@@ -624,7 +631,8 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                     if att_record:
                         # Record Exists
                         status = att_record.get("status", "Present")
-                        if status in ["Present", "Late"]: 
+                        # Handle varied status cases
+                        if status in ["Present", "Late"] or att_record.get("is_late"): 
                             present_days += 1
                         elif status == "Absent": 
                             absent_days += 1
@@ -653,6 +661,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             
             attendance_metrics = {
                 "present_days": present_days,
+                "on_time_days": present_days - late_days,  # Explicitly added
                 "absent_days": absent_days,
                 "late_days": late_days,
                 "holiday_days": len(month_holidays), 

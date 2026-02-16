@@ -1928,13 +1928,27 @@ class Repository:
     # Attendance CRUD
     async def clock_in(self, attendance: AttendanceCreate, employee_id: str) -> dict:
         try:
+            # Resolve to MongoDB _id to ensure consistency
+            target_emp_id = employee_id
+            
+            # Try finding the employee to get stable _id
+            emp = await self.employees.find_one({
+                "$or": [
+                     {"employee_no_id": employee_id},
+                     {"_id": ObjectId(employee_id) if ObjectId.is_valid(employee_id) else "000000000000000000000000"}
+                ]
+            })
+            
+            if emp:
+                target_emp_id = str(emp["_id"])
+
             # Check if already has an attendance record for this date
             existing = await self.attendance.find_one(
-                {"employee_id": employee_id, "date": attendance.date}
+                {"employee_id": target_emp_id, "date": attendance.date}
             )
 
             attendance_data = attendance.dict()
-            attendance_data["employee_id"] = employee_id
+            attendance_data["employee_id"] = target_emp_id
             attendance_data["updated_at"] = datetime.utcnow()
             
             # Fetch system settings for late calculation
@@ -2014,9 +2028,30 @@ class Repository:
         self, attendance: AttendanceUpdate, employee_id: str, date: str
     ) -> dict:
         try:
+            # Resolve to MongoDB _id to ensure consistency
+            target_emp_id = employee_id
+            
+            # Try finding the employee to get stable _id
+            emp = await self.employees.find_one({
+                "$or": [
+                     {"employee_no_id": employee_id},
+                     {"_id": ObjectId(employee_id) if ObjectId.is_valid(employee_id) else "000000000000000000000000"}
+                ]
+            })
+            
+            if emp:
+                target_emp_id = str(emp["_id"])
+
             existing = await self.attendance.find_one(
-                {"employee_id": employee_id, "date": date}
+                {"employee_id": target_emp_id, "date": date}
             )
+            if not existing:
+                # Fallback: Try searching with the original ID just in case it was a legacy record 
+                # (though dashboard should handle migration, this is safety for active sessions)
+                existing = await self.attendance.find_one(
+                    {"employee_id": employee_id, "date": date}
+                )
+            
             if not existing:
                 raise ValueError("No clock-in record found for this date")
 
