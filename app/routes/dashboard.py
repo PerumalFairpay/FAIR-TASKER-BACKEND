@@ -180,11 +180,13 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                 "today": {
                     "date": today_str,
                     "total_employees": total_employees,
-                    "present": today_counts.get("present", 0),
+                    "present": today_counts.get("total_present", 0),    
+                     "on_time": today_counts.get("on_time", 0),      # Added on_time
                     "absent": today_counts.get("absent", 0),
                     "on_leave": today_counts.get("leave", 0),
                     "late": today_counts.get("late", 0),
-                    "present_percentage": round((today_counts.get("present", 0) / total_employees) * 100, 1) if total_employees > 0 else 0,
+                    "holiday": today_counts.get("holiday", 0),      # Added holiday
+                    "present_percentage": round((today_counts.get("total_present", 0) / total_employees) * 100, 1) if total_employees > 0 else 0,
                     "avg_work_hours": today_avg_hours
                 },
                 "this_week": {
