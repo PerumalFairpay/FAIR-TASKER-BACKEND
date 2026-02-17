@@ -276,7 +276,7 @@ class Repository:
 
             leave_types = await self.leave_types.find().to_list(length=None)
             query = {
-                "employee_id": employee.get("employee_no_id") or str(employee["_id"]),
+                "employee_id": employee.get("employee_no_id") or employee.get("id"),
                 "status": {"$in": ["Approved", "Pending"]}
             }
             leave_requests = await self.leave_requests.find(query).to_list(length=None)
@@ -328,7 +328,7 @@ class Repository:
             if not employee:
                 return {}
 
-            identifiers = [str(employee["_id"]), employee.get("name"), employee.get("employee_no_id")]
+            identifiers = [employee.get("id"), employee.get("name"), employee.get("employee_no_id")]
             identifiers = [i for i in identifiers if i]  
 
             query = {
@@ -377,7 +377,7 @@ class Repository:
             if not employee:
                 return {}
             
-            identifier = employee.get("employee_no_id") or str(employee["_id"])
+            identifier = employee.get("employee_no_id") or employee.get("id")
             return await self.get_dashboard_metrics(employee_id=identifier)
             
         except Exception as e:
