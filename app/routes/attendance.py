@@ -267,7 +267,7 @@ async def import_attendance(file: UploadFile = File(...)):
         # Create map of Biometric ID -> Employee No ID
         # Only include employees with a biometric_id
         valid_biometric_map = {
-            str(emp.get("biometric_id")).strip(): str(emp.get("employee_no_id"))
+            str(emp.get("biometric_id")).strip(): str(emp.get("id"))
             for emp in all_employees
             if emp.get("biometric_id")
         }

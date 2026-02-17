@@ -378,7 +378,7 @@ class Repository:
             if not employee:
                 return {}
             
-            identifier = employee.get("employee_no_id") or employee.get("id")
+            identifier = employee.get("id")
             return await self.get_dashboard_metrics(employee_id=identifier)
             
         except Exception as e:
