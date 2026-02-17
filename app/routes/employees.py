@@ -189,11 +189,19 @@ async def get_employee_summary_details(employee_id: str):
         # 4. Fetch Attendance Stats
         attendance_stats = await repo.get_employee_attendance_stats(employee_id)
 
+        # 5. Fetch Assigned Projects
+        assigned_projects = await repo.get_employee_assigned_projects(employee_id)
+
+        # 6. Fetch Assigned Assets
+        assigned_assets = await repo.get_assets_by_employee(employee_id)
+
         summary_data = {
             "employee": employee,
             "leave_summary": leave_summary,
             "task_metrics": task_metrics,
-            "attendance_stats": attendance_stats
+            "attendance_stats": attendance_stats,
+            "assigned_projects": assigned_projects,
+            "assigned_assets": assigned_assets
         }
 
         return success_response(

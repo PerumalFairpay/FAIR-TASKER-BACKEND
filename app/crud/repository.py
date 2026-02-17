@@ -371,6 +371,7 @@ class Repository:
              print(f"Error in get_employee_task_metrics: {e}")
              return {}
 
+
     async def get_employee_attendance_stats(self, employee_id: str) -> dict:
         try:
             employee = await self.get_employee(employee_id)
@@ -383,6 +384,39 @@ class Repository:
         except Exception as e:
             print(f"Error in get_employee_attendance_stats: {e}")
             return {}
+
+    async def get_employee_assigned_projects(self, employee_id: str) -> List[dict]:
+        try:
+            employee = await self.get_employee(employee_id)
+            if not employee:
+                return []
+             
+            emp_id = str(employee.get("id"))
+            
+            query = {
+                "$or": [
+                    {"project_manager_ids": emp_id},
+                    {"team_leader_ids": emp_id},
+                    {"team_member_ids": emp_id}
+                ]
+            }
+            
+            projects = await self.projects.find(query).to_list(length=None)
+            
+            result = []
+            for p in projects:
+                p_norm = normalize(p)
+                if p_norm.get("client_id"):
+                    client = await self.clients.find_one({"_id": ObjectId(p_norm["client_id"])})
+                    if client:
+                        p_norm["client_name"] = client.get("name")
+                        p_norm["client_company"] = client.get("company_name")
+                result.append(p_norm)
+                
+            return result
+        except Exception as e:
+            print(f"Error in get_employee_assigned_projects: {e}")
+            return []
 
     async def update_employee(
         self,
