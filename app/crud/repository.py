@@ -42,7 +42,7 @@ from app.models import (
     NDARequestUpdate,
     PayslipCreate,
 )
-from app.utils import normalize, get_password_hash
+from app.utils import normalize, get_password_hash, get_employee_basic_details
 from bson import ObjectId
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -251,6 +251,7 @@ class Repository:
                 "name": 1,
                 "email": 1,
                 "status": 1,
+                "biometric_id": 1,
             }
             employees = await self.employees.find({}, projection).to_list(length=None)
 
@@ -266,6 +267,156 @@ class Repository:
             return normalize(employee)
         except Exception as e:
             raise e
+
+    async def get_employee_leave_balances(self, employee_id: str) -> dict:
+        try:
+            employee = await self.get_employee(employee_id)
+            if not employee:
+                return None
+
+            leave_types = await self.leave_types.find().to_list(length=None)
+            query = {
+                "employee_id": employee.get("employee_no_id") or employee.get("id"),
+                "status": {"$in": ["Approved", "Pending"]}
+            }
+            leave_requests = await self.leave_requests.find(query).to_list(length=None)
+
+            balance_summary = {
+                "total_allocated": 0,
+                "used": 0,
+                "available": 0,
+                "pending_approval": 0,
+                "breakdown": []
+            }
+
+            for lt in leave_types:
+                allocated = float(lt.get("days_allowed", 0))
+                type_id = str(lt["_id"])
+                
+                used_count = 0.0
+                pending_count = 0.0
+                
+                for lr in leave_requests:
+                    if str(lr.get("leave_type_id")) == type_id:
+                        days = float(lr.get("total_days", 0))
+                        if lr.get("status") == "Approved":
+                            used_count += days
+                        elif lr.get("status") == "Pending":
+                            pending_count += days
+                
+                balance_summary["breakdown"].append({
+                    "type": lt.get("type_name"),
+                    "allocated": allocated,
+                    "used": used_count,
+                    "pending": pending_count,
+                    "available": max(0, allocated - used_count)
+                })
+
+                balance_summary["total_allocated"] += allocated
+                balance_summary["used"] += used_count
+                balance_summary["pending_approval"] += pending_count
+                balance_summary["available"] += max(0, allocated - used_count)
+
+            return balance_summary
+        except Exception as e:
+            print(f"Error in get_employee_leave_balances: {e}")
+            return {"total_allocated": 0, "used": 0, "available": 0, "pending_approval": 0, "breakdown": []}
+
+    async def get_employee_task_metrics(self, employee_id: str) -> dict:
+        try:
+            employee = await self.get_employee(employee_id)
+            if not employee:
+                return {}
+
+            identifiers = [employee.get("id"), employee.get("name"), employee.get("employee_no_id")]
+            identifiers = [i for i in identifiers if i]  
+
+            query = {
+                "assigned_to": {"$in": identifiers}
+            }
+            tasks = await self.tasks.find(query).to_list(length=None)
+
+            metrics = {
+                "total_assigned": len(tasks),
+                "completed": 0,
+                "in_progress": 0,
+                "pending": 0,
+                "overdue": 0,
+                "completion_rate": 0
+            }
+
+            now = datetime.utcnow()
+            for task in tasks:
+                status = task.get("status", "Todo")
+                if status == "Done" or status == "Completed":
+                    metrics["completed"] += 1
+                elif status == "In Progress":
+                    metrics["in_progress"] += 1
+                else:
+                    metrics["pending"] += 1
+                 
+                if status not in ["Done", "Completed"] and task.get("end_date"):
+                    try:
+                        end_date = datetime.strptime(task["end_date"], "%Y-%m-%d")
+                        if end_date < now:
+                            metrics["overdue"] += 1
+                    except:
+                        pass
+
+            if metrics["total_assigned"] > 0:
+                metrics["completion_rate"] = round((metrics["completed"] / metrics["total_assigned"]) * 100, 2)
+
+            return metrics
+        except Exception as e:
+             print(f"Error in get_employee_task_metrics: {e}")
+             return {}
+
+
+    async def get_employee_attendance_stats(self, employee_id: str) -> dict:
+        try:
+            employee = await self.get_employee(employee_id)
+            if not employee:
+                return {}
+            
+            identifier = employee.get("id")
+            return await self.get_dashboard_metrics(employee_id=identifier)
+            
+        except Exception as e:
+            print(f"Error in get_employee_attendance_stats: {e}")
+            return {}
+
+    async def get_employee_assigned_projects(self, employee_id: str) -> List[dict]:
+        try:
+            employee = await self.get_employee(employee_id)
+            if not employee:
+                return []
+             
+            emp_id = str(employee.get("id"))
+            
+            query = {
+                "$or": [
+                    {"project_manager_ids": emp_id},
+                    {"team_leader_ids": emp_id},
+                    {"team_member_ids": emp_id}
+                ]
+            }
+            
+            projects = await self.projects.find(query).to_list(length=None)
+            
+            result = []
+            for p in projects:
+                p_norm = normalize(p)
+                if p_norm.get("client_id"):
+                    client = await self.clients.find_one({"_id": ObjectId(p_norm["client_id"])})
+                    if client:
+                        p_norm["client_name"] = client.get("name")
+                        p_norm["client_company"] = client.get("company_name")
+                result.append(p_norm)
+                
+            return result
+        except Exception as e:
+            print(f"Error in get_employee_assigned_projects: {e}")
+            return []
 
     async def update_employee(
         self,
@@ -839,6 +990,19 @@ class Repository:
         except Exception as e:
             raise e
 
+
+    async def get_projects_summary(self) -> List[dict]:
+        try:
+            projection = {
+                "name": 1,
+                "status": 1,
+                "logo": 1
+            }
+            projects = await self.projects.find({}, projection).to_list(length=None)
+            return [normalize(p) for p in projects]
+        except Exception as e:
+            raise e
+
     async def get_project(self, project_id: str) -> dict:
         try:
             project = await self.projects.find_one({"_id": ObjectId(project_id)})
@@ -1231,13 +1395,20 @@ class Repository:
 
             blog_norm = normalize(blog)
 
-            # Recommendations Logic (like in pilot)
+            # Recommendations Logic
             recommendations = []
+            rec_filters = []
             if blog_norm.get("category"):
+                rec_filters.append({"category": blog_norm["category"]})
+            
+            if blog_norm.get("tags") and isinstance(blog_norm["tags"], list) and len(blog_norm["tags"]) > 0:
+                rec_filters.append({"tags": {"$in": blog_norm["tags"]}})
+
+            if rec_filters:
                 rec_query = {
                     "deleted": False,
-                    "category": blog_norm["category"],
                     "_id": {"$ne": ObjectId(blog_norm["id"])},
+                    "$or": rec_filters
                 }
                 cursor = self.blogs.find(rec_query).sort("created_at", -1).limit(3)
                 recs = await cursor.to_list(length=3)
@@ -1907,13 +2078,27 @@ class Repository:
     # Attendance CRUD
     async def clock_in(self, attendance: AttendanceCreate, employee_id: str) -> dict:
         try:
+            # Resolve to MongoDB _id to ensure consistency
+            target_emp_id = employee_id
+            
+            # Try finding the employee to get stable _id
+            emp = await self.employees.find_one({
+                "$or": [
+                     {"employee_no_id": employee_id},
+                     {"_id": ObjectId(employee_id) if ObjectId.is_valid(employee_id) else "000000000000000000000000"}
+                ]
+            })
+            
+            if emp:
+                target_emp_id = str(emp["_id"])
+
             # Check if already has an attendance record for this date
             existing = await self.attendance.find_one(
-                {"employee_id": employee_id, "date": attendance.date}
+                {"employee_id": target_emp_id, "date": attendance.date}
             )
 
             attendance_data = attendance.dict()
-            attendance_data["employee_id"] = employee_id
+            attendance_data["employee_id"] = target_emp_id
             attendance_data["updated_at"] = datetime.utcnow()
             
             # Fetch system settings for late calculation
@@ -1993,9 +2178,30 @@ class Repository:
         self, attendance: AttendanceUpdate, employee_id: str, date: str
     ) -> dict:
         try:
+            # Resolve to MongoDB _id to ensure consistency
+            target_emp_id = employee_id
+            
+            # Try finding the employee to get stable _id
+            emp = await self.employees.find_one({
+                "$or": [
+                     {"employee_no_id": employee_id},
+                     {"_id": ObjectId(employee_id) if ObjectId.is_valid(employee_id) else "000000000000000000000000"}
+                ]
+            })
+            
+            if emp:
+                target_emp_id = str(emp["_id"])
+
             existing = await self.attendance.find_one(
-                {"employee_id": employee_id, "date": date}
+                {"employee_id": target_emp_id, "date": date}
             )
+            if not existing:
+                # Fallback: Try searching with the original ID just in case it was a legacy record 
+                # (though dashboard should handle migration, this is safety for active sessions)
+                existing = await self.attendance.find_one(
+                    {"employee_id": employee_id, "date": date}
+                )
+            
             if not existing:
                 raise ValueError("No clock-in record found for this date")
 
@@ -2254,13 +2460,13 @@ class Repository:
             for r in records:
                 r_norm = normalize(r)
                 emp_details = emp_map.get(r_norm.get("employee_id"))
+                
+                # OPTIMIZATION: Use helper to get only basic details
                 if emp_details:
-                    # Remove sensitive data
-                    if "hashed_password" in emp_details:
-                        del emp_details["hashed_password"]
-                    if "password" in emp_details:
-                        del emp_details["password"]
-                r_norm["employee_details"] = emp_details
+                    r_norm["employee_details"] = get_employee_basic_details(emp_details)
+                else:
+                    r_norm["employee_details"] = None
+                    
                 result.append(r_norm)
 
             # Sort by date and employee name (already sorted by date in DB query, secondary sort in memory if needed but DB sort is better)
@@ -2311,20 +2517,45 @@ class Repository:
                     {"$match": match_query},
                     {"$group": {"_id": "$status", "count": {"$sum": 1}}},
                 ]
-                cursor = self.attendance.aggregate(pipeline)
-                stats = {
-                    "present": 0,
-                    "absent": 0,
-                    "leave": 0,
-                    "holiday": 0,
-                    "late": 0,
-                    "overtime": 0,
-                }
+                cursor = await self.attendance.aggregate(pipeline)
+                
+                # Count each status separately
+                on_time = 0  # "Present" status
+                late = 0     # "Late" status
+                absent = 0
+                leave = 0
+                holiday = 0
+                overtime = 0
+                
                 async for doc in cursor:
                     status_key = str(doc["_id"]).lower()
-                    if status_key in stats:
-                        stats[status_key] = doc["count"]
-                return stats
+                    count = doc["count"]
+                    
+                    if status_key == "present":
+                        on_time = count
+                    elif status_key == "late":
+                        late = count
+                    elif status_key == "absent":
+                        absent = count
+                    elif status_key == "leave":
+                        leave = count
+                    elif status_key == "holiday":
+                        holiday = count
+                    elif status_key == "overtime":
+                        overtime = count
+                
+                # Calculate total_present as sum of on_time + late + overtime
+                total_present = on_time + late + overtime
+                
+                return {
+                    "total_present": total_present,
+                    "on_time": on_time,
+                    "late": late,
+                    "absent": absent,
+                    "leave": leave,
+                    "holiday": holiday,
+                    "overtime": overtime,
+                }
 
             # Run aggregations
             # Today: Exact match on date, not range
@@ -2409,19 +2640,17 @@ class Repository:
                     date_str = log_time.strftime("%Y-%m-%d")
                     time_str = log_time.isoformat()
 
+                    # Strict Match: Look for employee with this biometric_id
+                    # We treat log.user_id as the biometric_id (e.g. "101")
+                    # It might be coming as int or str, so we try both strict string match or conversion if needed.
+                    # Since we store biometric_id as String in DB (based on model), we cast log.user_id to string.
+                    
+                    bio_id_str = str(log.user_id).strip()
+                    
                     employee = await self.employees.find_one(
-                        {"employee_no_id": str(log.user_id)}
+                        {"biometric_id": bio_id_str}
                     )
-                    if not employee:
-                        employee = await self.employees.find_one(
-                            {"attendance_id": str(log.user_id)}
-                        )
-
-                    if not employee:
-                        employee = await self.employees.find_one(
-                            {"attendance_id": int(log.user_id)}
-                        )
-
+                    
                     if not employee:
                         continue
 

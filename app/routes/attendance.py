@@ -264,22 +264,28 @@ async def import_attendance(file: UploadFile = File(...)):
 
         # Fetch valid employees for validation
         all_employees = await repo.get_all_employees_summary()
-        valid_employee_ids = {
-            str(emp.get("employee_no_id")).strip()
+        # Create map of Biometric ID -> Employee No ID
+        # Only include employees with a biometric_id
+        valid_biometric_map = {
+            str(emp.get("biometric_id")).strip(): str(emp.get("id"))
             for emp in all_employees
-            if emp.get("employee_no_id")
+            if emp.get("biometric_id")
         }
 
         records = []
         skipped_count = 0
         for _, row in df.iterrows():
             try:
-                emp_no_id = str(row["Employee ID"]).split(".")[0].strip()
+                # The "Employee ID" column in Excel is now treated as the Biometric ID
+                bio_id_input = str(row["Employee ID"]).split(".")[0].strip()
 
-                # VALIDATION: Check if employee exists
-                if emp_no_id not in valid_employee_ids:
+                # VALIDATION: Check if biometric ID exists in our system
+                if bio_id_input not in valid_biometric_map:
                     skipped_count += 1
                     continue
+
+                # Get the actual system Employee ID (EMPxxx) from the map
+                emp_no_id = valid_biometric_map[bio_id_input]
 
                 # Parse Date
                 date_val = row["Date"]

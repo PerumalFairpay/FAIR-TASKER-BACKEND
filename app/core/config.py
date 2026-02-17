@@ -19,11 +19,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 1440)
 # ====================================================
 # Redis Environment Variables
 # ====================================================
-REDIS_HOST = os.getenv("REDIS_HOST")
-REDIS_PORT = os.getenv("REDIS_PORT")
-REDIS_DB = os.getenv("REDIS_DB")
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
-REDIS_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}" if REDIS_HOST else None
+REDIS_URL = os.getenv("REDIS_URL")
 
 # ====================================================
 # AI Environment Variables

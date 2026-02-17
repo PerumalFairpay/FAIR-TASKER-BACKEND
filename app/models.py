@@ -54,8 +54,14 @@ class RoleUpdate(BaseModel):
     permissions: Optional[List[str]] = None
 
 
+class PermissionShortRef(BaseModel):
+    id: str
+    name: str
+
+
 class RoleResponse(RoleBase):
     id: str
+    permissions: List[PermissionShortRef]
 
     class Config:
         from_attributes = True
@@ -149,7 +155,7 @@ class EmployeeBase(BaseModel):
     email: EmailStr
     personal_email: Optional[EmailStr] = None
     mobile: str
-    date_of_birth: Optional[str] = None
+    date_of_birth: str  
     gender: Optional[str] = None
     emergency_contact_name: Optional[str] = None
     emergency_contact_number: Optional[str] = None
@@ -157,6 +163,7 @@ class EmployeeBase(BaseModel):
     marital_status: Optional[str] = None
     employee_type: Optional[str] = None
     employee_no_id: str
+    biometric_id: Optional[str] = None
     department: Optional[str] = None
     designation: Optional[str] = None
     role: Optional[str] = None
@@ -201,6 +208,7 @@ class EmployeeUpdate(BaseModel):
     marital_status: Optional[str] = None
     employee_type: Optional[str] = None
     employee_no_id: Optional[str] = None
+    biometric_id: Optional[str] = None
     department: Optional[str] = None
     designation: Optional[str] = None
     role: Optional[str] = None
@@ -317,6 +325,7 @@ class DocumentCategoryResponse(DocumentCategoryBase):
 class DocumentBase(BaseModel):
     name: str
     document_category_id: str
+    document_subcategory_id: Optional[str] = None
     description: Optional[str] = None
     expiry_date: Optional[str] = None
     status: Optional[str] = "Active"
@@ -331,6 +340,7 @@ class DocumentCreate(DocumentBase):
 class DocumentUpdate(BaseModel):
     name: Optional[str] = None
     document_category_id: Optional[str] = None
+    document_subcategory_id: Optional[str] = None
     description: Optional[str] = None
     expiry_date: Optional[str] = None
     status: Optional[str] = None
@@ -394,6 +404,8 @@ class ProjectBase(BaseModel):
     budget: Optional[float] = 0.0
     currency: Optional[str] = "USD"
     tags: List[str] = []
+    technical_stacks: List[str] = []
+    third_party_vendors: List[str] = []
     logo: Optional[str] = None
 
 
@@ -415,6 +427,8 @@ class ProjectUpdate(BaseModel):
     budget: Optional[float] = None
     currency: Optional[str] = None
     tags: Optional[List[str]] = None
+    technical_stacks: Optional[List[str]] = None
+    third_party_vendors: Optional[List[str]] = None
     logo: Optional[str] = None
 
 
@@ -478,6 +492,7 @@ class AssetCategoryResponse(AssetCategoryBase):
 class AssetBase(BaseModel):
     asset_name: str
     asset_category_id: str
+    asset_subcategory_id: Optional[str] = None
     manufacturer: Optional[str] = None
     supplier: Optional[str] = None
     purchase_from: Optional[str] = None
@@ -501,6 +516,7 @@ class AssetCreate(AssetBase):
 class AssetUpdate(BaseModel):
     asset_name: Optional[str] = None
     asset_category_id: Optional[str] = None
+    asset_subcategory_id: Optional[str] = None
     manufacturer: Optional[str] = None
     supplier: Optional[str] = None
     purchase_from: Optional[str] = None
@@ -781,9 +797,26 @@ class AttendanceStatusUpdate(BaseModel):
     notes: Optional[str] = None
 
 
+
+class EmployeeBasicDetails(BaseModel):
+    id: str
+    first_name: Optional[str] = ""
+    last_name: Optional[str] = ""
+    name: Optional[str] = ""  # Display name
+    email: Optional[EmailStr] = None
+    designation: Optional[str] = None
+    department: Optional[str] = None
+    profile_picture: Optional[str] = None
+    status: Optional[str] = "Active"
+    employee_no_id: Optional[str] = ""
+
+    class Config:
+        from_attributes = True
+
+
 class AttendanceResponse(AttendanceBase):
     id: str
-    employee_details: Optional[dict] = None
+    employee_details: Optional[EmployeeBasicDetails] = None
 
     class Config:
         from_attributes = True

@@ -14,6 +14,7 @@ router = APIRouter(prefix="/documents", tags=["documents"], dependencies=[Depend
 async def create_document(
     name: str = Form(...),
     document_category_id: str = Form(...),
+    document_subcategory_id: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     expiry_date: Optional[str] = Form(None),
     status: Optional[str] = Form("Active"),
@@ -30,6 +31,7 @@ async def create_document(
         document_data = DocumentCreate(
             name=name,
             document_category_id=document_category_id,
+            document_subcategory_id=document_subcategory_id,
             description=description,
             expiry_date=expiry_date,
             status=status,
@@ -85,6 +87,7 @@ async def update_document(
     document_id: str,
     name: Optional[str] = Form(None),
     document_category_id: Optional[str] = Form(None),
+    document_subcategory_id: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     expiry_date: Optional[str] = Form(None),
     status: Optional[str] = Form(None),
@@ -101,6 +104,7 @@ async def update_document(
         document_update_data = DocumentUpdate(
             name=name,
             document_category_id=document_category_id,
+            document_subcategory_id=document_subcategory_id,
             description=description,
             expiry_date=expiry_date,
             status=status,

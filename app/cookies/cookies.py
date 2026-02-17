@@ -1,6 +1,8 @@
 from typing import Any, Optional
 import json
 import redis.asyncio as aioredis
+from app.core.config import REDIS_URL, REDIS_PASSWORD
+
 class CookiesManager:
     def __init__(self):
         self.redis: Optional[aioredis.Redis] = None
@@ -10,9 +12,9 @@ class CookiesManager:
     # Redis Initialization
     # ------------------------------------------------------------------
     async def init_redis(self):
-        if self.redis is None:
+        if self.redis is None and REDIS_URL:
             self.redis = aioredis.from_url(
-                redis_url, password=REDIS_PASSWORD, decode_responses=True
+                REDIS_URL, password=REDIS_PASSWORD, decode_responses=True
             )
 
     async def ensure_redis(self):

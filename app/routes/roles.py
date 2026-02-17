@@ -1,11 +1,18 @@
 from fastapi import APIRouter, HTTPException, status, Depends
-from app.database import roles_collection
-from app.models import RoleCreate, RoleUpdate, RoleResponse
+from app.database import roles_collection, permissions_collection
+from app.models import RoleCreate, RoleUpdate, RoleResponse, PermissionShortRef
 from bson import ObjectId
-from typing import List
+from typing import List, Dict
 from app.auth import verify_token, require_permission
 
 router = APIRouter(dependencies=[Depends(verify_token)])
+
+async def get_permissions_map() -> Dict[str, str]:
+    """Returns a dictionary mapping permission ID (str) to permission Name."""
+    perm_map = {}
+    async for perm in permissions_collection.find():
+        perm_map[str(perm["_id"])] = perm["name"]
+    return perm_map
 
 @router.post("/", response_model=RoleResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("role:submit"))])
 async def create_role(role: RoleCreate):
@@ -16,13 +23,42 @@ async def create_role(role: RoleCreate):
     role_dict = role.dict()
     new_role = await roles_collection.insert_one(role_dict)
     created_role = await roles_collection.find_one({"_id": new_role.inserted_id})
-    return RoleResponse(**created_role, id=str(created_role["_id"]))
+     
+    permission_ids = created_role.get("permissions", [])
+    perm_map = await get_permissions_map()
+    
+    enriched_permissions = []
+    for pid in permission_ids:
+        pid_str = str(pid)
+        if pid_str in perm_map:
+            enriched_permissions.append(PermissionShortRef(id=pid_str, name=perm_map[pid_str]))
+    
+    return RoleResponse(
+        id=str(created_role["_id"]),
+        name=created_role["name"],
+        description=created_role.get("description"),
+        permissions=enriched_permissions
+    )
 
 @router.get("/", response_model=List[RoleResponse], dependencies=[Depends(require_permission("role:view"))])
 async def get_roles():
     roles = []
+    perm_map = await get_permissions_map()
+    
     async for role in roles_collection.find():
-        roles.append(RoleResponse(**role, id=str(role["_id"])))
+        permission_ids = role.get("permissions", [])
+        enriched_permissions = []
+        for pid in permission_ids:
+            pid_str = str(pid)
+            if pid_str in perm_map:
+                enriched_permissions.append(PermissionShortRef(id=pid_str, name=perm_map[pid_str]))
+
+        roles.append(RoleResponse(
+            id=str(role["_id"]),
+            name=role["name"],
+            description=role.get("description"),
+            permissions=enriched_permissions
+        ))
     return roles
 
 @router.get("/{role_id}", response_model=RoleResponse, dependencies=[Depends(require_permission("role:view"))])
@@ -34,7 +70,20 @@ async def get_role(role_id: str):
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
     
-    return RoleResponse(**role, id=str(role["_id"]))
+    perm_map = await get_permissions_map()
+    permission_ids = role.get("permissions", [])
+    enriched_permissions = []
+    for pid in permission_ids:
+        pid_str = str(pid)
+        if pid_str in perm_map:
+            enriched_permissions.append(PermissionShortRef(id=pid_str, name=perm_map[pid_str]))
+    
+    return RoleResponse(
+        id=str(role["_id"]),
+        name=role["name"],
+        description=role.get("description"),
+        permissions=enriched_permissions
+    )
 
 @router.put("/{role_id}", response_model=RoleResponse, dependencies=[Depends(require_permission("role:submit"))])
 async def update_role(role_id: str, role_update: RoleUpdate):
@@ -57,7 +106,21 @@ async def update_role(role_id: str, role_update: RoleUpdate):
         raise HTTPException(status_code=404, detail="Role not found")
         
     updated_role = await roles_collection.find_one({"_id": ObjectId(role_id)})
-    return RoleResponse(**updated_role, id=str(updated_role["_id"]))
+    
+    perm_map = await get_permissions_map()
+    permission_ids = updated_role.get("permissions", [])
+    enriched_permissions = []
+    for pid in permission_ids:
+        pid_str = str(pid)
+        if pid_str in perm_map:
+            enriched_permissions.append(PermissionShortRef(id=pid_str, name=perm_map[pid_str]))
+
+    return RoleResponse(
+        id=str(updated_role["_id"]),
+        name=updated_role["name"],
+        description=updated_role.get("description"),
+        permissions=enriched_permissions
+    )
 
 @router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission("role:submit"))])
 async def delete_role(role_id: str):

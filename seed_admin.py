@@ -1,5 +1,5 @@
 import asyncio
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 import os
 from dotenv import load_dotenv
 from app.utils import get_password_hash
@@ -34,7 +34,7 @@ admin_data = {
 }
 
 async def seed_admin():
-    client = AsyncIOMotorClient(DATABASE_URL)
+    client = AsyncMongoClient(DATABASE_URL)
     db = client[DATABASE_NAME]
     users_collection = db["users"]
     
@@ -60,10 +60,9 @@ async def seed_admin():
         
         result = await users_collection.insert_one(new_admin)
         print(f"Admin user created successfully with ID: {result.inserted_id}")
-        print(f"Email: {admin_data['email']}")
         print(f"Password: {admin_data['password']}")
 
-    client.close()
+    await client.close()
 
 if __name__ == "__main__":
     asyncio.run(seed_admin())

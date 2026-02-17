@@ -53,7 +53,8 @@ async def create_employee(
     ifsc_code: Optional[str] = Form(None),
     pf_account_number: Optional[str] = Form(None),
     esic_number: Optional[str] = Form(None),
-    pan_number: Optional[str] = Form(None)
+    pan_number: Optional[str] = Form(None),
+    biometric_id: Optional[str] = Form(None)
 ):
     try:
         profile_pic_path = None
@@ -112,7 +113,8 @@ async def create_employee(
             ifsc_code=ifsc_code,
             pf_account_number=pf_account_number,
             esic_number=esic_number,
-            pan_number=pan_number
+            pan_number=pan_number,
+            biometric_id=biometric_id
         )
 
         # Call repository. Note: repo signature change pending. passing profile_pic_path.
@@ -166,6 +168,45 @@ async def get_employees_summary():
         return success_response(
             message="Employees summary fetched successfully",
             data=employees
+        )
+    except Exception as e:
+        return error_response(message=str(e), status_code=500)
+
+@router.get("/{employee_id}/summary", dependencies=[Depends(require_permission("employee:view"))])
+async def get_employee_summary_details(employee_id: str):
+    try:
+        # 1. Fetch Basic Details
+        employee = await repo.get_employee(employee_id)
+        if not employee:
+             return error_response(message="Employee not found", status_code=404)
+
+        # 2. Fetch Leave Balances
+        leave_summary = await repo.get_employee_leave_balances(employee_id)
+
+        # 3. Fetch Task Metrics
+        task_metrics = await repo.get_employee_task_metrics(employee_id)
+
+        # 4. Fetch Attendance Stats
+        attendance_stats = await repo.get_employee_attendance_stats(employee_id)
+
+        # 5. Fetch Assigned Projects
+        assigned_projects = await repo.get_employee_assigned_projects(employee_id)
+
+        # 6. Fetch Assigned Assets
+        assigned_assets = await repo.get_assets_by_employee(employee_id)
+
+        summary_data = {
+            "employee": employee,
+            "leave_summary": leave_summary,
+            "task_metrics": task_metrics,
+            "attendance_stats": attendance_stats,
+            "assigned_projects": assigned_projects,
+            "assigned_assets": assigned_assets
+        }
+
+        return success_response(
+            message="Employee summary fetched successfully",
+            data=summary_data
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
@@ -227,7 +268,8 @@ async def update_employee(
     ifsc_code: Optional[str] = Form(None),
     pf_account_number: Optional[str] = Form(None),
     esic_number: Optional[str] = Form(None),
-    pan_number: Optional[str] = Form(None)
+    pan_number: Optional[str] = Form(None),
+    biometric_id: Optional[str] = Form(None)
 ):
     try:
         profile_pic_path = None
@@ -289,7 +331,8 @@ async def update_employee(
             ifsc_code=ifsc_code,
             pf_account_number=pf_account_number,
             esic_number=esic_number,
-            pan_number=pan_number
+            pan_number=pan_number,
+            biometric_id=biometric_id
         )
         
         updated_employee = await repo.update_employee(employee_id, update_data, profile_pic_path)
