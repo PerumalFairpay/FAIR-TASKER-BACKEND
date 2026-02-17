@@ -268,6 +268,166 @@ class Repository:
         except Exception as e:
             raise e
 
+    async def get_employee_leave_balances(self, employee_id: str) -> dict:
+        try:
+            employee = await self.get_employee(employee_id)
+            if not employee:
+                return None
+
+            leave_types = await self.leave_types.find().to_list(length=None)
+            query = {
+                "employee_id": employee.get("employee_no_id") or str(employee["_id"]),
+                "status": {"$in": ["Approved", "Pending"]}
+            }
+            leave_requests = await self.leave_requests.find(query).to_list(length=None)
+
+            balance_summary = {
+                "total_allocated": 0,
+                "used": 0,
+                "available": 0,
+                "pending_approval": 0,
+                "breakdown": []
+            }
+
+            for lt in leave_types:
+                allocated = float(lt.get("days_allowed", 0))
+                type_id = str(lt["_id"])
+                
+                used_count = 0.0
+                pending_count = 0.0
+                
+                for lr in leave_requests:
+                    if str(lr.get("leave_type_id")) == type_id:
+                        days = float(lr.get("total_days", 0))
+                        if lr.get("status") == "Approved":
+                            used_count += days
+                        elif lr.get("status") == "Pending":
+                            pending_count += days
+                
+                balance_summary["breakdown"].append({
+                    "type": lt.get("type_name"),
+                    "allocated": allocated,
+                    "used": used_count,
+                    "pending": pending_count,
+                    "available": max(0, allocated - used_count)
+                })
+
+                balance_summary["total_allocated"] += allocated
+                balance_summary["used"] += used_count
+                balance_summary["pending_approval"] += pending_count
+                balance_summary["available"] += max(0, allocated - used_count)
+
+            return balance_summary
+        except Exception as e:
+            print(f"Error in get_employee_leave_balances: {e}")
+            return {"total_allocated": 0, "used": 0, "available": 0, "pending_approval": 0, "breakdown": []}
+
+    async def get_employee_task_metrics(self, employee_id: str) -> dict:
+        try:
+            employee = await self.get_employee(employee_id)
+            if not employee:
+                return {}
+
+            identifiers = [str(employee["_id"]), employee.get("name"), employee.get("employee_no_id")]
+            identifiers = [i for i in identifiers if i]  
+
+            query = {
+                "assigned_to": {"$in": identifiers}
+            }
+            tasks = await self.tasks.find(query).to_list(length=None)
+
+            metrics = {
+                "total_assigned": len(tasks),
+                "completed": 0,
+                "in_progress": 0,
+                "pending": 0,
+                "overdue": 0,
+                "completion_rate": 0
+            }
+
+            now = datetime.utcnow()
+            for task in tasks:
+                status = task.get("status", "Todo")
+                if status == "Done" or status == "Completed":
+                    metrics["completed"] += 1
+                elif status == "In Progress":
+                    metrics["in_progress"] += 1
+                else:
+                    metrics["pending"] += 1
+                 
+                if status not in ["Done", "Completed"] and task.get("end_date"):
+                    try:
+                        end_date = datetime.strptime(task["end_date"], "%Y-%m-%d")
+                        if end_date < now:
+                            metrics["overdue"] += 1
+                    except:
+                        pass
+
+            if metrics["total_assigned"] > 0:
+                metrics["completion_rate"] = round((metrics["completed"] / metrics["total_assigned"]) * 100, 2)
+
+            return metrics
+        except Exception as e:
+             print(f"Error in get_employee_task_metrics: {e}")
+             return {}
+
+    async def get_employee_attendance_stats(self, employee_id: str) -> dict:
+        try:
+            employee = await self.get_employee(employee_id)
+            if not employee:
+                return {}
+            
+            identifier = employee.get("employee_no_id") or str(employee["_id"])
+            
+            now = datetime.utcnow()
+            start_date = now.replace(day=1).strftime("%Y-%m-%d")
+            
+            query = {
+                "employee_id": identifier,
+                "date": {"$gte": start_date}
+            }
+            
+            logs = await self.attendance.find(query).to_list(length=None)
+            
+            stats = {
+                "month": now.strftime("%B %Y"),
+                "total_working_days": 26,   
+                "present_days": 0,
+                "absent_days": 0,
+                "late_days": 0,
+                "leave_days": 0,
+                "half_day_days": 0,
+                "on_time_percentage": 0
+            }
+            
+            for log in logs:
+                status = log.get("status", "Absent")
+                if status == "Present":
+                    stats["present_days"] += 1
+                elif status == "Late":
+                    stats["late_days"] += 1
+                    stats["present_days"] += 1  
+                elif status == "Absent":
+                    stats["absent_days"] += 1
+                elif status == "Leave":
+                    stats["leave_days"] += 1
+                elif status == "Half Day":
+                    stats["half_day_days"] += 1
+                    stats["present_days"] += 0.5
+
+            total_attendance = stats["present_days"] 
+            
+            total_visits = stats["present_days"] 
+            pure_present = total_visits - stats["late_days"] - (stats["half_day_days"] * 0.5)
+            
+            if total_visits > 0:
+                stats["on_time_percentage"] = round((pure_present / total_visits) * 100, 1)
+                
+            return stats
+        except Exception as e:
+            print(f"Error in get_employee_attendance_stats: {e}")
+            return {}
+
     async def update_employee(
         self,
         employee_id: str,

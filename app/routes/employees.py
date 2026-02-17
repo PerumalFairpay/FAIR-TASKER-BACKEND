@@ -172,6 +172,37 @@ async def get_employees_summary():
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
+@router.get("/{employee_id}/summary", dependencies=[Depends(require_permission("employee:view"))])
+async def get_employee_summary_details(employee_id: str):
+    try:
+        # 1. Fetch Basic Details
+        employee = await repo.get_employee(employee_id)
+        if not employee:
+             return error_response(message="Employee not found", status_code=404)
+
+        # 2. Fetch Leave Balances
+        leave_summary = await repo.get_employee_leave_balances(employee_id)
+
+        # 3. Fetch Task Metrics
+        task_metrics = await repo.get_employee_task_metrics(employee_id)
+
+        # 4. Fetch Attendance Stats
+        attendance_stats = await repo.get_employee_attendance_stats(employee_id)
+
+        summary_data = {
+            "employee": employee,
+            "leave_summary": leave_summary,
+            "task_metrics": task_metrics,
+            "attendance_stats": attendance_stats
+        }
+
+        return success_response(
+            message="Employee summary fetched successfully",
+            data=summary_data
+        )
+    except Exception as e:
+        return error_response(message=str(e), status_code=500)
+
 @router.get("/{employee_id}", dependencies=[Depends(require_permission("employee:view"))])
 async def get_employee(employee_id: str):
     try:
