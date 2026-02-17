@@ -41,6 +41,8 @@ from app.models import (
     NDARequestCreate,
     NDARequestUpdate,
     PayslipCreate,
+    PayslipComponentCreate,
+    PayslipComponentUpdate,
 )
 from app.utils import normalize, get_password_hash, get_employee_basic_details
 from bson import ObjectId
@@ -76,6 +78,7 @@ class Repository:
         self.system_configurations = self.db["system_configurations"]
         self.nda_requests = self.db["nda_requests"]
         self.payslips = self.db["payslips"]
+        self.payslip_components = self.db["payslip_components"]
 
     async def create_employee(
         self, employee: EmployeeCreate, profile_picture_path: str = None
@@ -3003,5 +3006,72 @@ class Repository:
         except Exception as e:
             raise e
 
+
+    async def get_payslip(self, payslip_id: str) -> dict:
+        try:
+            doc = await self.payslips.find_one({"_id": ObjectId(payslip_id)})
+            return normalize(doc)
+        except Exception as e:
+            raise e
+            
+    async def update_payslip(self, payslip_id: str, update_data: dict) -> dict:
+        try:
+            update_data["updated_at"] = datetime.utcnow()
+            await self.payslips.update_one(
+                {"_id": ObjectId(payslip_id)}, {"$set": update_data}
+            )
+            return await self.get_payslip(payslip_id)
+        except Exception as e:
+            raise e
+
+    # Payslip Component CRUD
+    async def create_payslip_component(self, component: PayslipComponentCreate) -> dict:
+        try:
+            data = component.dict()
+            data["created_at"] = datetime.utcnow()
+            result = await self.payslip_components.insert_one(data)
+            data["id"] = str(result.inserted_id)
+            return normalize(data)
+        except Exception as e:
+            raise e
+
+    async def get_payslip_components(self, type: Optional[str] = None, is_active: Optional[bool] = None) -> List[dict]:
+        try:
+            query = {}
+            if type:
+                query["type"] = type
+            if is_active is not None:
+                query["is_active"] = is_active
+            
+            components = await self.payslip_components.find(query).to_list(length=None)
+            return [normalize(c) for c in components]
+        except Exception as e:
+            raise e
+
+    async def get_payslip_component(self, component_id: str) -> dict:
+        try:
+            component = await self.payslip_components.find_one({"_id": ObjectId(component_id)})
+            return normalize(component)
+        except Exception as e:
+            raise e
+
+    async def update_payslip_component(self, component_id: str, component: PayslipComponentUpdate) -> dict:
+        try:
+            update_data = {k: v for k, v in component.dict().items() if v is not None}
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.payslip_components.update_one(
+                    {"_id": ObjectId(component_id)}, {"$set": update_data}
+                )
+            return await self.get_payslip_component(component_id)
+        except Exception as e:
+            raise e
+
+    async def delete_payslip_component(self, component_id: str) -> bool:
+        try:
+            result = await self.payslip_components.delete_one({"_id": ObjectId(component_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
 
 repository = Repository()

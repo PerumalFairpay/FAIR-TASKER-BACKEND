@@ -31,6 +31,7 @@ from app.routes import (
     settings,
     nda,
     payslip,
+    payslip_component,
 )
 
 from app.jobs.scheduler import init_scheduler, shutdown_scheduler
@@ -119,6 +120,7 @@ api_router.include_router(checklist_templates.router)
 api_router.include_router(settings.router)
 api_router.include_router(nda.router)
 api_router.include_router(payslip.router)
+api_router.include_router(payslip_component.router)
 
 
 app.include_router(api_router, prefix="/api")

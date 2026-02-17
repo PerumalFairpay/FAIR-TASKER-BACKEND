@@ -954,3 +954,25 @@ class PayslipResponse(PayslipBase):
     class Config:
         from_attributes = True
 
+
+class PayslipComponentBase(BaseModel):
+    name: str
+    type: str  # "Earnings" or "Deductions"
+    is_active: bool = True
+
+
+class PayslipComponentCreate(PayslipComponentBase):
+    pass
+
+
+class PayslipComponentUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class PayslipComponentResponse(PayslipComponentBase):
+    id: str
+
+    class Config:
+        from_attributes = True
