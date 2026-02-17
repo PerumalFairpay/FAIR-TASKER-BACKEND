@@ -379,51 +379,10 @@ class Repository:
             
             identifier = employee.get("employee_no_id") or str(employee["_id"])
             
-            now = datetime.utcnow()
-            start_date = now.replace(day=1).strftime("%Y-%m-%d")
+            # Use the existing centralized metrics calculation
+            # This returns { "today": {...}, "month": {...}, "year": {...} }
+            return await self.get_dashboard_metrics(employee_id=identifier)
             
-            query = {
-                "employee_id": identifier,
-                "date": {"$gte": start_date}
-            }
-            
-            logs = await self.attendance.find(query).to_list(length=None)
-            
-            stats = {
-                "month": now.strftime("%B %Y"),
-                "total_working_days": 26,   
-                "present_days": 0,
-                "absent_days": 0,
-                "late_days": 0,
-                "leave_days": 0,
-                "half_day_days": 0,
-                "on_time_percentage": 0
-            }
-            
-            for log in logs:
-                status = log.get("status", "Absent")
-                if status == "Present":
-                    stats["present_days"] += 1
-                elif status == "Late":
-                    stats["late_days"] += 1
-                    stats["present_days"] += 1  
-                elif status == "Absent":
-                    stats["absent_days"] += 1
-                elif status == "Leave":
-                    stats["leave_days"] += 1
-                elif status == "Half Day":
-                    stats["half_day_days"] += 1
-                    stats["present_days"] += 0.5
-
-            total_attendance = stats["present_days"] 
-            
-            total_visits = stats["present_days"] 
-            pure_present = total_visits - stats["late_days"] - (stats["half_day_days"] * 0.5)
-            
-            if total_visits > 0:
-                stats["on_time_percentage"] = round((pure_present / total_visits) * 100, 1)
-                
-            return stats
         except Exception as e:
             print(f"Error in get_employee_attendance_stats: {e}")
             return {}
