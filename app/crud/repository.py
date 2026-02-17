@@ -378,9 +378,6 @@ class Repository:
                 return {}
             
             identifier = employee.get("employee_no_id") or str(employee["_id"])
-            
-            # Use the existing centralized metrics calculation
-            # This returns { "today": {...}, "month": {...}, "year": {...} }
             return await self.get_dashboard_metrics(employee_id=identifier)
             
         except Exception as e:
