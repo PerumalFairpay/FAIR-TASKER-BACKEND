@@ -1005,6 +1005,10 @@ class FeedbackUpdate(BaseModel):
     attachments: Optional[List[str]] = None
 
 
+class FeedbackStatusUpdate(BaseModel):
+    status: str
+
+
 class FeedbackResponse(FeedbackBase):
     id: str
     created_at: datetime

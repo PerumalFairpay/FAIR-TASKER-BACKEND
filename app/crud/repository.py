@@ -3110,13 +3110,44 @@ class Repository:
 
     # Feedback CRUD
     
+    async def get_feedback_metrics(self, employee_id: Optional[str] = None) -> dict:
+        try:
+            metrics_query = {"employee_id": employee_id} if employee_id else {}
+            all_feedbacks = await self.db["feedback"].find(metrics_query, {"type": 1, "status": 1}).to_list(length=None)
+
+            type_counts = {"Bug": 0, "Feature Request": 0, "General": 0}
+            status_counts = {"Open": 0, "In Review": 0, "Resolved": 0, "Closed": 0}
+
+            for f in all_feedbacks:
+                t = f.get("type", "General")
+                s = f.get("status", "Open")
+                if t in type_counts:
+                    type_counts[t] += 1
+                if s in status_counts:
+                    status_counts[s] += 1
+
+            return {
+                "total": len(all_feedbacks),
+                "by_type": type_counts,
+                "by_status": status_counts,
+            }
+        except Exception as e:
+            raise e
+
     async def create_feedback(self, feedback: FeedbackCreate) -> dict:
         try:
             feedback_data = feedback.dict()
             feedback_data["created_at"] = datetime.utcnow()
             result = await self.db["feedback"].insert_one(feedback_data)
-            feedback_data["id"] = str(result.inserted_id)
-            return normalize(feedback_data)
+            feedback_id = str(result.inserted_id)
+            
+            # Fetch enriched feedback
+            new_feedback = await self.get_feedback(feedback_id)
+            
+            # Fetch metrics after creation
+            metrics = await self.get_feedback_metrics()
+            
+            return {"feedback": new_feedback, "metrics": metrics}
         except Exception as e:
             raise e
 
@@ -3145,26 +3176,8 @@ class Repository:
                         feedback["employee"] = employee_details
                 result.append(feedback)
 
-            # Compute metrics from ALL feedbacks (ignore status filter for metrics)
-            metrics_query = {"employee_id": employee_id} if employee_id else {}
-            all_feedbacks = await self.db["feedback"].find(metrics_query, {"type": 1, "status": 1}).to_list(length=None)
-
-            type_counts = {"Bug": 0, "Feature Request": 0, "General": 0}
-            status_counts = {"Open": 0, "In Review": 0, "Resolved": 0, "Closed": 0}
-
-            for f in all_feedbacks:
-                t = f.get("type", "General")
-                s = f.get("status", "Open")
-                if t in type_counts:
-                    type_counts[t] += 1
-                if s in status_counts:
-                    status_counts[s] += 1
-
-            metrics = {
-                "total": len(all_feedbacks),
-                "by_type": type_counts,
-                "by_status": status_counts,
-            }
+            # Compute metrics using helper
+            metrics = await self.get_feedback_metrics(employee_id=employee_id)
 
             return {"feedbacks": result, "metrics": metrics}
         except Exception as e:
@@ -3173,8 +3186,17 @@ class Repository:
 
     async def get_feedback(self, feedback_id: str) -> dict:
         try:
-            feedback = await self.db["feedback"].find_one({"_id": ObjectId(feedback_id)})
-            return normalize(feedback) if feedback else None
+            feedback_raw = await self.db["feedback"].find_one({"_id": ObjectId(feedback_id)})
+            if not feedback_raw:
+                return None
+            
+            feedback = normalize(feedback_raw)
+            emp_id = feedback.get("employee_id")
+            if emp_id:
+                employee_details = await self.get_employee_basic_details(emp_id)
+                if employee_details:
+                    feedback["employee"] = employee_details
+            return feedback
         except Exception as e:
             raise e
 
@@ -3186,7 +3208,15 @@ class Repository:
                 await self.db["feedback"].update_one(
                     {"_id": ObjectId(feedback_id)}, {"$set": update_data}
                 )
-            return await self.get_feedback(feedback_id)
+            
+            updated_feedback = await self.get_feedback(feedback_id)
+            if not updated_feedback:
+                return None
+                
+            # Fetch metrics after update
+            metrics = await self.get_feedback_metrics()
+            
+            return {"feedback": updated_feedback, "metrics": metrics}
         except Exception as e:
             raise e
 

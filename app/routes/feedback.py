@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Form, File, UploadFile
 from app.helper.response_helper import success_response, error_response
 from app.crud.repository import repository as repo
-from app.models import FeedbackCreate, FeedbackUpdate
+from app.models import FeedbackCreate, FeedbackUpdate, FeedbackStatusUpdate
 from app.helper.file_handler import file_handler
 from typing import Optional, List
 from app.auth import verify_token
@@ -35,12 +35,13 @@ async def create_feedback(
             attachments=attachment_urls
         )
         
-        new_feedback = await repo.create_feedback(feedback_data)
+        result = await repo.create_feedback(feedback_data)
         
         return success_response(
             message="Feedback submitted successfully",
             status_code=201,
-            data=new_feedback
+            data=result["feedback"],
+            meta=result["metrics"]
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
@@ -84,14 +85,33 @@ async def update_feedback(
             attachments=attachment_urls if attachment_urls else None
         )
         
-        updated_feedback = await repo.update_feedback(feedback_id, feedback_update)
+        result = await repo.update_feedback(feedback_id, feedback_update)
         
-        if not updated_feedback:
+        if not result:
             return error_response(message="Feedback not found", status_code=404)
             
         return success_response(
             message="Feedback updated successfully",
-            data=updated_feedback
+            data=result["feedback"],
+            meta=result["metrics"]
+        )
+    except Exception as e:
+        return error_response(message=str(e), status_code=500)
+
+
+
+@router.patch("/{feedback_id}/status")
+async def update_feedback_status(feedback_id: str, payload: FeedbackStatusUpdate):
+    try:
+        result = await repo.update_feedback(feedback_id, FeedbackUpdate(status=payload.status))
+        
+        if not result:
+            return error_response(message="Feedback not found", status_code=404)
+            
+        return success_response(
+            message=f"Feedback status updated to {payload.status}",
+            data=result["feedback"],
+            meta=result["metrics"]
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
