@@ -43,6 +43,8 @@ from app.models import (
     PayslipCreate,
     PayslipComponentCreate,
     PayslipComponentUpdate,
+    FeedbackCreate,
+    FeedbackUpdate,
 )
 from app.utils import normalize, get_password_hash, get_employee_basic_details
 from bson import ObjectId
@@ -3083,6 +3085,61 @@ class Repository:
     async def delete_payslip_component(self, component_id: str) -> bool:
         try:
             result = await self.payslip_components.delete_one({"_id": ObjectId(component_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+
+    # Feedback CRUD
+    
+    async def create_feedback(self, feedback: FeedbackCreate) -> dict:
+        try:
+            feedback_data = feedback.dict()
+            feedback_data["created_at"] = datetime.utcnow()
+            result = await self.db["feedback"].insert_one(feedback_data)
+            feedback_data["id"] = str(result.inserted_id)
+            return normalize(feedback_data)
+        except Exception as e:
+            raise e
+
+    async def get_feedbacks(
+        self, user_id: Optional[str] = None, status: Optional[str] = None
+    ) -> List[dict]:
+        try:
+            query = {}
+            if user_id:
+                query["user_id"] = user_id
+            if status:
+                query["status"] = status
+            
+            feedbacks = await self.db["feedback"].find(query).sort("created_at", -1).to_list(length=None)
+            return [normalize(f) for f in feedbacks]
+        except Exception as e:
+            raise e
+
+
+    async def get_feedback(self, feedback_id: str) -> dict:
+        try:
+            feedback = await self.db["feedback"].find_one({"_id": ObjectId(feedback_id)})
+            return normalize(feedback) if feedback else None
+        except Exception as e:
+            raise e
+
+    async def update_feedback(self, feedback_id: str, feedback: FeedbackUpdate) -> dict:
+        try:
+            update_data = {k: v for k, v in feedback.dict().items() if v is not None}
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.db["feedback"].update_one(
+                    {"_id": ObjectId(feedback_id)}, {"$set": update_data}
+                )
+            return await self.get_feedback(feedback_id)
+        except Exception as e:
+            raise e
+
+    async def delete_feedback(self, feedback_id: str) -> bool:
+        try:
+            result = await self.db["feedback"].delete_one({"_id": ObjectId(feedback_id)})
             return result.deleted_count > 0
         except Exception as e:
             raise e

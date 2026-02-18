@@ -976,3 +976,39 @@ class PayslipComponentResponse(PayslipComponentBase):
 
     class Config:
         from_attributes = True
+
+
+class FeedbackBase(BaseModel):
+    user_id: str
+    user_name: str
+    type: str  # Bug, Feedback, Feature Request
+    subject: str
+    description: str
+    priority: str = "Medium"  # Low, Medium, High, Critical
+    status: str = "Open"  # Open, In Review, Resolved, Closed
+    attachments: List[str] = []
+
+
+class FeedbackCreate(FeedbackBase):
+    pass
+
+
+class FeedbackUpdate(BaseModel):
+    id: Optional[str] = None
+    user_id: Optional[str] = None
+    user_name: Optional[str] = None
+    type: Optional[str] = None
+    subject: Optional[str] = None
+    description: Optional[str] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+    attachments: Optional[List[str]] = None
+
+
+class FeedbackResponse(FeedbackBase):
+    id: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
