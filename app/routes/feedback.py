@@ -49,10 +49,11 @@ async def create_feedback(
 @router.get("/")
 async def get_feedbacks(employee_id: Optional[str] = None, status: Optional[str] = None):
     try:
-        feedbacks = await repo.get_feedbacks(employee_id=employee_id, status=status)
+        result = await repo.get_feedbacks(employee_id=employee_id, status=status)
         return success_response(
             message="Feedbacks fetched successfully",
-            data=feedbacks
+            data=result["feedbacks"],
+            meta=result["metrics"]
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)

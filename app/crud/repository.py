@@ -3122,17 +3122,21 @@ class Repository:
 
     async def get_feedbacks(
         self, employee_id: Optional[str] = None, status: Optional[str] = None
-    ) -> List[dict]:
+    ) -> dict:
         try:
             query = {}
             if employee_id:
                 query["employee_id"] = employee_id
             if status:
                 query["status"] = status
-            
-            feedbacks = await self.db["feedback"].find(query).sort("created_at", -1).to_list(length=None)
+
+            # Fetch feedbacks and compute metrics in parallel
+            feedbacks_cursor = self.db["feedback"].find(query).sort("created_at", -1)
+            feedbacks_raw = await feedbacks_cursor.to_list(length=None)
+
+            # Build enriched list
             result = []
-            for f in feedbacks:
+            for f in feedbacks_raw:
                 feedback = normalize(f)
                 emp_id = feedback.get("employee_id")
                 if emp_id:
@@ -3140,7 +3144,29 @@ class Repository:
                     if employee_details:
                         feedback["employee"] = employee_details
                 result.append(feedback)
-            return result
+
+            # Compute metrics from ALL feedbacks (ignore status filter for metrics)
+            metrics_query = {"employee_id": employee_id} if employee_id else {}
+            all_feedbacks = await self.db["feedback"].find(metrics_query, {"type": 1, "status": 1}).to_list(length=None)
+
+            type_counts = {"Bug": 0, "Feature Request": 0, "General": 0}
+            status_counts = {"Open": 0, "In Review": 0, "Resolved": 0, "Closed": 0}
+
+            for f in all_feedbacks:
+                t = f.get("type", "General")
+                s = f.get("status", "Open")
+                if t in type_counts:
+                    type_counts[t] += 1
+                if s in status_counts:
+                    status_counts[s] += 1
+
+            metrics = {
+                "total": len(all_feedbacks),
+                "by_type": type_counts,
+                "by_status": status_counts,
+            }
+
+            return {"feedbacks": result, "metrics": metrics}
         except Exception as e:
             raise e
 
