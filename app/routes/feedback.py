@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends, Form
+from fastapi import APIRouter, HTTPException, Depends, Form, File, UploadFile
 from app.helper.response_helper import success_response, error_response
 from app.crud.repository import repository as repo
 from app.models import FeedbackCreate, FeedbackUpdate
+from app.helper.file_handler import file_handler
 from typing import Optional, List
 from app.auth import verify_token
 
@@ -16,9 +17,14 @@ async def create_feedback(
     subject: str = Form(...),
     description: str = Form(...),
     priority: str = Form("Medium"),
-    attachments: Optional[List[str]] = Form(None)
+    attachments: List[UploadFile] = File([])
 ):
     try:
+        attachment_urls = []
+        for file in attachments:
+            uploaded = await file_handler.upload_file(file)
+            attachment_urls.append(uploaded["url"])
+
         feedback_data = FeedbackCreate(
             user_id=user_id,
             user_name=user_name,
@@ -26,7 +32,7 @@ async def create_feedback(
             subject=subject,
             description=description,
             priority=priority,
-            attachments=attachments or []
+            attachments=attachment_urls
         )
         
         new_feedback = await repo.create_feedback(feedback_data)
@@ -59,16 +65,22 @@ async def update_feedback(
     type: Optional[str] = Form(None),
     subject: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
-    attachments: Optional[List[str]] = Form(None)
+    attachments: List[UploadFile] = File([])
 ):
     try:
+        attachment_urls = []
+        if attachments:
+            for file in attachments:
+                uploaded = await file_handler.upload_file(file)
+                attachment_urls.append(uploaded["url"])
+            
         feedback_update = FeedbackUpdate(
             status=status,
             priority=priority,
             type=type,
             subject=subject,
             description=description,
-            attachments=attachments
+            attachments=attachment_urls if attachment_urls else None
         )
         
         updated_feedback = await repo.update_feedback(feedback_id, feedback_update)
