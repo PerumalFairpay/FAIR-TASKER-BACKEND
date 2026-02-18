@@ -2974,6 +2974,19 @@ class Repository:
         except Exception as e:
             raise e
 
+    async def get_latest_payslip(self, employee_id: str) -> Optional[dict]:
+        try:
+            # Sort by year desc, then by generated_at desc to get the most recent
+            payslip = await self.payslips.find_one(
+                {"employee_id": employee_id},
+                sort=[("year", -1), ("generated_at", -1)]
+            )
+            if not payslip:
+                return None
+            return normalize(payslip)
+        except Exception as e:
+            raise e
+
     async def get_payslip(self, payslip_id: str) -> dict:
         try:
             payslip = await self.payslips.find_one({"_id": ObjectId(payslip_id)})

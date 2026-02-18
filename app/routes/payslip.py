@@ -217,6 +217,28 @@ async def list_payslips(
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
+@router.get("/latest/{employee_id}")
+async def get_latest_payslip(employee_id: str):
+    """
+    Get the most recent payslip for a specific employee.
+    Returns earnings and deductions to allow copying to a new payslip.
+    """
+    try:
+        payslip = await repository.get_latest_payslip(employee_id)
+        if not payslip:
+            return error_response(message="No previous payslip found for this employee", status_code=404)
+        return success_response(
+            message="Latest payslip retrieved successfully",
+            data={
+                "earnings": payslip.get("earnings", {}),
+                "deductions": payslip.get("deductions", {}),
+                "month": payslip.get("month"),
+                "year": payslip.get("year"),
+            }
+        )
+    except Exception as e:
+        return error_response(message=str(e), status_code=500)
+
 @router.get("/download/{payslip_id}")
 async def download_payslip(payslip_id: str, current_user: dict = Depends(get_current_user)):
     """
