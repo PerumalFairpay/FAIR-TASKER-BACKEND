@@ -979,8 +979,8 @@ class PayslipComponentResponse(PayslipComponentBase):
 
 
 class FeedbackBase(BaseModel):
-    user_id: str
-    user_name: str
+    employee_id: str
+    employee_name: str
     type: str  # Bug, Feedback, Feature Request
     subject: str
     description: str
@@ -995,8 +995,8 @@ class FeedbackCreate(FeedbackBase):
 
 class FeedbackUpdate(BaseModel):
     id: Optional[str] = None
-    user_id: Optional[str] = None
-    user_name: Optional[str] = None
+    employee_id: Optional[str] = None
+    employee_name: Optional[str] = None
     type: Optional[str] = None
     subject: Optional[str] = None
     description: Optional[str] = None

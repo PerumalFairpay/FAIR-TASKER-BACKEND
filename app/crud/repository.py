@@ -273,6 +273,24 @@ class Repository:
         except Exception as e:
             raise e
 
+    async def get_employee_basic_details(self, employee_id: str) -> dict:
+        """Returns a lightweight employee profile for embedding in other resources."""
+        try:
+            employee = await self.employees.find_one({"_id": ObjectId(employee_id)})
+            if not employee:
+                return None
+            return {
+                "id": str(employee["_id"]),
+                "name": employee.get("name", ""),
+                "profile_picture": employee.get("profile_picture"),
+                "designation": employee.get("designation"),
+                "department": employee.get("department"),
+                "employee_no_id": employee.get("employee_no_id"),
+                "email": employee.get("email"),
+            }
+        except Exception:
+            return None
+
     async def get_employee_leave_balances(self, employee_id: str) -> dict:
         try:
             employee = await self.get_employee(employee_id)
@@ -3103,17 +3121,26 @@ class Repository:
             raise e
 
     async def get_feedbacks(
-        self, user_id: Optional[str] = None, status: Optional[str] = None
+        self, employee_id: Optional[str] = None, status: Optional[str] = None
     ) -> List[dict]:
         try:
             query = {}
-            if user_id:
-                query["user_id"] = user_id
+            if employee_id:
+                query["employee_id"] = employee_id
             if status:
                 query["status"] = status
             
             feedbacks = await self.db["feedback"].find(query).sort("created_at", -1).to_list(length=None)
-            return [normalize(f) for f in feedbacks]
+            result = []
+            for f in feedbacks:
+                feedback = normalize(f)
+                emp_id = feedback.get("employee_id")
+                if emp_id:
+                    employee_details = await self.get_employee_basic_details(emp_id)
+                    if employee_details:
+                        feedback["employee"] = employee_details
+                result.append(feedback)
+            return result
         except Exception as e:
             raise e
 

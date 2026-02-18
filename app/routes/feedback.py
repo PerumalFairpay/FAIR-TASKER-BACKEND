@@ -11,8 +11,8 @@ router = APIRouter(prefix="/feedback", tags=["feedback"], dependencies=[Depends(
 
 @router.post("/")
 async def create_feedback(
-    user_id: str = Form(...),
-    user_name: str = Form(...),
+    employee_id: str = Form(...),
+    employee_name: str = Form(...),
     type: str = Form(...),
     subject: str = Form(...),
     description: str = Form(...),
@@ -26,8 +26,8 @@ async def create_feedback(
             attachment_urls.append(uploaded["url"])
 
         feedback_data = FeedbackCreate(
-            user_id=user_id,
-            user_name=user_name,
+            employee_id=employee_id,
+            employee_name=employee_name,
             type=type,
             subject=subject,
             description=description,
@@ -47,9 +47,9 @@ async def create_feedback(
 
 
 @router.get("/")
-async def get_feedbacks(user_id: Optional[str] = None, status: Optional[str] = None):
+async def get_feedbacks(employee_id: Optional[str] = None, status: Optional[str] = None):
     try:
-        feedbacks = await repo.get_feedbacks(user_id=user_id, status=status)
+        feedbacks = await repo.get_feedbacks(employee_id=employee_id, status=status)
         return success_response(
             message="Feedbacks fetched successfully",
             data=feedbacks
