@@ -3,10 +3,10 @@ from app.helper.response_helper import success_response, error_response
 from app.crud.repository import repository as repo
 from app.models import FeedbackCreate, FeedbackUpdate, FeedbackStatusUpdate
 from app.helper.file_handler import file_handler
+from app.auth import get_current_user, require_permission
 from typing import Optional, List
-from app.auth import verify_token
 
-router = APIRouter(prefix="/feedback", tags=["feedback"], dependencies=[Depends(verify_token)])
+router = APIRouter(prefix="/feedback", tags=["feedback"])
 
 
 @router.post("/")
@@ -17,7 +17,8 @@ async def create_feedback(
     subject: str = Form(...),
     description: str = Form(...),
     priority: str = Form("Medium"),
-    attachments: List[UploadFile] = File([])
+    attachments: List[UploadFile] = File([]),
+    current_user: dict = Depends(require_permission("feedback:submit"))
 ):
     try:
         attachment_urls = []
@@ -48,8 +49,14 @@ async def create_feedback(
 
 
 @router.get("/")
-async def get_feedbacks(employee_id: Optional[str] = None, status: Optional[str] = None):
+async def get_feedbacks(
+    employee_id: Optional[str] = None,
+    status: Optional[str] = None,
+    current_user: dict = Depends(require_permission("feedback:view"))
+):
     try:
+        # Anyone with feedback:view permission can see all feedbacks
+        # Optionally filter by employee_id if provided as a query param
         result = await repo.get_feedbacks(employee_id=employee_id, status=status)
         return success_response(
             message="Feedbacks fetched successfully",
@@ -59,6 +66,7 @@ async def get_feedbacks(employee_id: Optional[str] = None, status: Optional[str]
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
+
 @router.put("/{feedback_id}")
 async def update_feedback(
     feedback_id: str,
@@ -67,9 +75,21 @@ async def update_feedback(
     type: Optional[str] = Form(None),
     subject: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
-    attachments: List[UploadFile] = File([])
+    attachments: List[UploadFile] = File([]),
+    current_user: dict = Depends(require_permission("feedback:submit"))
 ):
     try:
+        # Ownership check: employees can only edit their own feedback
+        if current_user.get("role") != "admin":
+            existing = await repo.get_feedback(feedback_id)
+            if not existing:
+                return error_response(message="Feedback not found", status_code=404)
+            if existing.get("employee_id") != current_user.get("employee_id"):
+                return error_response(
+                    message="You are not authorized to edit this feedback",
+                    status_code=403
+                )
+
         attachment_urls = []
         if attachments:
             for file in attachments:
@@ -99,9 +119,12 @@ async def update_feedback(
         return error_response(message=str(e), status_code=500)
 
 
-
 @router.patch("/{feedback_id}/status")
-async def update_feedback_status(feedback_id: str, payload: FeedbackStatusUpdate):
+async def update_feedback_status(
+    feedback_id: str,
+    payload: FeedbackStatusUpdate,
+    current_user: dict = Depends(require_permission("feedback:manage"))
+):
     try:
         result = await repo.update_feedback(feedback_id, FeedbackUpdate(status=payload.status))
         
@@ -118,8 +141,21 @@ async def update_feedback_status(feedback_id: str, payload: FeedbackStatusUpdate
 
 
 @router.delete("/{feedback_id}")
-async def delete_feedback(feedback_id: str):
+async def delete_feedback(
+    feedback_id: str,
+    current_user: dict = Depends(require_permission("feedback:submit"))
+):
     try:
+        if current_user.get("role") != "admin":
+            existing = await repo.get_feedback(feedback_id)
+            if not existing:
+                return error_response(message="Feedback not found", status_code=404)
+            if existing.get("employee_id") != current_user.get("employee_id"):
+                return error_response(
+                    message="You are not authorized to delete this feedback",
+                    status_code=403
+                )
+
         success = await repo.delete_feedback(feedback_id)
         if not success:
             return error_response(message="Feedback not found", status_code=404)
