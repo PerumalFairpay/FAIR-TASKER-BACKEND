@@ -978,6 +978,13 @@ class PayslipComponentResponse(PayslipComponentBase):
         from_attributes = True
 
 
+
+class FeedbackAttachment(BaseModel):
+    document_name: str
+    document_proof: str
+    file_type: Optional[str] = None
+
+
 class FeedbackBase(BaseModel):
     employee_id: str
     employee_name: str
@@ -986,7 +993,7 @@ class FeedbackBase(BaseModel):
     description: str
     priority: str = "Medium"  # Low, Medium, High, Critical
     status: str = "Open"  # Open, In Review, Resolved, Closed
-    attachments: List[str] = []
+    attachments: List[FeedbackAttachment] = []
 
 
 class FeedbackCreate(FeedbackBase):
@@ -1002,7 +1009,7 @@ class FeedbackUpdate(BaseModel):
     description: Optional[str] = None
     priority: Optional[str] = None
     status: Optional[str] = None
-    attachments: Optional[List[str]] = None
+    attachments: Optional[List[FeedbackAttachment]] = None
 
 
 class FeedbackStatusUpdate(BaseModel):

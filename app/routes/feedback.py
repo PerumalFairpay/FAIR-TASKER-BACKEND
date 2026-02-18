@@ -24,7 +24,11 @@ async def create_feedback(
         attachment_urls = []
         for file in attachments:
             uploaded = await file_handler.upload_file(file)
-            attachment_urls.append(uploaded["url"])
+            attachment_urls.append({
+                "document_name": file.filename,
+                "document_proof": uploaded["url"],
+                "file_type": file.content_type
+            })
 
         feedback_data = FeedbackCreate(
             employee_id=employee_id,
@@ -94,7 +98,11 @@ async def update_feedback(
         if attachments:
             for file in attachments:
                 uploaded = await file_handler.upload_file(file)
-                attachment_urls.append(uploaded["url"])
+                attachment_urls.append({
+                    "document_name": file.filename,
+                    "document_proof": uploaded["url"],
+                    "file_type": file.content_type
+                })
             
         feedback_update = FeedbackUpdate(
             status=status,
