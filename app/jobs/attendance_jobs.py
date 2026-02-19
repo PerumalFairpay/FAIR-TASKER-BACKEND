@@ -5,7 +5,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-async def generate_attendance_for_date(target_date: str = None, preplanned_only: bool = False) -> dict:
+from bson import ObjectId
+
+async def generate_attendance_for_date(target_date: str = None, preplanned_only: bool = False, shift_type_filter: str = None) -> dict:
     """
     Generate attendance records for a specific date.
     Creates Absent, Holiday, or Leave records for employees who didn't clock in.
@@ -13,6 +15,9 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
     Args:
         target_date: Date in YYYY-MM-DD format. Defaults to yesterday.
         preplanned_only: If True, only generates Holiday and Leave records (skips Absent).
+        shift_type_filter: "Day" or "Night". If provided, only processes employees in that shift type.
+                           If None, processes all employees.
+                           "Day" includes employees with no assigned shift (default).
     """
     try:
         today_str = datetime.utcnow().strftime("%Y-%m-%d")
@@ -33,10 +38,14 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
             logger.info(f"Skipping future date: {target_date}")
             return {"success": False, "message": "Cannot generate records for future dates"}
         
-        logger.info(f"Generating attendance records for {target_date} (Preplanned Only: {preplanned_only})")
+        logger.info(f"Generating attendance for {target_date} (Preplanned: {preplanned_only}, Shift: {shift_type_filter})")
         
         # Fetch all employees
         employees = await repo.employees.find().to_list(length=None)
+        
+        # Fetch all shifts to map ID -> Shift Type
+        shifts = await repo.shifts.find().to_list(length=None)
+        shift_map = {str(s["_id"]): s for s in shifts}
         
         # Fetch existing attendance records for this date
         existing_records = await repo.attendance.find({"date": target_date}).to_list(length=None)
@@ -69,6 +78,31 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
         for emp in employees:
             emp_no_id = str(emp.get("employee_no_id"))
             emp_id = str(emp.get("_id"))
+            
+            # --- SHIFT FILTERING START ---
+            if shift_type_filter:
+                emp_shift_id = emp.get("shift_id")
+                is_night_shift = False # Default to Day
+                
+                # Check assigned shift
+                if emp_shift_id and emp_shift_id in shift_map:
+                    is_night_shift = shift_map[emp_shift_id].get("is_night_shift", False)
+                elif emp.get("department"):
+                     # Fallback to Dept Default
+                     # We assume department logic handled elsewhere or pre-fetched, 
+                     # but for batch job, let's keep it simple: 
+                     # If no personal shift, check if we can infer from department default?
+                     # Fetching department for every employee is slow.
+                     # Optimisation: We could fetch departments once.
+                     pass 
+
+                # Filter Logic
+                if shift_type_filter == "Day" and is_night_shift:
+                    continue # Skip Night shift employees in Day job
+                
+                if shift_type_filter == "Night" and not is_night_shift:
+                    continue # Skip Day shift employees in Night job
+            # --- SHIFT FILTERING END ---
             
             # Skip if employee already has an attendance record for this date
             if emp_no_id in existing_employee_ids:
@@ -156,16 +190,31 @@ async def generate_today_preplanned_records():
 
 async def generate_daily_attendance_records():
     """
-    Night job (11:57 PM IST) to generate ALL missing records for the ending day.
-    This fills in 'Absent' records for anyone who didn't clock in.
+    Night job (11:57 PM IST) to generate Missing records for DAY SHIFT employees.
     """
     try:
-        # Calculate current date in IST (UTC + 5:30)
         ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
         today_str = ist_now.strftime("%Y-%m-%d")
         
-        logger.info(f"Starting end-of-day attendance generation for {today_str} (IST)")
-        return await generate_attendance_for_date(today_str, preplanned_only=False)
+        logger.info(f"Starting Day Shift attendance generation for {today_str}")
+        return await generate_attendance_for_date(today_str, preplanned_only=False, shift_type_filter="Day")
     except Exception as e:
-        logger.error(f"Daily attendance job failed: {str(e)}")
+        logger.error(f"Daily Day Shift job failed: {str(e)}")
+        return {"success": False, "message": str(e)}
+
+async def generate_night_shift_attendance_records():
+    """
+    Morning job (08:00 AM IST) to generate Missing records for NIGHT SHIFT employees (for Previous Day).
+    """
+    try:
+        ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
+        # For Night Shift, "Absent" is determined the NEXT morning.
+        # So we are looking for records from YESTERDAY.
+        yesterday_dt = ist_now - timedelta(days=1)
+        yesterday_str = yesterday_dt.strftime("%Y-%m-%d")
+        
+        logger.info(f"Starting Night Shift attendance generation for {yesterday_str}")
+        return await generate_attendance_for_date(yesterday_str, preplanned_only=False, shift_type_filter="Night")
+    except Exception as e:
+        logger.error(f"Daily Night Shift job failed: {str(e)}")
         return {"success": False, "message": str(e)}

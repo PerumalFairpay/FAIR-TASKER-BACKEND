@@ -4,6 +4,8 @@ from app.models import (
     DepartmentUpdate,
     EmployeeCreate,
     EmployeeUpdate,
+    ShiftCreate,
+    ShiftUpdate,
     ExpenseCategoryCreate,
     ExpenseCategoryUpdate,
     ExpenseCreate,
@@ -60,6 +62,7 @@ class Repository:
     def __init__(self):
         self.db = db
         self.departments = self.db["departments"]
+        self.shifts = self.db["shifts"]
         self.employees = self.db["employees"]
         self.users = self.db["users"]
         self.expense_categories = self.db["expense_categories"]
@@ -656,6 +659,50 @@ class Repository:
     async def delete_department(self, department_id: str) -> bool:
         try:
             result = await self.departments.delete_one({"_id": ObjectId(department_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+    # Shift CRUD
+    async def create_shift(self, shift: ShiftCreate) -> dict:
+        try:
+            shift_data = shift.dict()
+            shift_data["created_at"] = datetime.utcnow()
+            result = await self.shifts.insert_one(shift_data)
+            shift_data["id"] = str(result.inserted_id)
+            return normalize(shift_data)
+        except Exception as e:
+            raise e
+
+    async def get_shifts(self) -> List[dict]:
+        try:
+            shifts = await self.shifts.find().to_list(length=None)
+            return [normalize(s) for s in shifts]
+        except Exception as e:
+            raise e
+
+    async def get_shift(self, shift_id: str) -> dict:
+        try:
+            shift = await self.shifts.find_one({"_id": ObjectId(shift_id)})
+            return normalize(shift)
+        except Exception as e:
+            raise e
+
+    async def update_shift(self, shift_id: str, shift: ShiftUpdate) -> dict:
+        try:
+            update_data = {k: v for k, v in shift.dict().items() if v is not None}
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.shifts.update_one(
+                    {"_id": ObjectId(shift_id)}, {"$set": update_data}
+                )
+            return await self.get_shift(shift_id)
+        except Exception as e:
+            raise e
+
+    async def delete_shift(self, shift_id: str) -> bool:
+        try:
+            result = await self.shifts.delete_one({"_id": ObjectId(shift_id)})
             return result.deleted_count > 0
         except Exception as e:
             raise e
@@ -2124,37 +2171,65 @@ class Repository:
             attendance_data["employee_id"] = target_emp_id
             attendance_data["updated_at"] = datetime.utcnow()
             
-            # Fetch system settings for late calculation
-            work_start_time_config = await self.system_configurations.find_one(
-                {"key": "work_start_time"}
-            )
-            late_grace_period_config = await self.system_configurations.find_one(
-                {"key": "late_grace_period_minutes"}
-            )
+            # --- SHIFT & LATE CALCULATION START ---
             
-            # Default values if settings not found
-            work_start_time = work_start_time_config.get("value", "09:00") if work_start_time_config else "09:00"
-            late_grace_period = late_grace_period_config.get("value", 15) if late_grace_period_config else 15
+            # 1. Get Shift Details
+            shift = None
+            shift_id = emp.get("shift_id")
             
-            # Parse clock_in time and convert to IST (Asia/Kolkata)
-            from datetime import timezone, timedelta
+            if shift_id:
+                shift = await self.shifts.find_one({"_id": ObjectId(shift_id)})
             
+            # 2. Fallback to Department Default Shift if no personal shift
+            if not shift and emp.get("department"):
+                # We need to find the department to get default_shift_id
+                # dept_name stored in employee, but we need ID or look up by name
+                dept = await self.departments.find_one({"name": emp.get("department")})
+                if dept and dept.get("default_shift_id"):
+                    shift = await self.shifts.find_one({"_id": ObjectId(dept["default_shift_id"])})
+            
+            # 3. Determine Work Start Time & Grace Period
+            work_start_time = "09:00" # Default
+            late_grace_period = 15    # Default
+            
+            if shift:
+                work_start_time = shift.get("start_time", "09:00")
+                late_grace_period = shift.get("late_threshold_minutes", 15)
+            else:
+                # Fallback to System Configuration
+                work_start_time_config = await self.system_configurations.find_one({"key": "work_start_time"})
+                late_grace_period_config = await self.system_configurations.find_one({"key": "late_grace_period_minutes"})
+                
+                if work_start_time_config:
+                    work_start_time = work_start_time_config.get("value", "09:00")
+                if late_grace_period_config:
+                    late_grace_period = late_grace_period_config.get("value", 15)
+
+            # 4. Parse Times
+            from datetime import timedelta
+            
+            # Current Clock In Time (IST)
             clock_in_dt = datetime.fromisoformat(attendance.clock_in.replace("Z", "+00:00"))
-            
-            # Convert UTC to IST (UTC+5:30)
             ist_offset = timedelta(hours=5, minutes=30)
             clock_in_ist = clock_in_dt + ist_offset
             clock_in_time = clock_in_ist.time()
             
-            # Parse work start time
-            work_start = datetime.strptime(work_start_time, "%H:%M").time()
-            
-            # Calculate if late
+            # Shift Start Time
+            try:
+                work_start = datetime.strptime(work_start_time, "%H:%M").time()
+            except ValueError:
+                # Handle cases where seconds might be included or format differs
+                try:
+                     work_start = datetime.strptime(work_start_time, "%H:%M:%S").time()
+                except ValueError:
+                     work_start = datetime.strptime("09:00", "%H:%M").time() # Absolute fallback
+
+            # 5. Calculate Late Status
             is_late = False
             status = "Present"
             
+            # Only mark late if clock_in is AFTER start_time
             if clock_in_time > work_start:
-                # Calculate minutes late
                 clock_in_minutes = clock_in_time.hour * 60 + clock_in_time.minute
                 work_start_minutes = work_start.hour * 60 + work_start.minute
                 minutes_late = clock_in_minutes - work_start_minutes
@@ -2162,6 +2237,8 @@ class Repository:
                 if minutes_late > late_grace_period:
                     is_late = True
                     status = "Late"
+            
+            # --- SHIFT & LATE CALCULATION END ---
             
             attendance_data["is_late"] = is_late
             attendance_data["status"] = status
@@ -2237,15 +2314,60 @@ class Repository:
             start_str = existing.get("clock_in")
             end_str = update_data.get("clock_out")
 
+            # --- OVERTIME CALCULATION START ---
             if start_str and end_str:
                 try:
-                    # Attempt generic ISO parsing
+                    # Parse Times
                     start_dt = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
                     end_dt = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
                     duration = (end_dt - start_dt).total_seconds() / 3600
-                    update_data["total_work_hours"] = round(duration, 2)
-                except:
-                    pass  # Fallback or skip if format issues
+                    
+                    total_work_hours = round(duration, 2)
+                    update_data["total_work_hours"] = total_work_hours
+                    
+                    # Get Shift for Overtime Calculation
+                    shift = None
+                    if emp and emp.get("shift_id"):
+                        shift = await self.shifts.find_one({"_id": ObjectId(emp["shift_id"])})
+                    
+                    if not shift and emp and emp.get("department"):
+                        dept = await self.departments.find_one({"name": emp.get("department")})
+                        if dept and dept.get("default_shift_id"):
+                            shift = await self.shifts.find_one({"_id": ObjectId(dept["default_shift_id"])})
+                    
+                    # Calculate Expected Shift Duration
+                    shift_duration = 9.00 # Default fallback (9 hours)
+                    
+                    if shift:
+                        try:
+                            s_start = datetime.strptime(shift.get("start_time", "09:00"), "%H:%M")
+                            s_end = datetime.strptime(shift.get("end_time", "18:00"), "%H:%M")
+                            
+                            # Handle crossing midnight (e.g. 20:00 - 05:00)
+                            if s_end < s_start:
+                                s_end += timedelta(days=1)
+                                
+                            shift_duration = (s_end - s_start).total_seconds() / 3600
+                        except:
+                            shift_duration = 9.00
+                            
+                    # Calculate Overtime
+                    # Logic: Overtime = Work Hours - Shift Duration
+                    overtime = max(0.0, total_work_hours - shift_duration)
+                    update_data["overtime_hours"] = round(overtime, 2)
+                    
+                    # Optional: Update status to "Overtime" if significant overtime?
+                    # valid statuses: Present, Late, Absent, Leave, Holiday, Overtime
+                    # If already Late, keep it Late? Or upgrade to Overtime?
+                    # Requirements usually keep "Late" entry status but maybe show OT flag.
+                    # For now, if overtime > 1 hour, maybe update status?
+                    # Let's keep status as is (Present/Late) unless specific requirement to change status.
+                    # update_data["status"] = "Overtime" if overtime > 0 else ...
+                    
+                except Exception as e:
+                    print(f"Error calculating OT: {e}")
+                    pass 
+            # --- OVERTIME CALCULATION END ---
 
             update_data["updated_at"] = datetime.utcnow()
 

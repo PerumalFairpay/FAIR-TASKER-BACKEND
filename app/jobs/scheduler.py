@@ -1,6 +1,10 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from app.jobs.attendance_jobs import generate_daily_attendance_records, generate_today_preplanned_records
+from app.jobs.attendance_jobs import (
+    generate_daily_attendance_records,
+    generate_today_preplanned_records,
+    generate_night_shift_attendance_records,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -44,7 +48,17 @@ def init_scheduler():
         replace_existing=True
     )
     
-    logger.info("Scheduled jobs: Pre-planned at 12:05 AM IST, Full generation at 11:57 PM IST")
+    # 3. Night Shift Job: Generate Full Attendance for Night Shift (Mark Absent for Previous Night)
+    # Runs at 02:30 AM UTC (08:00 AM IST)
+    scheduler.add_job(
+        generate_night_shift_attendance_records,
+        trigger=CronTrigger(hour=2, minute=30),
+        id="night_shift_full_attendance",
+        name="Generate Night Shift Attendance (Absences)",
+        replace_existing=True
+    )
+    
+    logger.info("Scheduled jobs: Pre-planned at 12:05 AM IST, Day Full at 11:57 PM IST, Night Full at 08:00 AM IST")
     
     # Start the scheduler
     scheduler.start()

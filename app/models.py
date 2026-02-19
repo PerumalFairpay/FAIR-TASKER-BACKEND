@@ -95,6 +95,7 @@ class PermissionResponse(PermissionBase):
 class DepartmentBase(BaseModel):
     name: str
     parent_id: Optional[Union[str, int]] = None
+    default_shift_id: Optional[str] = None
 
 
 class DepartmentCreate(DepartmentBase):
@@ -104,9 +105,40 @@ class DepartmentCreate(DepartmentBase):
 class DepartmentUpdate(BaseModel):
     name: Optional[str] = None
     parent_id: Optional[Union[str, int]] = None
+    default_shift_id: Optional[str] = None
 
 
 class DepartmentResponse(DepartmentBase):
+    id: str
+    default_shift_id: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ShiftBase(BaseModel):
+    name: str = Field(..., description="e.g., General, Night Support A")
+    start_time: str = Field(..., description="Format HH:MM")
+    end_time: str = Field(..., description="Format HH:MM")
+    late_threshold_minutes: int = 15
+    is_night_shift: bool = False
+    department_ids: List[str] = []  # Departments that can use this shift
+
+
+class ShiftCreate(ShiftBase):
+    pass
+
+
+class ShiftUpdate(BaseModel):
+    name: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    late_threshold_minutes: Optional[int] = None
+    is_night_shift: Optional[bool] = None
+    department_ids: Optional[List[str]] = None
+
+
+class ShiftResponse(ShiftBase):
     id: str
 
     class Config:
@@ -168,6 +200,7 @@ class EmployeeBase(BaseModel):
     designation: Optional[str] = None
     role: Optional[str] = None
     status: Optional[str] = "Active"
+    shift_id: Optional[str] = None
     date_of_joining: Optional[str] = None
     confirmation_date: Optional[str] = None
     notice_period: Optional[str] = None
@@ -213,6 +246,7 @@ class EmployeeUpdate(BaseModel):
     designation: Optional[str] = None
     role: Optional[str] = None
     status: Optional[str] = None
+    shift_id: Optional[str] = None
     date_of_joining: Optional[str] = None
     confirmation_date: Optional[str] = None
     notice_period: Optional[str] = None
