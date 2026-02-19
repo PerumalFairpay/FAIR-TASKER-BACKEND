@@ -54,7 +54,8 @@ async def create_employee(
     pf_account_number: Optional[str] = Form(None),
     esic_number: Optional[str] = Form(None),
     pan_number: Optional[str] = Form(None),
-    biometric_id: Optional[str] = Form(None)
+    biometric_id: Optional[str] = Form(None),
+    shift_id: Optional[str] = Form(None)
 ):
     try:
         profile_pic_path = None
@@ -101,6 +102,7 @@ async def create_employee(
             notice_period=notice_period,
             address=address,
             work_mode=work_mode,
+            shift_id=shift_id,
             documents=documents_list,
             onboarding_checklist=json.loads(onboarding_checklist) if onboarding_checklist else [],
             offboarding_checklist=json.loads(offboarding_checklist) if offboarding_checklist else [],
@@ -269,7 +271,8 @@ async def update_employee(
     pf_account_number: Optional[str] = Form(None),
     esic_number: Optional[str] = Form(None),
     pan_number: Optional[str] = Form(None),
-    biometric_id: Optional[str] = Form(None)
+    biometric_id: Optional[str] = Form(None),
+    shift_id: Optional[str] = Form(None)
 ):
     try:
         profile_pic_path = None
@@ -319,6 +322,7 @@ async def update_employee(
             notice_period=notice_period,
             address=address,
             work_mode=work_mode,
+            shift_id=shift_id,
             documents=documents_list if documents_list else None,
             onboarding_checklist=json.loads(onboarding_checklist) if onboarding_checklist else None,
             offboarding_checklist=json.loads(offboarding_checklist) if offboarding_checklist else None,
