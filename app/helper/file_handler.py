@@ -33,7 +33,7 @@ class FileHandler:
             raise ValueError("Invalid storage_type. Use 'local' or 's3'.")
     
     # --------------- Upload Bytes ----------------- #
-    async def upload_bytes(self, file_data: bytes, filename: str, content_type: str = "application/pdf") -> Dict[str, str]:
+    async def upload_bytes(self, file_data: bytes, filename: str, content_type: str = "application/pdf", subfolder: str = "") -> Dict[str, str]:
         """Upload raw bytes (e.g., generated PDF) to storage"""
         result = None
         file_id = str(uuid.uuid4())
@@ -41,14 +41,16 @@ class FileHandler:
         file_name = f"{file_id}{file_ext}"
 
         if self.storage_type == "local":
-            file_path = os.path.join(self.local_dir, file_name)
+            sub_dir = os.path.join(self.local_dir, subfolder) if subfolder else self.local_dir
+            os.makedirs(sub_dir, exist_ok=True)
+            file_path = os.path.join(sub_dir, file_name)
             with open(file_path, "wb") as f:
                 f.write(file_data)
-            file_url = f"/files/{file_name}"
+            file_url = f"/files/{subfolder}/{file_name}" if subfolder else f"/files/{file_name}"
             result = {"id": file_id, "url": file_url, "name": filename}
         elif self.storage_type == "s3":
             try:
-                s3_file_name = f"{AWS_USE_PATH}/{file_name}"
+                s3_file_name = f"{AWS_USE_PATH}/{subfolder}/{file_name}" if subfolder else f"{AWS_USE_PATH}/{file_name}"
                 extra_args = {"ServerSideEncryption": "AES256"}
                 if content_type:
                     extra_args["ContentType"] = content_type
@@ -66,21 +68,23 @@ class FileHandler:
         return result
 
     # --------------- Upload File ----------------- #
-    async def upload_file(self, file: UploadFile) -> Dict[str, str]:
+    async def upload_file(self, file: UploadFile, subfolder: str = "") -> Dict[str, str]:
         result = None
         file_id = str(uuid.uuid4())
         file_ext = os.path.splitext(file.filename)[1] or ""
         file_name = f"{file_id}{file_ext}"
 
         if self.storage_type == "local":
-            file_path = os.path.join(self.local_dir, file_name)
+            sub_dir = os.path.join(self.local_dir, subfolder) if subfolder else self.local_dir
+            os.makedirs(sub_dir, exist_ok=True)
+            file_path = os.path.join(sub_dir, file_name)
             with open(file_path, "wb") as f:
                 f.write(await file.read())
-                file_url = f"/files/{file_name}"  # can map via route
+                file_url = f"/files/{subfolder}/{file_name}" if subfolder else f"/files/{file_name}"
                 result = {"id": file_id, "url": file_url, "name": file.filename}
         elif self.storage_type == "s3":
             try:
-                file_name = f"{AWS_USE_PATH}/{file_name}"
+                s3_key = f"{AWS_USE_PATH}/{subfolder}/{file_name}" if subfolder else f"{AWS_USE_PATH}/{file_name}"
                 file_bytes = await file.read()   # <-- async
                 extra_args = {"ServerSideEncryption": "AES256"}
                 if file.content_type:
@@ -89,10 +93,10 @@ class FileHandler:
                 self.s3_client.upload_fileobj(
                         io.BytesIO(file_bytes),
                         self.aws_bucket,
-                        file_name,
+                        s3_key,
                         ExtraArgs=extra_args,
                     )
-                # file_url = f"https://{self.aws_bucket}.s3.{self.aws_region}.amazonaws.com/{file_name}"
+                # file_url = f"https://{self.aws_bucket}.s3.{self.aws_region}.amazonaws.com/{s3_key}"
                 file_url = self.get_file_api_url(file_id)
                 result = {"id": file_id, "url": file_url, "name": file.filename}
             except ClientError as e:

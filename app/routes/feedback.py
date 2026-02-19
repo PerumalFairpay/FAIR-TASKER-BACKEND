@@ -23,7 +23,7 @@ async def create_feedback(
     try:
         attachment_urls = []
         for file in attachments:
-            uploaded = await file_handler.upload_file(file)
+            uploaded = await file_handler.upload_file(file, subfolder="feedback")
             attachment_urls.append({
                 "document_name": file.filename,
                 "document_proof": uploaded["url"],
@@ -97,7 +97,7 @@ async def update_feedback(
         attachment_urls = []
         if attachments:
             for file in attachments:
-                uploaded = await file_handler.upload_file(file)
+                uploaded = await file_handler.upload_file(file, subfolder="feedback")
                 attachment_urls.append({
                     "document_name": file.filename,
                     "document_proof": uploaded["url"],
