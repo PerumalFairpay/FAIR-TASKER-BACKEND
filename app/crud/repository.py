@@ -2806,6 +2806,22 @@ class Repository:
                     )
 
                     if not attendance: 
+                        # --- SHIFT & LATE CALCULATION START ---
+                        
+                        # 1. Get Shift Details
+                        shift = None
+                        shift_id = employee.get("shift_id")
+                        
+                        if shift_id:
+                            shift = await self.shifts.find_one({"_id": ObjectId(shift_id)})
+                        
+                        # 2. Fallback to Department Default Shift if no personal shift
+                        if not shift and employee.get("department"):
+                            dept = await self.departments.find_one({"name": employee.get("department")})
+                            if dept and dept.get("default_shift_id"):
+                                shift = await self.shifts.find_one({"_id": ObjectId(dept["default_shift_id"])})
+                        
+                        # 3. Determine Work Start Time & Grace Period
                         work_start_time_config = await self.system_configurations.find_one(
                             {"key": "work_start_time"}
                         )
@@ -2813,11 +2829,28 @@ class Repository:
                             {"key": "late_grace_period_minutes"}
                         )
                         
-                        work_start_time = work_start_time_config.get("value", "09:00") if work_start_time_config else "09:00"
-                        late_grace_period = late_grace_period_config.get("value", 15) if late_grace_period_config else 15
+                        work_start_time = "09:00" # Default fallback
+                        late_grace_period = 15    # Default fallback
+
+                        if shift:
+                            work_start_time = shift.get("start_time", "09:00")
+                            late_grace_period = shift.get("late_threshold_minutes", 15)
+                        else:
+                            # Fallback to System Configuration
+                            if work_start_time_config:
+                                work_start_time = work_start_time_config.get("value", "09:00")
+                            if late_grace_period_config:
+                                late_grace_period = late_grace_period_config.get("value", 15)
                          
-                        work_start = datetime.strptime(work_start_time, "%H:%M").time()
-                        
+                        try:
+                            # Parse with seconds handling
+                            try:
+                                work_start = datetime.strptime(work_start_time, "%H:%M").time()
+                            except ValueError:
+                                work_start = datetime.strptime(work_start_time, "%H:%M:%S").time()
+                        except ValueError:
+                             work_start = datetime.strptime("09:00", "%H:%M").time()
+
                         clock_in_time = log_time.time()
                          
                         is_late = False
