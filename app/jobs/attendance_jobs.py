@@ -49,7 +49,13 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
         
         # Fetch existing attendance records for this date
         existing_records = await repo.attendance.find({"date": target_date}).to_list(length=None)
-        existing_employee_ids = {str(r.get("employee_id")) for r in existing_records}
+        
+        # Create a set of existing employee IDs (both ObjectId and Employee No formats)
+        # This handles cases where some records use ObjectId (Biometric/ClockIn) and others use Employee No (Legacy/Manual)
+        existing_employee_ids = set()
+        for r in existing_records:
+            e_id = str(r.get("employee_id"))
+            existing_employee_ids.add(e_id)
         
         # Check if this date is a holiday
         holiday = await repo.holidays.find_one({"date": target_date})
@@ -63,10 +69,11 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
         }).to_list(length=None)
         
         # Create a map of employee_id -> leave reason
+        # Map both ObjectId and Employee No if possible, but leave requests usually store ObjectId
         leave_map = {}
         for leave in approved_leaves:
-            emp_id = str(leave.get("employee_id"))
-            leave_map[emp_id] = leave.get("reason", "On Leave")
+            emp_id_str = str(leave.get("employee_id"))
+            leave_map[emp_id_str] = leave.get("reason", "On Leave")
         
         # Parse date to check if it's a weekend
         dt_parsed = datetime.strptime(target_date, "%Y-%m-%d")
@@ -77,7 +84,7 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
         
         for emp in employees:
             emp_no_id = str(emp.get("employee_no_id"))
-            emp_id = str(emp.get("_id"))
+            emp_mongo_id = str(emp.get("_id"))
             
             # --- SHIFT FILTERING START ---
             if shift_type_filter:
@@ -89,11 +96,6 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
                     is_night_shift = shift_map[emp_shift_id].get("is_night_shift", False)
                 elif emp.get("department"):
                      # Fallback to Dept Default
-                     # We assume department logic handled elsewhere or pre-fetched, 
-                     # but for batch job, let's keep it simple: 
-                     # If no personal shift, check if we can infer from department default?
-                     # Fetching department for every employee is slow.
-                     # Optimisation: We could fetch departments once.
                      pass 
 
                 # Filter Logic
@@ -105,7 +107,8 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
             # --- SHIFT FILTERING END ---
             
             # Skip if employee already has an attendance record for this date
-            if emp_no_id in existing_employee_ids:
+            # Check BOTH ID formats to prevent duplicates
+            if emp_no_id in existing_employee_ids or emp_mongo_id in existing_employee_ids:
                 continue
             
             # Determine status and notes
@@ -120,10 +123,13 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
                 # Sunday (weekend)
                 status = "Holiday"
                 notes = "Sunday"
-            elif emp_id in leave_map:
+            elif emp_mongo_id in leave_map: # Check leave by Mongo ID first (standard)
                 # Employee on approved leave
                 status = "Leave"
-                notes = leave_map[emp_id]
+                notes = leave_map[emp_mongo_id]
+            elif emp_no_id in leave_map: # Fallback check by Employee No
+                 status = "Leave"
+                 notes = leave_map[emp_no_id]
             else:
                 # Employee was absent
                 if preplanned_only:
@@ -135,8 +141,9 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
             
             if status:
                 # Create attendance record
+                # Use MongoDB ObjectId as the standard employee_id
                 attendance_data = {
-                    "employee_id": emp_no_id,
+                    "employee_id": emp_mongo_id,
                     "date": target_date,
                     "status": status,
                     "notes": notes,
