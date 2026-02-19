@@ -138,9 +138,13 @@ class FileHandler:
     # ---------------- Retrieve File URL ---------------- #
     def get_file_url(self, file_id: str) -> Optional[str]:
         if self.storage_type == "local":
-            for f in os.listdir(self.local_dir):
-                if f.startswith(file_id):
-                    return f"/files/{f}"
+            search_paths = ["", "feedback"]
+            for sub in search_paths:
+                check_dir = os.path.join(self.local_dir, sub) if sub else self.local_dir
+                if os.path.exists(check_dir):
+                    for f in os.listdir(check_dir):
+                        if f.startswith(file_id):
+                            return f"/files/{sub}/{f}" if sub else f"/files/{f}"
             return None
 
         elif self.storage_type == "s3":
@@ -156,25 +160,36 @@ class FileHandler:
 
     def get_file_path(self, file_id: str) -> Optional[str]:
         if self.storage_type == "local":
-            for f in os.listdir(self.local_dir):
-                if f.startswith(file_id):
-                    return os.path.join(self.local_dir, f)
+            search_paths = ["", "feedback"]
+            for sub in search_paths:
+                check_dir = os.path.join(self.local_dir, sub) if sub else self.local_dir
+                if os.path.exists(check_dir):
+                    for f in os.listdir(check_dir):
+                        if f.startswith(file_id):
+                            return os.path.join(check_dir, f)
             return None
 
         elif self.storage_type == "s3":
             try:
-                prefix = f"{AWS_USE_PATH}/{file_id}"
-                objs = self.s3_client.list_objects_v2(Bucket=self.aws_bucket, Prefix=prefix)
-                for obj in objs.get("Contents", []):
-                    return obj["Key"]
+                search_paths = ["", "feedback"]
+                for sub in search_paths:
+                    prefix = f"{AWS_USE_PATH}/{sub}/{file_id}" if sub else f"{AWS_USE_PATH}/{file_id}"
+                    objs = self.s3_client.list_objects_v2(Bucket=self.aws_bucket, Prefix=prefix)
+                    for obj in objs.get("Contents", []):
+                        return obj["Key"]
+                return None
             except ClientError:
                 return None
     
     def get_file(self, file_id: str) -> Optional[str]:
         if self.storage_type == "local":
-            for f in os.listdir(self.local_dir):
-                if f.startswith(file_id):
-                    return os.path.splitext(f)[1]
+            search_paths = ["", "feedback"]
+            for sub in search_paths:
+                check_dir = os.path.join(self.local_dir, sub) if sub else self.local_dir
+                if os.path.exists(check_dir):
+                    for f in os.listdir(check_dir):
+                        if f.startswith(file_id):
+                            return os.path.splitext(f)[1]
             return None
 
         elif self.storage_type == "s3":
@@ -190,9 +205,13 @@ class FileHandler:
     # ---------------- Download File ---------------- #
     def get_file_info(self, file_id: str) -> Optional[str]:
         if self.storage_type == "local":
-            for f in os.listdir(self.local_dir):
-                if f.startswith(file_id):
-                    return os.path.join(self.local_dir, f)
+            search_paths = ["", "feedback"]
+            for sub in search_paths:
+                check_dir = os.path.join(self.local_dir, sub) if sub else self.local_dir
+                if os.path.exists(check_dir):
+                    for f in os.listdir(check_dir):
+                        if f.startswith(file_id):
+                            return os.path.join(check_dir, f)  # Using check_dir instead of self.local_dir
             return None
 
         elif self.storage_type == "s3":
@@ -213,19 +232,25 @@ class FileHandler:
     # ---------------- Delete File ---------------- #
     def delete_file(self, file_id: str) -> bool:
         if self.storage_type == "local":
-            for f in os.listdir(self.local_dir):
-                if f.startswith(file_id):
-                    os.remove(os.path.join(self.local_dir, f))
-                    return True
+            search_paths = ["", "feedback"]
+            for sub in search_paths:
+                check_dir = os.path.join(self.local_dir, sub) if sub else self.local_dir
+                if os.path.exists(check_dir):
+                    for f in os.listdir(check_dir):
+                        if f.startswith(file_id):
+                            os.remove(os.path.join(check_dir, f))
+                            return True
             return False
 
         elif self.storage_type == "s3":
             try:
-                objs = self.s3_client.list_objects_v2(Bucket=self.aws_bucket)
-                for obj in objs.get("Contents", []):
-                    if obj["Key"].startswith(file_id):
-                        self.s3_client.delete_object(Bucket=self.aws_bucket, Key=obj["Key"])
-                        return True
+                # First find the file key
+                key_to_delete = self.get_file_path(file_id)
+                if key_to_delete:
+                     self.s3_client.delete_object(Bucket=self.aws_bucket, Key=key_to_delete)
+                     return True
+                return False
+            except ClientError:
                 return False
             except ClientError:
                 return False
