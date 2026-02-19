@@ -125,7 +125,7 @@ api_router.include_router(payslip_component.router)
 api_router.include_router(feedback.router)
 
 
-app.include_router(api_router, prefix="/api")
+app.include_router(api_router,prefix="/api")
 
 
 @app.exception_handler(RequestValidationError)

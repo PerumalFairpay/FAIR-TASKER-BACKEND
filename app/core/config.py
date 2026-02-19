@@ -7,7 +7,7 @@ load_dotenv()
 # MongoDB Environment Variables
 # ====================================================
 DATABASE_URL = os.getenv("DATABASE_URL")
-DATABASE_NAME = os.getenv("DATABASE_NAME")
+DATABASE_NAME = os.getenv("DATABASE_NAME","fairpay_hrm_db")
 
 # ====================================================
 # JWT Environment Variables
@@ -35,6 +35,7 @@ AWS_BUCKET_NAME = os.getenv("AWS_BUCKET_NAME")
 AWS_REGION = os.getenv("AWS_REGION")
 AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
 AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
+AWS_USE_PATH = os.getenv("AWS_USE_PATH", "dev-uploads")
 
 # ====================================================
 # Storage Environment Variables

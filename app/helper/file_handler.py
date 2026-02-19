@@ -5,7 +5,7 @@ import io
 from fastapi import UploadFile
 from typing import List, Dict, Union, Optional
 from botocore.exceptions import ClientError
-from app.core.config import API_URL, AWS_BUCKET_NAME, AWS_REGION, AWS_ACCESS_KEY, AWS_SECRET_KEY
+from app.core.config import API_URL, AWS_BUCKET_NAME, AWS_REGION, AWS_ACCESS_KEY, AWS_SECRET_KEY, AWS_USE_PATH
 
 
 class FileHandler:
@@ -48,7 +48,7 @@ class FileHandler:
             result = {"id": file_id, "url": file_url, "name": filename}
         elif self.storage_type == "s3":
             try:
-                s3_file_name = f"dev-uploads/{file_name}"
+                s3_file_name = f"{AWS_USE_PATH}/{file_name}"
                 extra_args = {"ServerSideEncryption": "AES256"}
                 if content_type:
                     extra_args["ContentType"] = content_type
@@ -80,7 +80,7 @@ class FileHandler:
                 result = {"id": file_id, "url": file_url, "name": file.filename}
         elif self.storage_type == "s3":
             try:
-                file_name = f"dev-uploads/{file_name}"
+                file_name = f"{AWS_USE_PATH}/{file_name}"
                 file_bytes = await file.read()   # <-- async
                 extra_args = {"ServerSideEncryption": "AES256"}
                 if file.content_type:
@@ -116,7 +116,7 @@ class FileHandler:
 
             elif self.storage_type == "s3":
                 try:
-                    file_name = f"dev-uploads/{file_name}"
+                    file_name = f"{AWS_USE_PATH}/{file_name}"
                     self.s3_client.upload_fileobj(
                         file.file,
                         self.aws_bucket,
@@ -159,7 +159,7 @@ class FileHandler:
 
         elif self.storage_type == "s3":
             try:
-                prefix = f"dev-uploads/{file_id}"
+                prefix = f"{AWS_USE_PATH}/{file_id}"
                 objs = self.s3_client.list_objects_v2(Bucket=self.aws_bucket, Prefix=prefix)
                 for obj in objs.get("Contents", []):
                     return obj["Key"]
