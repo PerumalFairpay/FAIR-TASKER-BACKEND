@@ -49,9 +49,6 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
         
         # Fetch existing attendance records for this date
         existing_records = await repo.attendance.find({"date": target_date}).to_list(length=None)
-        
-        # Create a set of existing employee IDs (both ObjectId and Employee No formats)
-        # This handles cases where some records use ObjectId (Biometric/ClockIn) and others use Employee No (Legacy/Manual)
         existing_employee_ids = set()
         for r in existing_records:
             e_id = str(r.get("employee_id"))
