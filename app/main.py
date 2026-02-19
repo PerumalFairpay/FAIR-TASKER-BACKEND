@@ -42,10 +42,11 @@ from app.cookies.cookies import get_manager
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="Fair Tasker Backend",
+    title="HRM Backend",
     version="1.0.0",
-    docs_url="/api/docs",
+    docs_url="/",
     redoc_url="/api/redoc",
+    root_path="/api"
 )
 
 
@@ -125,7 +126,7 @@ api_router.include_router(payslip_component.router)
 api_router.include_router(feedback.router)
 
 
-app.include_router(api_router,prefix="/api")
+app.include_router(api_router)
 
 
 @app.exception_handler(RequestValidationError)
