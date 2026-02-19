@@ -49,6 +49,11 @@ permissions_data = [
      
     # Navigation (Sidebar) Permissions
     {"name": "Nav Milestone", "slug": "nav:milestone", "module": "Navigation", "description": "View Milestone Roadmap menu in sidebar"},
+
+    # Feedback -seeder updated
+    {"name": "View Feedback", "slug": "feedback:view", "module": "Feedback", "description": "View own submitted feedback"},
+    {"name": "Submit Feedback", "slug": "feedback:submit", "module": "Feedback", "description": "Create and edit own feedback entries"},
+    {"name": "Manage Feedback", "slug": "feedback:manage", "module": "Feedback", "description": "Admin: view all feedback, update status, and delete any entry"},
 ]
 
 async def seed_permissions():
@@ -96,6 +101,9 @@ async def seed_permissions():
                 perm_map.get("asset:view"),
                 perm_map.get("employee:view"), 
                 perm_map.get("document:view"),
+                # Feedback
+                perm_map.get("feedback:view"),
+                perm_map.get("feedback:submit"),
                 
                 # Nav Permissions
                 # perm_map.get("nav:milestone"),
@@ -110,10 +118,10 @@ async def seed_permissions():
     for role in roles_data:
         await roles_collection.update_one(
             {"name": role["name"]},
-            {"$setOnInsert": role},
+            {"$set": {"permissions": role["permissions"], "description": role["description"]}},
             upsert=True
         )
-        print(f"Role checked/seeded: {role['name']}")
+        print(f"Role updated/seeded: {role['name']}")
             
     print("\nAll seeding completed successfully!")
     await client.close()

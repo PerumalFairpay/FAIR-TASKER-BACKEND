@@ -41,6 +41,10 @@ from app.models import (
     NDARequestCreate,
     NDARequestUpdate,
     PayslipCreate,
+    PayslipComponentCreate,
+    PayslipComponentUpdate,
+    FeedbackCreate,
+    FeedbackUpdate,
 )
 from app.utils import normalize, get_password_hash, get_employee_basic_details
 from bson import ObjectId
@@ -76,6 +80,7 @@ class Repository:
         self.system_configurations = self.db["system_configurations"]
         self.nda_requests = self.db["nda_requests"]
         self.payslips = self.db["payslips"]
+        self.payslip_components = self.db["payslip_components"]
 
     async def create_employee(
         self, employee: EmployeeCreate, profile_picture_path: str = None
@@ -267,6 +272,24 @@ class Repository:
             return normalize(employee)
         except Exception as e:
             raise e
+
+    async def get_employee_basic_details(self, employee_id: str) -> dict:
+        """Returns a lightweight employee profile for embedding in other resources."""
+        try:
+            employee = await self.employees.find_one({"_id": ObjectId(employee_id)})
+            if not employee:
+                return None
+            return {
+                "id": str(employee["_id"]),
+                "name": employee.get("name", ""),
+                "profile_picture": employee.get("profile_picture"),
+                "designation": employee.get("designation"),
+                "department": employee.get("department"),
+                "employee_no_id": employee.get("employee_no_id"),
+                "email": employee.get("email"),
+            }
+        except Exception:
+            return None
 
     async def get_employee_leave_balances(self, employee_id: str) -> dict:
         try:
@@ -2971,6 +2994,19 @@ class Repository:
         except Exception as e:
             raise e
 
+    async def get_latest_payslip(self, employee_id: str) -> Optional[dict]:
+        try:
+            # Sort by year desc, then by generated_at desc to get the most recent
+            payslip = await self.payslips.find_one(
+                {"employee_id": employee_id},
+                sort=[("year", -1), ("generated_at", -1)]
+            )
+            if not payslip:
+                return None
+            return normalize(payslip)
+        except Exception as e:
+            raise e
+
     async def get_payslip(self, payslip_id: str) -> dict:
         try:
             payslip = await self.payslips.find_one({"_id": ObjectId(payslip_id)})
@@ -3003,5 +3039,192 @@ class Repository:
         except Exception as e:
             raise e
 
+
+    async def get_payslip(self, payslip_id: str) -> dict:
+        try:
+            doc = await self.payslips.find_one({"_id": ObjectId(payslip_id)})
+            return normalize(doc)
+        except Exception as e:
+            raise e
+            
+    async def update_payslip(self, payslip_id: str, update_data: dict) -> dict:
+        try:
+            update_data["updated_at"] = datetime.utcnow()
+            await self.payslips.update_one(
+                {"_id": ObjectId(payslip_id)}, {"$set": update_data}
+            )
+            return await self.get_payslip(payslip_id)
+        except Exception as e:
+            raise e
+
+    # Payslip Component CRUD
+    async def create_payslip_component(self, component: PayslipComponentCreate) -> dict:
+        try:
+            data = component.dict()
+            data["created_at"] = datetime.utcnow()
+            result = await self.payslip_components.insert_one(data)
+            data["id"] = str(result.inserted_id)
+            return normalize(data)
+        except Exception as e:
+            raise e
+
+    async def get_payslip_components(self, type: Optional[str] = None, is_active: Optional[bool] = None) -> List[dict]:
+        try:
+            query = {}
+            if type:
+                query["type"] = type
+            if is_active is not None:
+                query["is_active"] = is_active
+            
+            components = await self.payslip_components.find(query).to_list(length=None)
+            return [normalize(c) for c in components]
+        except Exception as e:
+            raise e
+
+    async def get_payslip_component(self, component_id: str) -> dict:
+        try:
+            component = await self.payslip_components.find_one({"_id": ObjectId(component_id)})
+            return normalize(component)
+        except Exception as e:
+            raise e
+
+    async def update_payslip_component(self, component_id: str, component: PayslipComponentUpdate) -> dict:
+        try:
+            update_data = {k: v for k, v in component.dict().items() if v is not None}
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.payslip_components.update_one(
+                    {"_id": ObjectId(component_id)}, {"$set": update_data}
+                )
+            return await self.get_payslip_component(component_id)
+        except Exception as e:
+            raise e
+
+    async def delete_payslip_component(self, component_id: str) -> bool:
+        try:
+            result = await self.payslip_components.delete_one({"_id": ObjectId(component_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+
+    # Feedback CRUD
+    
+    async def get_feedback_metrics(self, employee_id: Optional[str] = None) -> dict:
+        try:
+            metrics_query = {"employee_id": employee_id} if employee_id else {}
+            all_feedbacks = await self.db["feedback"].find(metrics_query, {"type": 1, "status": 1}).to_list(length=None)
+
+            type_counts = {"Bug": 0, "Feature Request": 0, "General": 0}
+            status_counts = {"Open": 0, "In Review": 0, "Resolved": 0, "Closed": 0}
+
+            for f in all_feedbacks:
+                t = f.get("type", "General")
+                s = f.get("status", "Open")
+                if t in type_counts:
+                    type_counts[t] += 1
+                if s in status_counts:
+                    status_counts[s] += 1
+
+            return {
+                "total": len(all_feedbacks),
+                "by_type": type_counts,
+                "by_status": status_counts,
+            }
+        except Exception as e:
+            raise e
+
+    async def create_feedback(self, feedback: FeedbackCreate) -> dict:
+        try:
+            feedback_data = feedback.dict()
+            feedback_data["created_at"] = datetime.utcnow()
+            result = await self.db["feedback"].insert_one(feedback_data)
+            feedback_id = str(result.inserted_id)
+            
+            # Fetch enriched feedback
+            new_feedback = await self.get_feedback(feedback_id)
+            
+            # Fetch metrics after creation
+            metrics = await self.get_feedback_metrics()
+            
+            return {"feedback": new_feedback, "metrics": metrics}
+        except Exception as e:
+            raise e
+
+    async def get_feedbacks(
+        self, employee_id: Optional[str] = None, status: Optional[str] = None
+    ) -> dict:
+        try:
+            query = {}
+            if employee_id:
+                query["employee_id"] = employee_id
+            if status:
+                query["status"] = status
+
+            # Fetch feedbacks and compute metrics in parallel
+            feedbacks_cursor = self.db["feedback"].find(query).sort("created_at", -1)
+            feedbacks_raw = await feedbacks_cursor.to_list(length=None)
+
+            # Build enriched list
+            result = []
+            for f in feedbacks_raw:
+                feedback = normalize(f)
+                emp_id = feedback.get("employee_id")
+                if emp_id:
+                    employee_details = await self.get_employee_basic_details(emp_id)
+                    if employee_details:
+                        feedback["employee"] = employee_details
+                result.append(feedback)
+
+            # Compute metrics using helper
+            metrics = await self.get_feedback_metrics(employee_id=employee_id)
+
+            return {"feedbacks": result, "metrics": metrics}
+        except Exception as e:
+            raise e
+
+
+    async def get_feedback(self, feedback_id: str) -> dict:
+        try:
+            feedback_raw = await self.db["feedback"].find_one({"_id": ObjectId(feedback_id)})
+            if not feedback_raw:
+                return None
+            
+            feedback = normalize(feedback_raw)
+            emp_id = feedback.get("employee_id")
+            if emp_id:
+                employee_details = await self.get_employee_basic_details(emp_id)
+                if employee_details:
+                    feedback["employee"] = employee_details
+            return feedback
+        except Exception as e:
+            raise e
+
+    async def update_feedback(self, feedback_id: str, feedback: FeedbackUpdate) -> dict:
+        try:
+            update_data = {k: v for k, v in feedback.dict().items() if v is not None}
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.db["feedback"].update_one(
+                    {"_id": ObjectId(feedback_id)}, {"$set": update_data}
+                )
+            
+            updated_feedback = await self.get_feedback(feedback_id)
+            if not updated_feedback:
+                return None
+                
+            # Fetch metrics after update
+            metrics = await self.get_feedback_metrics()
+            
+            return {"feedback": updated_feedback, "metrics": metrics}
+        except Exception as e:
+            raise e
+
+    async def delete_feedback(self, feedback_id: str) -> bool:
+        try:
+            result = await self.db["feedback"].delete_one({"_id": ObjectId(feedback_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
 
 repository = Repository()
