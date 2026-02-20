@@ -51,8 +51,9 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
         existing_records = await repo.attendance.find({"date": target_date}).to_list(length=None)
         existing_employee_ids = set()
         for r in existing_records:
-            e_id = str(r.get("employee_id"))
-            existing_employee_ids.add(e_id)
+            # Add both possible ID formats to the set to be safe
+            if r.get("employee_id"):
+                existing_employee_ids.add(str(r.get("employee_id")))
         
         # Check if this date is a holiday
         holiday = await repo.holidays.find_one({"date": target_date})

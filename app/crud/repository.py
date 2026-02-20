@@ -1749,7 +1749,7 @@ class Repository:
             if not employee:
                 return
 
-            emp_no_id = str(employee.get("employee_no_id"))
+            emp_no_id = str(employee.get("_id"))
 
             # Remove "Leave" records for this employee in the date range
             # ONLY if they haven't clocked in (clock_in is None)
@@ -1791,7 +1791,7 @@ class Repository:
                 if not employee:
                     return
 
-                emp_no_id = str(employee.get("employee_no_id"))
+                emp_no_id = str(employee.get("_id"))
 
                 # Check existing attendance for today
                 existing = await self.attendance.find_one(
@@ -2799,6 +2799,7 @@ class Repository:
                     if not employee:
                         continue
 
+                    # Use MongoDB ObjectId as the standard employee_id
                     employee_id = str(employee["_id"])
 
                     attendance = await self.attendance.find_one(
