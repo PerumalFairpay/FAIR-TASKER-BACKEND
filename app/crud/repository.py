@@ -2778,9 +2778,11 @@ class Repository:
                         {"employee_id": employee_id, "date": date_str}
                     )
 
-                    if not attendance: 
-                        # --- SHIFT & LATE CALCULATION START ---
-                        
+                    # --- UNIFIED CLOCK IN / OVERRIDE LOGIC ---
+                    # We handle clock-in if:
+                    # 1. No record exists yet.
+                    # 2. A record exists (e.g. "Leave") but has no clock_in time.
+                    if not attendance or not attendance.get("clock_in"):
                         # 1. Get Shift Details
                         shift = None
                         shift_id = employee.get("shift_id")
@@ -2880,40 +2882,61 @@ class Repository:
                         else:
                             attendance_status = "Ontime"
 
-                        # --- SHIFT & LATE CALCULATION END ---
+                        # --- UPDATE OR INSERT ---
+                        if attendance:
+                            # Update existing (Leave/Absent) record to Present
+                            await self.attendance.update_one(
+                                {"_id": attendance["_id"]},
+                                {
+                                    "$set": {
+                                        "clock_in":          time_str,
+                                        "status":            "Present",
+                                        "attendance_status": attendance_status,
+                                        "is_late":           is_late,
+                                        "is_permission":     is_permission,
+                                        "is_half_day":       is_half_day,
+                                        "leave_type_code":   leave_type_code,
+                                        "device_type":       "Biometric",
+                                        "updated_at":        datetime.utcnow(),
+                                    }
+                                }
+                            )
+                        else:
+                            # Create new Present record
+                            new_record = {
+                                "employee_id":       employee_id,
+                                "date":              date_str,
+                                "clock_in":          time_str,
+                                "device_type":       "Biometric",
+                                "status":            "Present",
+                                "attendance_status": attendance_status,
+                                "is_late":           is_late,
+                                "is_permission":     is_permission,
+                                "is_half_day":       is_half_day,
+                                "leave_type_code":   leave_type_code,
+                                "created_at":        datetime.utcnow(),
+                            }
+                            await self.attendance.insert_one(new_record)
                         
-                        new_record = {
-                            "employee_id":       employee_id,
-                            "date":              date_str,
-                            "clock_in":          time_str,
-                            "device_type":       "Biometric",
-                            "status":            "Present",
-                            "attendance_status": attendance_status,
-                            "is_late":           is_late,
-                            "is_permission":     is_permission,
-                            "is_half_day":       is_half_day,
-                            "leave_type_code":   leave_type_code,
-                            "created_at":        datetime.utcnow(),
-                        }
-                        await self.attendance.insert_one(new_record)
                         processed_count += 1
 
                     else: 
-                        clock_in_time = datetime.fromisoformat(attendance["clock_in"])
+                        # --- CLOCK OUT LOGIC ---
+                        # Only process if this log is later than the existing clock_in
+                        # Note: We use the existing clock_in string from the record
+                        clock_in_time_dt = datetime.fromisoformat(attendance["clock_in"])
 
-                        if log_time > clock_in_time:
+                        if log_time > clock_in_time_dt:
                             should_update = True
                             if attendance.get("clock_out"):
                                 current_clock_out = datetime.fromisoformat(
                                     attendance["clock_out"]
                                 )
                                 if log_time <= current_clock_out:
-                                    should_update = (
-                                        False  
-                                    )
+                                    should_update = False  
 
                             if should_update:
-                                work_duration = log_time - clock_in_time
+                                work_duration = log_time - clock_in_time_dt
                                 total_hours = round(
                                     work_duration.total_seconds() / 3600, 2
                                 )
@@ -2930,6 +2953,7 @@ class Repository:
                                     },
                                 )
                                 processed_count += 1
+
 
                 except Exception as e:
                     errors.append(f"Error processing log for {log.user_id}: {str(e)}")
