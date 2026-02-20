@@ -66,12 +66,31 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
             "end_date": {"$gte": target_date}
         }).to_list(length=None)
         
-        # Create a map of employee_id -> leave reason
-        # Map both ObjectId and Employee No if possible, but leave requests usually store ObjectId
+        # Create a map of employee_id -> leave info
+        # Map both ObjectId and Employee No if possible
         leave_map = {}
         for leave in approved_leaves:
             emp_id_str = str(leave.get("employee_id"))
-            leave_map[emp_id_str] = leave.get("reason", "On Leave")
+
+            # Fetch leave type code
+            leave_type_code = None
+            leave_type_id = leave.get("leave_type_id")
+            if leave_type_id:
+                try:
+                    from bson import ObjectId as _ObjId
+                    lt = await repo.leave_types.find_one({"_id": _ObjId(leave_type_id)})
+                    if lt:
+                        leave_type_code = lt.get("code")
+                except Exception:
+                    pass
+
+            leave_map[emp_id_str] = {
+                "reason":             leave.get("reason", "On Leave"),
+                "leave_type_code":    leave_type_code,
+                "leave_duration_type": leave.get("leave_duration_type", "Single"),
+                "half_day_session":   leave.get("half_day_session"),
+            }
+
         
         # Parse date to check if it's a weekend
         dt_parsed = datetime.strptime(target_date, "%Y-%m-%d")
@@ -111,49 +130,67 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
             
             # Determine status and notes
             status = None
-            notes = None
+            notes  = None
+            leave_type_code    = None
+            attendance_status  = None
+            is_half_day        = False
             
+            leave_info = leave_map.get(emp_mongo_id) or leave_map.get(emp_no_id)
+
             if holiday_name:
                 # Company-wide holiday
-                status = "Holiday"
-                notes = holiday_name
+                status           = "Holiday"
+                attendance_status = "Holiday"
+                notes            = holiday_name
             elif is_sunday:
                 # Sunday (weekend)
-                status = "Holiday"
-                notes = "Sunday"
-            elif emp_mongo_id in leave_map: # Check leave by Mongo ID first (standard)
+                status           = "Holiday"
+                attendance_status = "Holiday"
+                notes            = "Sunday"
+            elif leave_info:
                 # Employee on approved leave
-                status = "Leave"
-                notes = leave_map[emp_mongo_id]
-            elif emp_no_id in leave_map: # Fallback check by Employee No
-                 status = "Leave"
-                 notes = leave_map[emp_no_id]
+                duration_type = leave_info.get("leave_duration_type", "Single")
+                leave_type_code = leave_info.get("leave_type_code")
+
+                if duration_type == "Half Day":
+                    status           = "Leave"
+                    attendance_status = "Half Day"
+                    is_half_day      = True
+                    notes            = leave_info.get("reason", "Half Day Leave")
+                else:
+                    status           = "Leave"
+                    attendance_status = leave_type_code or "Leave"
+                    notes            = leave_info.get("reason", "On Leave")
             else:
                 # Employee was absent
                 if preplanned_only:
                     # If we are only looking for pre-planned (Morning job), skip absences
                     continue
                 else:
-                    status = "Absent"
-                    notes = "No attendance recorded"
+                    status           = "Absent"
+                    attendance_status = "Absent"
+                    notes            = "No attendance recorded"
             
             if status:
-                # Create attendance record
-                # Use MongoDB ObjectId as the standard employee_id
+                # Create attendance record using MongoDB ObjectId as the standard employee_id
                 attendance_data = {
-                    "employee_id": emp_mongo_id,
-                    "date": target_date,
-                    "status": status,
-                    "notes": notes,
-                    "clock_in": None,
-                    "clock_out": None,
-                    "total_work_hours": 0.0,
-                    "overtime_hours": 0.0,
-                    "device_type": "Auto Sync",
-                    "created_at": datetime.utcnow()
+                    "employee_id":       emp_mongo_id,
+                    "date":              target_date,
+                    "status":            status,
+                    "attendance_status": attendance_status,
+                    "leave_type_code":   leave_type_code,
+                    "is_half_day":       is_half_day,
+                    "notes":             notes,
+                    "clock_in":          None,
+                    "clock_out":         None,
+                    "total_work_hours":  0.0,
+                    "overtime_hours":    0.0,
+                    "device_type":       "Auto Sync",
+                    "created_at":        datetime.utcnow()
                 }
                 
                 records_to_insert.append(attendance_data)
+
         
         # Bulk insert records
         if records_to_insert:

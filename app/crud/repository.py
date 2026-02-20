@@ -77,7 +77,7 @@ class Repository:
         self.blogs = self.db["blogs"]
         self.leave_types = self.db["leave_types"]
         self.leave_requests = self.db["leave_requests"]
-        self.tasks = self.db["tasks"]
+
         self.tasks = self.db["tasks"]
         self.attendance = self.db["attendance"]
         self.system_configurations = self.db["system_configurations"]
@@ -1779,39 +1779,61 @@ class Repository:
 
             # Check if today is covered by the leave
             if start_date <= today <= end_date:
+                duration_type = leave_req.get("leave_duration_type")
+
                 # If it's a "Permission" type (short duration), do NOT mark as "Leave" in attendance.
-                if leave_req.get("leave_duration_type") == "Permission":
+                if duration_type == "Permission":
                     return
 
-                # Need to find the employee_no_id (which is used in attendance collection)
-                # using the mongo _id stored in leave request
+                # Fetch leave type code
+                leave_type_code = None
+                lt_id = leave_req.get("leave_type_id")
+                if lt_id:
+                    try:
+                        lt = await self.leave_types.find_one({"_id": ObjectId(lt_id)})
+                        if lt:
+                            leave_type_code = lt.get("code")
+                    except:
+                        pass
+
+                # Derive detailed status
+                attendance_status = leave_type_code or "Leave"
+                is_half_day = False
+                if duration_type == "Half Day":
+                    attendance_status = "Half Day"
+                    is_half_day = True
+
+                # Need to find the employee (standardizing on mongo _id string as employee_id)
                 employee = await self.employees.find_one(
                     {"_id": ObjectId(emp_mongo_id)}
                 )
                 if not employee:
                     return
 
-                emp_no_id = str(employee.get("_id"))
+                emp_standard_id = str(employee.get("_id"))
 
                 # Check existing attendance for today
                 existing = await self.attendance.find_one(
-                    {"employee_id": emp_no_id, "date": today}
+                    {"employee_id": emp_standard_id, "date": today}
                 )
 
                 if not existing:
                     # Create Leave record
                     await self.attendance.insert_one(
                         {
-                            "employee_id": emp_no_id,
-                            "date": today,
-                            "status": "Leave",
-                            "notes": reason,
-                            "clock_in": None,
-                            "clock_out": None,
-                            "total_work_hours": 0.0,
-                            "overtime_hours": 0.0,
-                            "device_type": "Auto Sync",
-                            "created_at": datetime.utcnow(),
+                            "employee_id":       emp_standard_id,
+                            "date":              today,
+                            "status":            "Leave",
+                            "attendance_status": attendance_status,
+                            "is_half_day":       is_half_day,
+                            "leave_type_code":   leave_type_code,
+                            "notes":             reason,
+                            "clock_in":          None,
+                            "clock_out":         None,
+                            "total_work_hours":  0.0,
+                            "overtime_hours":    0.0,
+                            "device_type":       "Auto Sync",
+                            "created_at":        datetime.utcnow(),
                         }
                     )
                 elif existing.get("status") == "Absent":
@@ -1820,13 +1842,17 @@ class Repository:
                         {"_id": existing["_id"]},
                         {
                             "$set": {
-                                "status": "Leave",
-                                "notes": reason,
-                                "device_type": "Auto Sync",
-                                "updated_at": datetime.utcnow(),
+                                "status":            "Leave",
+                                "attendance_status": attendance_status,
+                                "is_half_day":       is_half_day,
+                                "leave_type_code":   leave_type_code,
+                                "notes":             reason,
+                                "device_type":       "Auto Sync",
+                                "updated_at":        datetime.utcnow(),
                             }
                         },
                     )
+
                 # If status is "Present" (Clocked In), we typically don't overwrite it with Leave
                 # as presence usually takes precedence or requires manual fix.
 
@@ -2175,73 +2201,121 @@ class Repository:
             
             # 1. Get Shift Details
             shift = None
-            shift_id = emp.get("shift_id")
+            shift_id = emp.get("shift_id") if emp else None
             
             if shift_id:
                 shift = await self.shifts.find_one({"_id": ObjectId(shift_id)})
             
             # 2. Fallback to Department Default Shift if no personal shift
-            if not shift and emp.get("department"):
-                # We need to find the department to get default_shift_id
-                # dept_name stored in employee, but we need ID or look up by name
+            if not shift and emp and emp.get("department"):
                 dept = await self.departments.find_one({"name": emp.get("department")})
                 if dept and dept.get("default_shift_id"):
                     shift = await self.shifts.find_one({"_id": ObjectId(dept["default_shift_id"])})
             
-            # 3. Determine Work Start Time & Grace Period
-            work_start_time = "09:00" # Default
-            late_grace_period = 15    # Default
+            # 3. Determine Work Start Time, End Time & Grace Period
+            work_start_time = "09:00"  # Default
+            work_end_time = "18:00"    # Default
+            late_grace_period = 15     # Default minutes
             
             if shift:
                 work_start_time = shift.get("start_time", "09:00")
+                work_end_time = shift.get("end_time", "18:00")
                 late_grace_period = shift.get("late_threshold_minutes", 15)
             else:
-                # Fallback to System Configuration
                 work_start_time_config = await self.system_configurations.find_one({"key": "work_start_time"})
                 late_grace_period_config = await self.system_configurations.find_one({"key": "late_grace_period_minutes"})
-                
                 if work_start_time_config:
                     work_start_time = work_start_time_config.get("value", "09:00")
                 if late_grace_period_config:
                     late_grace_period = late_grace_period_config.get("value", 15)
 
             # 4. Parse Times
-            from datetime import timedelta
-            
-            # Current Clock In Time (IST)
+            from datetime import timedelta as _timedelta
+
             clock_in_dt = datetime.fromisoformat(attendance.clock_in.replace("Z", "+00:00"))
-            ist_offset = timedelta(hours=5, minutes=30)
+            ist_offset = _timedelta(hours=5, minutes=30)
             clock_in_ist = clock_in_dt + ist_offset
             clock_in_time = clock_in_ist.time()
-            
-            # Shift Start Time
-            try:
-                work_start = datetime.strptime(work_start_time, "%H:%M").time()
-            except ValueError:
-                # Handle cases where seconds might be included or format differs
-                try:
-                     work_start = datetime.strptime(work_start_time, "%H:%M:%S").time()
-                except ValueError:
-                     work_start = datetime.strptime("09:00", "%H:%M").time() # Absolute fallback
 
-            # 5. Calculate Late Status
+            def _parse_time(t_str, fallback="09:00"):
+                for fmt in ("%H:%M", "%H:%M:%S"):
+                    try:
+                        return datetime.strptime(t_str, fmt).time()
+                    except ValueError:
+                        pass
+                return datetime.strptime(fallback, "%H:%M").time()
+
+            work_start = _parse_time(work_start_time, "09:00")
+            work_end   = _parse_time(work_end_time,   "18:00")
+
+            # 5. Calculate Mid-Shift time for Half Day
+            start_minutes = work_start.hour * 60 + work_start.minute
+            end_minutes   = work_end.hour * 60 + work_end.minute
+            mid_minutes   = start_minutes + (end_minutes - start_minutes) // 2
+            mid_shift_hour, mid_shift_min = divmod(mid_minutes, 60)
+            from datetime import time as _time
+            mid_shift_time = _time(mid_shift_hour, mid_shift_min)
+
+            # 6. Fetch Approved Leave Request for this employee & date
+            approved_leave = await self.leave_requests.find_one({
+                "employee_id": target_emp_id,
+                "status": "Approved",
+                "start_date": {"$lte": attendance.date},
+                "end_date":   {"$gte": attendance.date},
+            })
+
+            leave_duration_type = approved_leave.get("leave_duration_type") if approved_leave else None
+            half_day_session    = approved_leave.get("half_day_session") if approved_leave else None
+
+            # Determine leave_type_code from the leave type document
+            leave_type_code = None
+            if approved_leave and approved_leave.get("leave_type_id"):
+                lt = await self.leave_types.find_one({"_id": ObjectId(approved_leave["leave_type_id"])})
+                if lt:
+                    leave_type_code = lt.get("code")
+
+            # 7. Effective start time (adjusted for Half Day)
+            effective_start = work_start
+            if leave_duration_type == "Half Day" and half_day_session == "First Half":
+                # Employee on leave for morning → expected in for afternoon
+                effective_start = mid_shift_time
+
+            # 8. Compute Late
             is_late = False
-            status = "Present"
-            
-            # Only mark late if clock_in is AFTER start_time
-            if clock_in_time > work_start:
-                clock_in_minutes = clock_in_time.hour * 60 + clock_in_time.minute
-                work_start_minutes = work_start.hour * 60 + work_start.minute
-                minutes_late = clock_in_minutes - work_start_minutes
-                
+            clock_in_minutes = clock_in_time.hour * 60 + clock_in_time.minute
+            eff_start_minutes = effective_start.hour * 60 + effective_start.minute
+
+            if clock_in_minutes > eff_start_minutes:
+                minutes_late = clock_in_minutes - eff_start_minutes
                 if minutes_late > late_grace_period:
                     is_late = True
-                    status = "Late"
-            
+
+            # 9. Derive detailed status
+            is_permission = False
+            is_half_day   = False
+            attendance_status = "Ontime"
+
+            if leave_duration_type == "Permission":
+                is_permission     = True
+                attendance_status = "Permission"
+            elif leave_duration_type == "Half Day":
+                is_half_day       = True
+                attendance_status = "Half Day"
+            elif is_late:
+                attendance_status = "Late"
+            else:
+                attendance_status = "Ontime"
+
+            status = "Present"
+
             # --- SHIFT & LATE CALCULATION END ---
             
-            attendance_data["is_late"] = is_late
-            attendance_data["status"] = status
+            attendance_data["is_late"]          = is_late
+            attendance_data["is_permission"]     = is_permission
+            attendance_data["is_half_day"]       = is_half_day
+            attendance_data["attendance_status"] = attendance_status
+            attendance_data["leave_type_code"]   = leave_type_code
+            attendance_data["status"]            = status
 
             if existing:
                 # If they are already marked "Present", "Late", or "Overtime", don't allow double clock-in
@@ -2254,11 +2328,15 @@ class Repository:
                     {"_id": existing["_id"]},
                     {
                         "$set": {
-                            "clock_in": attendance_data["clock_in"],
-                            "device_type": attendance_data["device_type"],
-                            "status": status,
-                            "is_late": is_late,
-                            "notes": f"Overrode {existing.get('status')} - Employee clocked in{' (Late)' if is_late else ''}",
+                            "clock_in":          attendance_data["clock_in"],
+                            "device_type":       attendance_data["device_type"],
+                            "status":            status,
+                            "attendance_status": attendance_status,
+                            "is_late":           is_late,
+                            "is_permission":     is_permission,
+                            "is_half_day":       is_half_day,
+                            "leave_type_code":   leave_type_code,
+                            "notes": f"Overrode {existing.get('status')} - Employee clocked in ({attendance_status})",
                             "updated_at": datetime.utcnow(),
                         }
                     },
@@ -2273,6 +2351,7 @@ class Repository:
             return normalize(attendance_data)
         except Exception as e:
             raise e
+
 
     async def clock_out(
         self, attendance: AttendanceUpdate, employee_id: str, date: str
@@ -2529,56 +2608,71 @@ class Repository:
                     match_query["date"]["$lte"] = end_date
 
                 if employee_id:
-                    # If employee_id is a dict (from get_all_attendance query logic), use it directly
-                    # Otherwise treat as string
-                    if isinstance(employee_id, dict):
-                        match_query["employee_id"] = employee_id
-                    else:
-                        match_query["employee_id"] = employee_id
+                    match_query["employee_id"] = employee_id
 
-                pipeline = [
+                # Group by primary status
+                pipeline_status = [
                     {"$match": match_query},
                     {"$group": {"_id": "$status", "count": {"$sum": 1}}},
                 ]
-                cursor = await self.attendance.aggregate(pipeline)
-                
-                # Count each status separately
-                on_time = 0  # "Present" status
-                late = 0     # "Late" status
-                absent = 0
-                leave = 0
-                holiday = 0
-                overtime = 0
-                
-                async for doc in cursor:
-                    status_key = str(doc["_id"]).lower()
+                # Group by detailed attendance_status
+                pipeline_detail = [
+                    {"$match": match_query},
+                    {"$group": {"_id": "$attendance_status", "count": {"$sum": 1}}},
+                ]
+
+                status_cursor = await self.attendance.aggregate(pipeline_status)
+                detail_cursor = await self.attendance.aggregate(pipeline_detail)
+
+                # --- Primary counters ---
+                present_total = 0
+                absent        = 0
+                leave         = 0
+                holiday       = 0
+
+                async for doc in status_cursor:
+                    sk = str(doc["_id"] or "").lower()
                     count = doc["count"]
-                    
-                    if status_key == "present":
-                        on_time = count
-                    elif status_key == "late":
-                        late = count
-                    elif status_key == "absent":
+                    if sk == "present":
+                        present_total = count
+                    elif sk == "absent":
                         absent = count
-                    elif status_key == "leave":
+                    elif sk == "leave":
                         leave = count
-                    elif status_key == "holiday":
+                    elif sk == "holiday":
                         holiday = count
-                    elif status_key == "overtime":
-                        overtime = count
-                
-                # Calculate total_present as sum of on_time + late + overtime
-                total_present = on_time + late + overtime
-                
+
+                # --- Detailed sub-status counters ---
+                on_time    = 0
+                late       = 0
+                permission = 0
+                half_day   = 0
+
+                async for doc in detail_cursor:
+                    sk = str(doc["_id"] or "").lower()
+                    count = doc["count"]
+                    if sk == "ontime":
+                        on_time = count
+                    elif sk == "late":
+                        late = count
+                    elif sk == "permission":
+                        permission = count
+                    elif sk == "half day":
+                        half_day = count
+
                 return {
-                    "total_present": total_present,
-                    "on_time": on_time,
-                    "late": late,
-                    "absent": absent,
-                    "leave": leave,
-                    "holiday": holiday,
-                    "overtime": overtime,
+                    # Primary totals
+                    "total_present": present_total,
+                    "absent":        absent,
+                    "leave":         leave,
+                    "holiday":       holiday,
+                    # Detailed Present breakdown
+                    "on_time":       on_time,
+                    "late":          late,
+                    "permission":    permission,
+                    "half_day":      half_day,
                 }
+
 
             # Run aggregations
             # Today: Exact match on date, not range
@@ -2700,61 +2794,110 @@ class Repository:
                             if dept and dept.get("default_shift_id"):
                                 shift = await self.shifts.find_one({"_id": ObjectId(dept["default_shift_id"])})
                         
-                        # 3. Determine Work Start Time & Grace Period
-                        work_start_time_config = await self.system_configurations.find_one(
-                            {"key": "work_start_time"}
-                        )
-                        late_grace_period_config = await self.system_configurations.find_one(
-                            {"key": "late_grace_period_minutes"}
-                        )
+                        # 3. Determine Work Start Time, End Time & Grace Period
+                        work_start_time_config = await self.system_configurations.find_one({"key": "work_start_time"})
+                        late_grace_period_config = await self.system_configurations.find_one({"key": "late_grace_period_minutes"})
                         
-                        work_start_time = "09:00" # Default fallback
-                        late_grace_period = 15    # Default fallback
+                        work_start_time = "09:00"  # Default
+                        work_end_time   = "18:00"  # Default
+                        late_grace_period = 15     # Default
 
                         if shift:
-                            work_start_time = shift.get("start_time", "09:00")
+                            work_start_time   = shift.get("start_time", "09:00")
+                            work_end_time     = shift.get("end_time", "18:00")
                             late_grace_period = shift.get("late_threshold_minutes", 15)
                         else:
-                            # Fallback to System Configuration
                             if work_start_time_config:
                                 work_start_time = work_start_time_config.get("value", "09:00")
                             if late_grace_period_config:
                                 late_grace_period = late_grace_period_config.get("value", 15)
-                         
-                        try:
-                            # Parse with seconds handling
-                            try:
-                                work_start = datetime.strptime(work_start_time, "%H:%M").time()
-                            except ValueError:
-                                work_start = datetime.strptime(work_start_time, "%H:%M:%S").time()
-                        except ValueError:
-                             work_start = datetime.strptime("09:00", "%H:%M").time()
+
+                        def _bio_parse_time(t_str, fallback="09:00"):
+                            for fmt in ("%H:%M", "%H:%M:%S"):
+                                try:
+                                    return datetime.strptime(t_str, fmt).time()
+                                except ValueError:
+                                    pass
+                            return datetime.strptime(fallback, "%H:%M").time()
+
+                        work_start = _bio_parse_time(work_start_time, "09:00")
+                        work_end   = _bio_parse_time(work_end_time, "18:00")
+
+                        # 4. Calculate Mid-Shift for Half Day
+                        s_min  = work_start.hour * 60 + work_start.minute
+                        e_min  = work_end.hour * 60 + work_end.minute
+                        mid_min = s_min + (e_min - s_min) // 2
+                        mid_h, mid_m = divmod(mid_min, 60)
+                        from datetime import time as _btime
+                        mid_shift_time = _btime(mid_h, mid_m)
 
                         clock_in_time = log_time.time()
-                         
+
+                        # 5. Fetch Approved Leave Request for this employee & date
+                        approved_leave = await self.leave_requests.find_one({
+                            "employee_id": employee_id,
+                            "status": "Approved",
+                            "start_date": {"$lte": date_str},
+                            "end_date":   {"$gte": date_str},
+                        })
+
+                        leave_duration_type = approved_leave.get("leave_duration_type") if approved_leave else None
+                        half_day_session    = approved_leave.get("half_day_session") if approved_leave else None
+
+                        # Determine leave_type_code
+                        leave_type_code = None
+                        if approved_leave and approved_leave.get("leave_type_id"):
+                            lt = await self.leave_types.find_one({"_id": ObjectId(approved_leave["leave_type_id"])})
+                            if lt:
+                                leave_type_code = lt.get("code")
+
+                        # 6. Effective start time (adjusted for First Half Leave)
+                        effective_start = work_start
+                        if leave_duration_type == "Half Day" and half_day_session == "First Half":
+                            effective_start = mid_shift_time
+
+                        # 7. Compute Late
                         is_late = False
-                        status = "Present"
-                        
-                        if clock_in_time > work_start: 
-                            clock_in_minutes = clock_in_time.hour * 60 + clock_in_time.minute
-                            work_start_minutes = work_start.hour * 60 + work_start.minute
-                            minutes_late = clock_in_minutes - work_start_minutes
-                            
+                        ci_min  = clock_in_time.hour * 60 + clock_in_time.minute
+                        es_min  = effective_start.hour * 60 + effective_start.minute
+                        if ci_min > es_min:
+                            minutes_late = ci_min - es_min
                             if minutes_late > late_grace_period:
                                 is_late = True
-                                status = "Late"
+
+                        # 8. Derive detailed attendance_status
+                        is_permission = False
+                        is_half_day   = False
+
+                        if leave_duration_type == "Permission":
+                            is_permission     = True
+                            attendance_status = "Permission"
+                        elif leave_duration_type == "Half Day":
+                            is_half_day       = True
+                            attendance_status = "Half Day"
+                        elif is_late:
+                            attendance_status = "Late"
+                        else:
+                            attendance_status = "Ontime"
+
+                        # --- SHIFT & LATE CALCULATION END ---
                         
                         new_record = {
-                            "employee_id": employee_id,
-                            "date": date_str,
-                            "clock_in": time_str,
-                            "device_type": "Biometric",
-                            "status": status,
-                            "is_late": is_late,
-                            "created_at": datetime.utcnow(),
+                            "employee_id":       employee_id,
+                            "date":              date_str,
+                            "clock_in":          time_str,
+                            "device_type":       "Biometric",
+                            "status":            "Present",
+                            "attendance_status": attendance_status,
+                            "is_late":           is_late,
+                            "is_permission":     is_permission,
+                            "is_half_day":       is_half_day,
+                            "leave_type_code":   leave_type_code,
+                            "created_at":        datetime.utcnow(),
                         }
                         await self.attendance.insert_one(new_record)
                         processed_count += 1
+
                     else: 
                         clock_in_time = datetime.fromisoformat(attendance["clock_in"])
 

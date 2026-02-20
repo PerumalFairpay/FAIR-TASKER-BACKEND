@@ -648,7 +648,7 @@ class LeaveTypeResponse(LeaveTypeBase):
 class LeaveRequestBase(BaseModel):
     employee_id: str
     leave_type_id: str
-    leave_duration_type: str  # "Single", "Multiple", "Half Day"
+    leave_duration_type: str  # "Single", "Multiple", "Half Day", "Permission"
     start_date: str
     end_date: str
     half_day_session: Optional[str] = None  # "First Half", "Second Half"
@@ -785,7 +785,6 @@ class AttendanceBase(BaseModel):
     date: str  # Format: "YYYY-MM-DD"
     clock_in: str  # ISO 8601 timestamp
 
-    # New Field
     device_type: str = "Web"  # Options: "Web", "Mobile", "Biometric", "Manual"
 
     clock_out: Optional[str] = None
@@ -793,9 +792,19 @@ class AttendanceBase(BaseModel):
     break_end: Optional[str] = None
     total_break_hours: float = 0.0
     total_work_hours: float = 0.0
+
+    # Primary status: Present | Absent | Leave | Holiday
     status: str = "Present"
+
+    # Detailed sub-status: Ontime | Late | Permission | Half Day
+    attendance_status: Optional[str] = None
+
     overtime_hours: float = 0.0
     is_late: bool = False
+    is_half_day: bool = False      # True when employee has an approved Half Day leave
+    is_permission: bool = False    # True when employee has an approved Permission leave request
+    leave_type_code: Optional[str] = None  # e.g. "CL", "SL", "LOP", "Half Day"
+
     notes: Optional[str] = None
     ip_address: Optional[str] = None
     location: Optional[str] = None
