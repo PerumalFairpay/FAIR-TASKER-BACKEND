@@ -4,7 +4,6 @@ from app.crud.repository import repository as repo
 from app.models import (
     AttendanceCreate,
     AttendanceUpdate,
-    AttendanceStatusUpdate,
     BiometricSyncRequest,
 )
 from typing import Optional
@@ -80,47 +79,6 @@ async def clock_out(
         )
 
 
-@router.patch("/update-status/{attendance_id}", dependencies=[Depends(verify_token)])
-async def update_attendance_status(
-    attendance_id: str,
-    status_update: AttendanceStatusUpdate,
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Update attendance status for a specific record.
-    If status is changed to 'Leave', automatically creates a leave request with default reason.
-    """
-    try:
-        result = await repo.update_attendance_status(
-            attendance_id,
-            status_update.status,
-            status_update.reason,
-            status_update.notes,
-        )
-
-        if not result:
-            return JSONResponse(
-                status_code=404,
-                content={"message": "Attendance record not found", "success": False},
-            )
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "message": f"Attendance status updated to {status_update.status}",
-                "success": True,
-                "data": result,
-            },
-        )
-    except ValueError as e:
-        return JSONResponse(
-            status_code=400, content={"message": str(e), "success": False}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Server Error: {str(e)}", "success": False},
-        )
 
 
 @router.get("/my-history", dependencies=[Depends(verify_token)])
