@@ -180,12 +180,14 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                 "today": {
                     "date": today_str,
                     "total_employees": total_employees,
-                    "present": today_counts.get("total_present", 0),    
-                     "on_time": today_counts.get("on_time", 0),      # Added on_time
+                    "present": today_counts.get("total_present", 0),
+                    "on_time": today_counts.get("on_time", 0),
                     "absent": today_counts.get("absent", 0),
                     "on_leave": today_counts.get("leave", 0),
                     "late": today_counts.get("late", 0),
-                    "holiday": today_counts.get("holiday", 0),      # Added holiday
+                    "half_day": today_counts.get("half_day", 0),
+                    "permission": today_counts.get("permission", 0),
+                    "holiday": today_counts.get("holiday", 0),
                     "present_percentage": round((today_counts.get("total_present", 0) / total_employees) * 100, 1) if total_employees > 0 else 0,
                     "avg_work_hours": today_avg_hours
                 },
@@ -574,6 +576,8 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             present_days = 0
             absent_days = 0
             late_days = 0
+            half_day_days = 0
+            permission_days = 0
             hours_today = 0.0
             hours_week = 0.0
             hours_month = 0.0
@@ -631,14 +635,21 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                     if att_record:
                         # Record Exists
                         status = att_record.get("status", "Present")
+                        att_status = (att_record.get("attendance_status") or "").lower()
                         # Handle varied status cases
-                        if status in ["Present", "Late"] or att_record.get("is_late"): 
+                        if status in ["Present", "Late", "Half Day"] or att_record.get("is_late"): 
                             present_days += 1
                         elif status == "Absent": 
                             absent_days += 1
                         
-                        if att_record.get("is_late") or status == "Late": 
+                        if att_record.get("is_late") or status == "Late" or att_status == "late": 
                             late_days += 1
+                        
+                        if att_record.get("is_half_day") or status == "Half Day" or att_status == "half day":
+                            half_day_days += 1
+                        
+                        if att_record.get("is_permission") or att_status == "permission":
+                            permission_days += 1
                         
                         # Hours
                         wh = float(att_record.get("total_work_hours", 0))
@@ -661,9 +672,11 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             
             attendance_metrics = {
                 "present_days": present_days,
-                "on_time_days": present_days - late_days,  # Explicitly added
+                "on_time_days": present_days - late_days,
                 "absent_days": absent_days,
                 "late_days": late_days,
+                "half_day_days": half_day_days,
+                "permission_days": permission_days,
                 "holiday_days": len(month_holidays), 
                 "leave_days": leaves_this_month,
                 "total_working_days": total_working_days_elapsed
