@@ -1751,7 +1751,7 @@ class Repository:
 
             emp_no_id = str(employee.get("_id"))
 
-            # Remove "Leave" records for this employee in the date range
+            # 1. Remove "Leave" records for this employee in the date range
             # ONLY if they haven't clocked in (clock_in is None)
             await self.attendance.delete_many(
                 {
@@ -1759,6 +1759,25 @@ class Repository:
                     "date": {"$gte": start_date, "$lte": end_date},
                     "status": "Leave",
                     "clock_in": None,
+                }
+            )
+            
+            # 2. Revert "Permission" and "Half Day" detailed status back to "Present"
+            # if they are checked in (status = "Present")
+            await self.attendance.update_many(
+                {
+                    "employee_id": emp_no_id,
+                    "date": {"$gte": start_date, "$lte": end_date},
+                    "status": "Present",
+                    "attendance_status": {"$in": ["Permission", "Half Day"]}
+                },
+                {
+                    "$set": {
+                        "attendance_status": "Present",
+                        "is_half_day": False,
+                        "notes": "",
+                        "updated_at": datetime.utcnow()
+                    }
                 }
             )
         except Exception as e:
@@ -1781,10 +1800,6 @@ class Repository:
             if start_date <= today <= end_date:
                 duration_type = leave_req.get("leave_duration_type")
 
-                # If it's a "Permission" type (short duration), do NOT mark as "Leave" in attendance.
-                if duration_type == "Permission":
-                    return
-
                 # Fetch leave type code
                 leave_type_code = None
                 lt_id = leave_req.get("leave_type_id")
@@ -1802,6 +1817,8 @@ class Repository:
                 if duration_type == "Half Day":
                     attendance_status = "Half Day"
                     is_half_day = True
+                elif duration_type == "Permission":
+                    attendance_status = "Permission"
 
                 # Need to find the employee (standardizing on mongo _id string as employee_id)
                 employee = await self.employees.find_one(
@@ -1818,7 +1835,10 @@ class Repository:
                 )
 
                 if not existing:
-                    # Create Leave record
+                    # Create Leave record (Skip for Permission since it's a partial absence and they should show up)
+                    if duration_type == "Permission":
+                        return 
+                        
                     await self.attendance.insert_one(
                         {
                             "employee_id":       emp_standard_id,
@@ -1836,25 +1856,35 @@ class Repository:
                             "created_at":        datetime.utcnow(),
                         }
                     )
-                elif existing.get("status") == "Absent":
-                    # Update Absent record to Leave
+                else:
+                    current_status = existing.get("status")
+                    update_fields = {
+                        "device_type": "Auto Sync",
+                        "updated_at": datetime.utcnow()
+                    }
+                    
+                    if current_status == "Absent":
+                        if duration_type != "Permission":
+                            update_fields["status"] = "Leave"
+                            
+                    if duration_type == "Permission":
+                        update_fields["attendance_status"] = "Permission"
+                        update_fields["notes"] = f"Approved Permission: {reason}"
+                    elif duration_type == "Half Day":
+                        update_fields["is_half_day"] = True
+                        update_fields["attendance_status"] = "Half Day"
+                        update_fields["notes"] = f"Approved Half Day: {reason}" # Changed from 'Approved Leave' to 'Approved Half Day' for clarity
+                    else:
+                        update_fields["status"] = "Leave"
+                        update_fields["attendance_status"] = attendance_status
+                        update_fields["is_half_day"] = False
+                        update_fields["leave_type_code"] = leave_type_code
+                        update_fields["notes"] = f"Approved Leave: {reason}"
+                        
                     await self.attendance.update_one(
                         {"_id": existing["_id"]},
-                        {
-                            "$set": {
-                                "status":            "Leave",
-                                "attendance_status": attendance_status,
-                                "is_half_day":       is_half_day,
-                                "leave_type_code":   leave_type_code,
-                                "notes":             reason,
-                                "device_type":       "Auto Sync",
-                                "updated_at":        datetime.utcnow(),
-                            }
-                        },
+                        {"$set": update_fields}
                     )
-
-                # If status is "Present" (Clocked In), we typically don't overwrite it with Leave
-                # as presence usually takes precedence or requires manual fix.
 
         except Exception as e:
             # We don't want to fail the whole request if this background task fails
