@@ -28,12 +28,14 @@ async def clock_in(
             employee_id = current_user.get("id")
 
         result = await repo.clock_in(attendance, employee_id)
+        metrics = await repo.get_dashboard_metrics(employee_id=result.get("employee_id"))
         return JSONResponse(
             status_code=201,
             content={
                 "message": "Clocked in successfully",
                 "success": True,
                 "data": result,
+                "metrics": metrics,
             },
         )
     except ValueError as e:
@@ -61,12 +63,14 @@ async def clock_out(
         clock_out_date = attendance.clock_out.split("T")[0]
 
         result = await repo.clock_out(attendance, employee_id, clock_out_date)
+        metrics = await repo.get_dashboard_metrics(employee_id=result.get("employee_id"))
         return JSONResponse(
             status_code=200,
             content={
                 "message": "Clocked out successfully",
                 "success": True,
                 "data": result,
+                "metrics": metrics,
             },
         )
     except ValueError as e:

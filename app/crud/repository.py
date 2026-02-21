@@ -2479,12 +2479,17 @@ class Repository:
                         },
                     )
                 attendance_data["id"] = str(existing["_id"])
-                return normalize({**existing, **attendance_data})
+                res = {**existing, **attendance_data}
+                if emp:
+                    res["employee_details"] = get_employee_basic_details(emp)
+                return normalize(res)
 
             # No existing record, create new one
             attendance_data["created_at"] = datetime.utcnow()
             result = await self.attendance.insert_one(attendance_data)
             attendance_data["id"] = str(result.inserted_id)
+            if emp:
+                attendance_data["employee_details"] = get_employee_basic_details(emp)
             return normalize(attendance_data)
         except Exception as e:
             raise e
@@ -2592,7 +2597,10 @@ class Repository:
             )
 
             updated_record = await self.attendance.find_one({"_id": existing["_id"]})
-            return normalize(updated_record)
+            res = normalize(updated_record)
+            if emp:
+                res["employee_details"] = get_employee_basic_details(emp)
+            return res
         except Exception as e:
             raise e
 
