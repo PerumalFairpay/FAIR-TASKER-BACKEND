@@ -35,6 +35,7 @@ from app.models import (
     EODReportItem,
     AttendanceCreate,
     AttendanceUpdate,
+    AttendanceAdminEdit,
     EmployeeChecklistTemplateCreate,
     EmployeeChecklistTemplateUpdate,
     BiometricLogItem,
@@ -2233,6 +2234,59 @@ class Repository:
             raise e
 
     # Attendance CRUD
+
+    async def edit_attendance_record(self, attendance_id: str, data: "AttendanceAdminEdit") -> dict:
+        """Admin-only: patch an existing attendance record by its _id."""
+        try:
+            from bson import ObjectId as _ObjId
+            record = await self.attendance.find_one({"_id": _ObjId(attendance_id)})
+            if not record:
+                raise ValueError("Attendance record not found")
+
+            update_fields = {k: v for k, v in data.dict().items() if v is not None}
+
+            # Auto-recalculate total_work_hours when possible
+            clock_in_str  = update_fields.get("clock_in")  or record.get("clock_in")
+            clock_out_str = update_fields.get("clock_out") or record.get("clock_out")
+
+            if clock_in_str and clock_out_str:
+                try:
+                    ci = datetime.fromisoformat(clock_in_str.replace("Z", "+00:00"))
+                    co = datetime.fromisoformat(clock_out_str.replace("Z", "+00:00"))
+                    diff = (co - ci).total_seconds() / 3600
+                    if diff > 0:
+                        update_fields["total_work_hours"] = round(diff, 2)
+                except Exception:
+                    pass
+
+            update_fields["updated_at"] = datetime.utcnow()
+            await self.attendance.update_one(
+                {"_id": _ObjId(attendance_id)},
+                {"$set": update_fields}
+            )
+
+            updated = await self.attendance.find_one({"_id": _ObjId(attendance_id)})
+            r_norm = normalize(updated)
+
+            # Embed employee_details
+            emp = None
+            emp_id = r_norm.get("employee_id")
+            if emp_id:
+                emp = await self.employees.find_one({
+                    "$or": [
+                        {"_id": _ObjId(emp_id) if _ObjId.is_valid(emp_id) else "000000000000000000000000"},
+                        {"employee_no_id": emp_id},
+                    ]
+                })
+            if emp:
+                r_norm["employee_details"] = get_employee_basic_details(normalize(emp))
+            else:
+                r_norm["employee_details"] = None
+
+            return r_norm
+        except Exception as e:
+            raise e
+
     async def clock_in(self, attendance: AttendanceCreate, employee_id: str) -> dict:
         try:
             # Resolve to MongoDB _id to ensure consistency

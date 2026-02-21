@@ -4,6 +4,7 @@ from app.crud.repository import repository as repo
 from app.models import (
     AttendanceCreate,
     AttendanceUpdate,
+    AttendanceAdminEdit,
     BiometricSyncRequest,
 )
 from typing import Optional
@@ -123,6 +124,39 @@ async def get_all_attendance(
                 **result,
             },
         )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"Server Error: {str(e)}", "success": False},
+        )
+
+
+
+@router.put("/edit/{attendance_id}", dependencies=[Depends(verify_token)])
+async def edit_attendance(
+    attendance_id: str,
+    payload: AttendanceAdminEdit,
+    current_user: dict = Depends(get_current_user),
+):
+    """Admin-only: edit an existing attendance record (times, status, notes)."""
+    try:
+        if current_user.get("role") != "admin":
+            return JSONResponse(
+                status_code=403,
+                content={"message": "Only admins can edit attendance records", "success": False},
+            )
+
+        result = await repo.edit_attendance_record(attendance_id, payload)
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": "Attendance record updated successfully",
+                "success": True,
+                "data": result,
+            },
+        )
+    except ValueError as e:
+        return JSONResponse(status_code=404, content={"message": str(e), "success": False})
     except Exception as e:
         return JSONResponse(
             status_code=500,

@@ -832,6 +832,20 @@ class AttendanceUpdate(BaseModel):
     status: Optional[str] = None
 
 
+class AttendanceAdminEdit(BaseModel):
+    """Payload for Admin-Only Attendance Record Edit"""
+
+    clock_in: Optional[str] = None           # ISO timestamp e.g. "2026-02-21T09:05:00"
+    clock_out: Optional[str] = None          # ISO timestamp
+    status: Optional[str] = None             # Present | Absent | Leave | Holiday
+    attendance_status: Optional[str] = None  # Ontime | Late | Permission | Half Day
+    is_late: Optional[bool] = None
+    is_half_day: Optional[bool] = None
+    is_permission: Optional[bool] = None
+    device_type: Optional[str] = None
+    notes: Optional[str] = None
+
+
 
 
 class EmployeeBasicDetails(BaseModel):
