@@ -1660,7 +1660,8 @@ class Repository:
             result = []
             for r in requests:
                 r_norm = normalize(r)
-                r_norm["employee_details"] = emp_map.get(str(r_norm.get("employee_id")))
+                emp_norm = emp_map.get(str(r_norm.get("employee_id")))
+                r_norm["employee_details"] = get_employee_basic_details(emp_norm) if emp_norm else None
                 r_norm["leave_type_details"] = lt_map.get(
                     str(r_norm.get("leave_type_id"))
                 )
@@ -1684,7 +1685,7 @@ class Repository:
             employee = await self.employees.find_one(
                 {"_id": ObjectId(r_norm.get("employee_id"))}
             )
-            r_norm["employee_details"] = normalize(employee) if employee else None
+            r_norm["employee_details"] = get_employee_basic_details(normalize(employee)) if employee else None
 
             # Fetch Leave Type
             leave_type = await self.leave_types.find_one(
