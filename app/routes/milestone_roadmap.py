@@ -25,7 +25,7 @@ async def create_milestone_roadmap(
         item_attachments = []
         if attachments:
             for file in attachments:
-                uploaded = await file_handler.upload_file(file, subfolder="tasks")
+                uploaded = await file_handler.upload_file(file, subfolder="milestones_roadmaps")
                 item_attachments.append(MilestoneRoadmapAttachment(
                     file_name=file.filename,
                     file_url=uploaded["url"],
@@ -111,7 +111,7 @@ async def update_milestone_roadmap(
         item_attachments = []
         if attachments:
             for file in attachments:
-                uploaded = await file_handler.upload_file(file, subfolder="tasks")
+                uploaded = await file_handler.upload_file(file, subfolder="milestones_roadmaps")
                 item_attachments.append(MilestoneRoadmapAttachment(
                     file_name=file.filename,
                     file_url=uploaded["url"],
