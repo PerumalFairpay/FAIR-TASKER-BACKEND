@@ -1927,6 +1927,8 @@ class Repository:
         assigned_to: Optional[str] = None,
         start_date: Optional[str] = None,
         date: Optional[str] = None,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
     ) -> List[dict]:
         try:
             query = {}
@@ -1935,6 +1937,12 @@ class Repository:
             if assigned_to:
                 # Matches if employee ID is in the list
                 query["assigned_to"] = assigned_to
+            
+            if status:
+                query["status"] = status
+            
+            if priority:
+                query["priority"] = priority
 
             if date:
                 # Determine the cutoff date for overdue calculation.
