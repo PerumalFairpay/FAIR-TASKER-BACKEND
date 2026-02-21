@@ -2383,25 +2383,47 @@ class Repository:
                 if existing.get("status") in ["Present", "Late", "Overtime"]:
                     raise ValueError("Already clocked in for this date")
 
-                # If they were marked "Absent", "Leave", or "Holiday" by the system,
-                # we OVERSHADOW it because the employee actually showed up to work.
-                await self.attendance.update_one(
-                    {"_id": existing["_id"]},
-                    {
-                        "$set": {
-                            "clock_in":          attendance_data["clock_in"],
-                            "device_type":       attendance_data["device_type"],
-                            "status":            status,
-                            "attendance_status": attendance_status,
-                            "is_late":           is_late,
-                            "is_permission":     is_permission,
-                            "is_half_day":       is_half_day,
-                            "leave_type_code":   leave_type_code,
-                            "notes": f"Overrode {existing.get('status')} - Employee clocked in ({attendance_status})",
-                            "updated_at": datetime.utcnow(),
-                        }
-                    },
+                # Option C: If the employee has a Full Day approved leave,
+                # preserve the Leave status (to keep leave balance deducted)
+                # but still record their clock-in time for work-hour tracking.
+                is_full_day_leave = (
+                    existing.get("status") == "Leave"
+                    and leave_duration_type not in ["Half Day", "Permission"]
                 )
+
+                if is_full_day_leave:
+                    # Keep Leave status, just record the clock-in time
+                    await self.attendance.update_one(
+                        {"_id": existing["_id"]},
+                        {
+                            "$set": {
+                                "clock_in":    attendance_data["clock_in"],
+                                "device_type": attendance_data["device_type"],
+                                "is_late":     is_late,
+                                "notes":       f"Employee clocked in while on Full Day Leave – leave balance remains deducted",
+                                "updated_at":  datetime.utcnow(),
+                            }
+                        },
+                    )
+                else:
+                    # Absent / Holiday / Half Day / Permission: override to Present
+                    await self.attendance.update_one(
+                        {"_id": existing["_id"]},
+                        {
+                            "$set": {
+                                "clock_in":          attendance_data["clock_in"],
+                                "device_type":       attendance_data["device_type"],
+                                "status":            status,
+                                "attendance_status": attendance_status,
+                                "is_late":           is_late,
+                                "is_permission":     is_permission,
+                                "is_half_day":       is_half_day,
+                                "leave_type_code":   leave_type_code,
+                                "notes": f"Overrode {existing.get('status')} - Employee clocked in ({attendance_status})",
+                                "updated_at": datetime.utcnow(),
+                            }
+                        },
+                    )
                 attendance_data["id"] = str(existing["_id"])
                 return normalize({**existing, **attendance_data})
 
@@ -2945,25 +2967,46 @@ class Repository:
 
                         # --- UPDATE OR INSERT ---
                         if attendance:
-                            # Update existing (Leave/Absent) record to Present
-                            await self.attendance.update_one(
-                                {"_id": attendance["_id"]},
-                                {
-                                    "$set": {
-                                        "clock_in":          time_str,
-                                        "status":            "Present",
-                                        "attendance_status": attendance_status,
-                                        "is_late":           is_late,
-                                        "is_permission":     is_permission,
-                                        "is_half_day":       is_half_day,
-                                        "leave_type_code":   leave_type_code,
-                                        "device_type":       "Biometric",
-                                        "updated_at":        datetime.utcnow(),
-                                    }
-                                }
+                            # Option C: If the employee has a Full Day Leave,
+                            # preserve the Leave status but record the clock-in time.
+                            is_full_day_leave_bio = (
+                                attendance.get("status") == "Leave"
+                                and leave_duration_type not in ["Half Day", "Permission"]
                             )
+
+                            if is_full_day_leave_bio:
+                                await self.attendance.update_one(
+                                    {"_id": attendance["_id"]},
+                                    {
+                                        "$set": {
+                                            "clock_in":    time_str,
+                                            "device_type": "Biometric",
+                                            "is_late":     is_late,
+                                            "notes":       "Employee clocked in while on Full Day Leave – leave balance remains deducted",
+                                            "updated_at":  datetime.utcnow(),
+                                        }
+                                    }
+                                )
+                            else:
+                                # Absent / Holiday / Half Day / Permission: override to Present
+                                await self.attendance.update_one(
+                                    {"_id": attendance["_id"]},
+                                    {
+                                        "$set": {
+                                            "clock_in":          time_str,
+                                            "status":            "Present",
+                                            "attendance_status": attendance_status,
+                                            "is_late":           is_late,
+                                            "is_permission":     is_permission,
+                                            "is_half_day":       is_half_day,
+                                            "leave_type_code":   leave_type_code,
+                                            "device_type":       "Biometric",
+                                            "updated_at":        datetime.utcnow(),
+                                        }
+                                    }
+                                )
                         else:
-                            # Create new Present record
+                            # No existing record → create new Present record
                             new_record = {
                                 "employee_id":       employee_id,
                                 "date":              date_str,
