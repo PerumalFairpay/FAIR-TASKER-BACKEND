@@ -61,7 +61,7 @@ class FileHandler:
                     s3_file_name,
                     ExtraArgs=extra_args,
                 )
-                file_url = self.get_file_api_url(file_id)
+                file_url = self.get_file_api_url(file_id, subfolder=subfolder)
                 result = {"id": file_id, "url": file_url, "name": filename}
             except ClientError as e:
                 raise Exception(f"Failed to upload {filename}: {e}")
@@ -97,7 +97,7 @@ class FileHandler:
                         ExtraArgs=extra_args,
                     )
                 # file_url = f"https://{self.aws_bucket}.s3.{self.aws_region}.amazonaws.com/{s3_key}"
-                file_url = self.get_file_api_url(file_id)
+                file_url = self.get_file_api_url(file_id, subfolder=subfolder)
                 result = {"id": file_id, "url": file_url, "name": file.filename}
             except ClientError as e:
                 raise Exception(f"Failed to upload {file.filename}: {e}")
@@ -221,11 +221,15 @@ class FileHandler:
             except ClientError:
                 return None
     
-    def get_file_api_url(self, file_id: str) -> Optional[str]:
+    def get_file_api_url(self, file_id: str, subfolder: str = "") -> Optional[str]:
         if self.storage_type == "local":
+            if subfolder:
+                return f"{API_URL}/files/{subfolder}/{file_id}"
             return f"{API_URL}/files/{file_id}"
         elif self.storage_type == "s3":
             if file_id and file_id != "" and len(file_id) > 0:
+                if subfolder:
+                    return f"{API_URL}/api/view/{subfolder}/{file_id}"
                 return f"{API_URL}/api/view/{file_id}"
             return None
 

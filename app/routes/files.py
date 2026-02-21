@@ -4,14 +4,16 @@ from app.helper.file_handler import file_handler as handler
 
 router = APIRouter()
 
-@router.get("/view/{file_id}")
+@router.get("/view/{file_id:path}")
 async def view_file(file_id: str, filename: str = None, content_type: str = None):
     try:
-        result = handler.get_file(file_id)
+        # file_id may be "subfolder/uuid" or just "uuid" — we only need the uuid part
+        actual_id = file_id.split("/")[-1]
+        result = handler.get_file(actual_id)
         if not result:
             return JSONResponse(status_code=404, content={"message": "File not found", "success": False})
         
-        file_info = handler.get_file_info(file_id)
+        file_info = handler.get_file_info(actual_id)
         
         # Determine the final filename
         final_filename = "file"
