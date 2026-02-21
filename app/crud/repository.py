@@ -1784,6 +1784,25 @@ class Repository:
                     }
                 }
             )
+            
+            # 3. Revert "Leave" records back to "Present" if they have a clock-in
+            # This handles the case where a Full Day leave is rejected AFTER an employee clocked in
+            await self.attendance.update_many(
+                {
+                    "employee_id": emp_no_id,
+                    "date": {"$gte": start_date, "$lte": end_date},
+                    "status": "Leave",
+                    "clock_in": {"$ne": None},
+                },
+                {
+                    "$set": {
+                        "status": "Present",
+                        "attendance_status": "Present",
+                        "notes": "Reverted Leave to Present after leave rejection",
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
         except Exception as e:
             print(f"Error cleaning up leave attendance: {e}")
 
