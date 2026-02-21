@@ -60,13 +60,13 @@ async def create_employee(
     try:
         profile_pic_path = None
         if profile_picture:
-            uploaded = await file_handler.upload_file(profile_picture)
+            uploaded = await file_handler.upload_file(profile_picture, subfolder="employees")
             profile_pic_path = uploaded["url"]
 
         documents_list = []
         if document_proofs:
             for i, doc_file in enumerate(document_proofs):
-                uploaded_doc = await file_handler.upload_file(doc_file)
+                uploaded_doc = await file_handler.upload_file(doc_file, subfolder="employees/documents")
                 doc_path = uploaded_doc["url"]
                 # Use provided name or filename fallback
                 doc_name = document_names[i] if i < len(document_names) else doc_file.filename
@@ -277,7 +277,7 @@ async def update_employee(
     try:
         profile_pic_path = None
         if profile_picture:
-            uploaded = await file_handler.upload_file(profile_picture)
+            uploaded = await file_handler.upload_file(profile_picture, subfolder="employees")
             profile_pic_path = uploaded["url"]
 
         documents_list = []
@@ -288,7 +288,7 @@ async def update_employee(
                  documents_list = current_emp["documents"]
             
             for i, doc_file in enumerate(document_proofs):
-                uploaded_doc = await file_handler.upload_file(doc_file)
+                uploaded_doc = await file_handler.upload_file(doc_file, subfolder="employees/documents")
                 doc_path = uploaded_doc["url"]
                 doc_name = document_names[i] if i < len(document_names) else doc_file.filename
                 
