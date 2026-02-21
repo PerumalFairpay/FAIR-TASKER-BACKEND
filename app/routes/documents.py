@@ -24,7 +24,7 @@ async def create_document(
         file_path = None
         file_type = None
         if file:
-            uploaded = await file_handler.upload_file(file)
+            uploaded = await file_handler.upload_file(file, subfolder="documents")
             file_path = uploaded["url"]
             file_type = file.content_type
 
@@ -97,7 +97,7 @@ async def update_document(
         file_path = None
         file_type = None
         if file:
-            uploaded = await file_handler.upload_file(file)
+            uploaded = await file_handler.upload_file(file, subfolder="documents")
             file_path = uploaded["url"]
             file_type = file.content_type
 

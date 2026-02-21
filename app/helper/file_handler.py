@@ -138,7 +138,7 @@ class FileHandler:
     # ---------------- Retrieve File URL ---------------- #
     def get_file_url(self, file_id: str) -> Optional[str]:
         if self.storage_type == "local":
-            search_paths = ["", "feedback"]
+            search_paths = ["", "feedback", "documents", "blogs", "expenses", "assets", "projects", "leave", "tasks"]
             for sub in search_paths:
                 check_dir = os.path.join(self.local_dir, sub) if sub else self.local_dir
                 if os.path.exists(check_dir):
@@ -160,7 +160,7 @@ class FileHandler:
 
     def get_file_path(self, file_id: str) -> Optional[str]:
         if self.storage_type == "local":
-            search_paths = ["", "feedback"]
+            search_paths = ["", "feedback", "documents", "blogs", "expenses", "assets", "projects", "leave", "tasks"]
             for sub in search_paths:
                 check_dir = os.path.join(self.local_dir, sub) if sub else self.local_dir
                 if os.path.exists(check_dir):
@@ -171,7 +171,7 @@ class FileHandler:
 
         elif self.storage_type == "s3":
             try:
-                search_paths = ["", "feedback"]
+                search_paths = ["", "feedback", "documents", "blogs", "expenses", "assets", "projects", "leave", "tasks"]
                 for sub in search_paths:
                     prefix = f"{AWS_USE_PATH}/{sub}/{file_id}" if sub else f"{AWS_USE_PATH}/{file_id}"
                     objs = self.s3_client.list_objects_v2(Bucket=self.aws_bucket, Prefix=prefix)
@@ -183,7 +183,7 @@ class FileHandler:
     
     def get_file(self, file_id: str) -> Optional[str]:
         if self.storage_type == "local":
-            search_paths = ["", "feedback"]
+            search_paths = ["", "feedback", "documents", "blogs", "expenses", "assets", "projects", "leave", "tasks"]
             for sub in search_paths:
                 check_dir = os.path.join(self.local_dir, sub) if sub else self.local_dir
                 if os.path.exists(check_dir):
@@ -205,7 +205,7 @@ class FileHandler:
     # ---------------- Download File ---------------- #
     def get_file_info(self, file_id: str) -> Optional[str]:
         if self.storage_type == "local":
-            search_paths = ["", "feedback"]
+            search_paths = ["", "feedback", "documents", "blogs", "expenses", "assets", "projects", "leave", "tasks"]
             for sub in search_paths:
                 check_dir = os.path.join(self.local_dir, sub) if sub else self.local_dir
                 if os.path.exists(check_dir):
@@ -232,7 +232,7 @@ class FileHandler:
     # ---------------- Delete File ---------------- #
     def delete_file(self, file_id: str) -> bool:
         if self.storage_type == "local":
-            search_paths = ["", "feedback"]
+            search_paths = ["", "feedback", "documents", "blogs", "expenses", "assets", "projects", "leave", "tasks"]
             for sub in search_paths:
                 check_dir = os.path.join(self.local_dir, sub) if sub else self.local_dir
                 if os.path.exists(check_dir):
@@ -263,6 +263,6 @@ async def save_upload_file(file: UploadFile, folder: str = None) -> str:
     if not file:
         return None
     
-    # uses just the file handler's upload_file method
-    result = await file_handler.upload_file(file)
+    # Forward the folder as a subfolder so files are correctly organised
+    result = await file_handler.upload_file(file, subfolder=folder or "")
     return result["url"]

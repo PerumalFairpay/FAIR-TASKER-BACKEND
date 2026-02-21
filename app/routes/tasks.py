@@ -29,7 +29,7 @@ async def create_task(
         task_attachments = []
         if attachments:
             for file in attachments:
-                uploaded = await file_handler.upload_file(file)
+                uploaded = await file_handler.upload_file(file, subfolder="tasks")
                 task_attachments.append(TaskAttachment(
                     file_name=file.filename,
                     file_url=uploaded["url"],
@@ -94,7 +94,7 @@ async def process_eod_report(
         new_attachments = []
         if attachments:
             for file in attachments:
-                uploaded = await file_handler.upload_file(file)
+                uploaded = await file_handler.upload_file(file, subfolder="tasks")
                 new_attachments.append(TaskAttachment(
                     file_name=file.filename,
                     file_url=uploaded["url"],
@@ -184,7 +184,7 @@ async def update_task(
         task_attachments = []
         if attachments:
             for file in attachments:
-                uploaded = await file_handler.upload_file(file)
+                uploaded = await file_handler.upload_file(file, subfolder="tasks")
                 task_attachments.append(TaskAttachment(
                     file_name=file.filename,
                     file_url=uploaded["url"],

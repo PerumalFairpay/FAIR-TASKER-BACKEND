@@ -32,7 +32,7 @@ async def create_project(
     try:
         logo_path = None
         if logo and logo.filename:
-            uploaded = await file_handler.upload_file(logo)
+            uploaded = await file_handler.upload_file(logo, subfolder="projects")
             logo_path = uploaded["url"]
 
         project_data = ProjectCreate(
@@ -136,7 +136,7 @@ async def update_project(
     try:
         logo_path = None
         if logo and logo.filename:
-            uploaded = await file_handler.upload_file(logo)
+            uploaded = await file_handler.upload_file(logo, subfolder="projects")
             logo_path = uploaded["url"]
 
         update_data = ProjectUpdate(

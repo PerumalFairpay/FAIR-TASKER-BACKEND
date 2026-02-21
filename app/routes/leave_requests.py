@@ -30,7 +30,7 @@ async def create_leave_request(
         attachment_path = None
         file_type = None
         if attachment:
-            attachment_path = await save_upload_file(attachment, "leave_attachments")
+            attachment_path = await save_upload_file(attachment, "leave")
             file_type = attachment.content_type
             
         leave_request = LeaveRequestCreate(
@@ -150,7 +150,7 @@ async def update_leave_request(
         attachment_path = None
         file_type = None
         if attachment:
-            attachment_path = await save_upload_file(attachment, "leave_attachments")
+            attachment_path = await save_upload_file(attachment, "leave")
             file_type = attachment.content_type
             
         update_data = LeaveRequestUpdate(

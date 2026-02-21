@@ -39,7 +39,7 @@ async def create_asset(
             for image in images:
                 if image.filename:
                     # Use centralized file handler
-                    uploaded_file = await file_handler.upload_file(image)
+                    uploaded_file = await file_handler.upload_file(image, subfolder="assets")
                     image_paths.append(uploaded_file["url"])
                     
                     # Capture content type of the first image/file
@@ -126,7 +126,7 @@ async def update_asset(
             for image in images:
                 if image.filename:
                     # Use centralized file handler
-                    uploaded_file = await file_handler.upload_file(image)
+                    uploaded_file = await file_handler.upload_file(image, subfolder="assets")
                     image_paths.append(uploaded_file["url"])
                     
                     # Capture content type of the first image/file

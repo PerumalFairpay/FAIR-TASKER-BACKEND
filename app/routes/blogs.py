@@ -27,7 +27,7 @@ async def create_blog(
     try:
         image_url = None
         if cover_image:
-            uploaded = await file_handler.upload_file(cover_image)
+            uploaded = await file_handler.upload_file(cover_image, subfolder="blogs")
             image_url = uploaded["url"]
 
         try:
@@ -125,7 +125,7 @@ async def update_blog(
     try:
         image_url = None
         if cover_image:
-            uploaded = await file_handler.upload_file(cover_image)
+            uploaded = await file_handler.upload_file(cover_image, subfolder="blogs")
             image_url = uploaded["url"]
 
         update_fields = {}
