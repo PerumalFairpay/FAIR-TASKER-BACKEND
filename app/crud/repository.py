@@ -47,6 +47,8 @@ from app.models import (
     PayslipComponentUpdate,
     FeedbackCreate,
     FeedbackUpdate,
+    MilestoneRoadmapCreate,
+    MilestoneRoadmapUpdate,
 )
 from app.utils import normalize, get_password_hash, get_employee_basic_details
 from bson import ObjectId
@@ -84,6 +86,7 @@ class Repository:
         self.nda_requests = self.db["nda_requests"]
         self.payslips = self.db["payslips"]
         self.payslip_components = self.db["payslip_components"]
+        self.milestones_roadmaps = self.db["milestones_roadmaps"]
 
     async def create_employee(
         self, employee: EmployeeCreate, profile_picture_path: str = None
@@ -3462,6 +3465,61 @@ class Repository:
     async def delete_feedback(self, feedback_id: str) -> bool:
         try:
             result = await self.db["feedback"].delete_one({"_id": ObjectId(feedback_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+    async def create_milestone_roadmap(self, item: MilestoneRoadmapCreate) -> dict:
+        try:
+            item_data = item.dict()
+            item_data["created_at"] = datetime.utcnow()
+            result = await self.milestones_roadmaps.insert_one(item_data)
+            item_data["id"] = str(result.inserted_id)
+            return normalize(item_data)
+        except Exception as e:
+            raise e
+
+    async def get_milestones_roadmaps(
+        self,
+        project_id: Optional[str] = None,
+        assigned_to: Optional[str] = None,
+        status: Optional[str] = None,
+        priority: Optional[str] = None
+    ) -> List[dict]:
+        try:
+            query = {}
+            if project_id: query["project_id"] = project_id
+            if assigned_to: query["assigned_to"] = assigned_to
+            if status: query["status"] = status
+            if priority: query["priority"] = priority
+
+            items = await self.milestones_roadmaps.find(query).to_list(length=None)
+            return [normalize(item) for item in items]
+        except Exception as e:
+            raise e
+
+    async def get_milestone_roadmap(self, item_id: str) -> dict:
+        try:
+            item = await self.milestones_roadmaps.find_one({"_id": ObjectId(item_id)})
+            return normalize(item)
+        except Exception as e:
+            raise e
+
+    async def update_milestone_roadmap(self, item_id: str, item: MilestoneRoadmapUpdate) -> dict:
+        try:
+            update_data = {k: v for k, v in item.dict().items() if v is not None}
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.milestones_roadmaps.update_one(
+                    {"_id": ObjectId(item_id)}, {"$set": update_data}
+                )
+            return await self.get_milestone_roadmap(item_id)
+        except Exception as e:
+            raise e
+
+    async def delete_milestone_roadmap(self, item_id: str) -> bool:
+        try:
+            result = await self.milestones_roadmaps.delete_one({"_id": ObjectId(item_id)})
             return result.deleted_count > 0
         except Exception as e:
             raise e

@@ -34,6 +34,7 @@ from app.routes import (
     payslip_component,
     feedback,
     shifts,
+    milestone_roadmap,
 )
 
 from app.jobs.scheduler import init_scheduler, shutdown_scheduler
@@ -126,6 +127,7 @@ api_router.include_router(payslip.router)
 api_router.include_router(payslip_component.router)
 api_router.include_router(feedback.router)
 api_router.include_router(shifts.router)
+api_router.include_router(milestone_roadmap.router)
 
 
 app.include_router(api_router)
