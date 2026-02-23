@@ -22,7 +22,7 @@ async def clock_in(
     attendance: AttendanceCreate, current_user: dict = Depends(get_current_user)
 ):
     try:
-        employee_id = current_user.get("employee_id") or current_user.get("id")
+        employee_id = current_user.get("employee_no_id") or current_user.get("id")
         if not employee_id:
             # Fallback if employee_id isn't in user record, imply the user ID itself is the link (unlikely based on project structure but safe)
             employee_id = current_user.get("id")
@@ -54,7 +54,7 @@ async def clock_out(
     attendance: AttendanceUpdate, current_user: dict = Depends(get_current_user)
 ):
     try:
-        employee_id = current_user.get("employee_id") or current_user.get("id")
+        employee_id = current_user.get("employee_no_id") or current_user.get("id")
 
         if not attendance.clock_out:
             raise HTTPException(status_code=400, detail="Clock out time required")
@@ -93,7 +93,7 @@ async def get_my_history(
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        employee_id = current_user.get("employee_id") or current_user.get("id")
+        employee_id = current_user.get("employee_no_id") or current_user.get("id")
         result = await repo.get_employee_attendance(employee_id, start_date, end_date)
         return JSONResponse(
             status_code=200,

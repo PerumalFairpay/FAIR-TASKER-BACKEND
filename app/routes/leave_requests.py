@@ -74,7 +74,7 @@ async def get_leave_requests(
         
         # If user is an employee, enforce filtering by their own ID
         if user_role == "employee":
-            emp_no_id = current_user.get("employee_id")
+            emp_no_id = current_user.get("employee_no_id")
             if emp_no_id:
                 # Find the employee mongo ID using the employee_no_id from user record
                 employee = await repo.employees.find_one({"employee_no_id": emp_no_id})

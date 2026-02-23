@@ -33,7 +33,7 @@ async def login(user: UserLogin, response: Response):
     )
 
     # Fetch employee record for ID mapping
-    business_id = user_record.get("employee_id")
+    business_id = user_record.get("employee_no_id")
     db_employee_id = None
     employee_no_id = business_id
     
@@ -71,9 +71,9 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     current_user.pop("hashed_password", None)
 
     # Fetch profile picture and map IDs if linked to an employee
-    if "employee_id" in current_user and current_user["employee_id"]:
-        # current_user["employee_id"] is the business ID here from the user record
-        business_id = current_user["employee_id"]
+    if "employee_no_id" in current_user and current_user["employee_no_id"]:
+        # current_user["employee_no_id"] is the business ID here from the user record
+        business_id = current_user["employee_no_id"]
         employee = await employees_collection.find_one(
             {"employee_no_id": business_id}
         )
@@ -84,6 +84,6 @@ async def get_me(current_user: dict = Depends(get_current_user)):
             current_user["employee_id"] = str(employee["_id"])
             current_user["employee_no_id"] = employee.get("employee_no_id")
             # Remove legacy field
-            current_user.pop("attendance_id", None)
+            current_user.pop("biometric_id", None)
 
     return {"message": "Success", "success": True, "data": current_user}

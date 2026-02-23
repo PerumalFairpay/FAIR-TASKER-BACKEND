@@ -19,9 +19,9 @@ class ChangePasswordRequest(BaseModel):
 @router.get("/")
 async def get_profile(current_user: dict = Depends(get_current_user)):
     try:
-        employee_id = current_user.get("employee_id")
+        employee_id = current_user.get("employee_no_id")
         if not employee_id:
-             # If no employee_id link, return user data as fallback
+             # If no employee_no_id link, return user data as fallback
              current_user.pop("hashed_password", None)
              return success_response(message="User profile fetched", data=current_user)
         
@@ -63,7 +63,7 @@ async def update_profile(
     document_proof: Optional[UploadFile] = File(None)
 ):
     try:
-        employee_id = current_user.get("employee_id")
+        employee_id = current_user.get("employee_no_id")
         if not employee_id:
              return error_response(message="Employee record not found for this user", status_code=404)
         
@@ -135,8 +135,8 @@ async def change_password(
             {"$set": {"hashed_password": hashed_password, "updated_at": datetime.utcnow()}}
         )
         
-        # Update Employee table if employee_id exists
-        employee_id = current_user.get("employee_id")
+        # Update Employee table if employee_no_id exists
+        employee_id = current_user.get("employee_no_id")
         if employee_id:
             await repo.employees.update_one(
                 {"employee_no_id": employee_id},

@@ -174,10 +174,10 @@ class Repository:
             employee_data["created_at"] = datetime.utcnow()
 
             # Create User Entry
-            # User fields: employee_id, attendance_id, name, email, mobile, hashed_password
+            # User fields: employee_no_id, biometric_id, name, email, mobile, hashed_password
             user_data = {
-                "employee_id": employee.employee_no_id,
-                "attendance_id": employee.employee_no_id,  # Defaulting to emp_id
+                "employee_no_id": employee.employee_no_id,
+                "biometric_id": employee.biometric_id,  # Default to biometric_id
                 "name": employee.name,
                 "email": employee.email,
                 "mobile": employee.mobile,
@@ -539,7 +539,7 @@ class Repository:
                     current_emp = await self.get_employee(employee_id)
                     if current_emp and "employee_no_id" in current_emp:
                         await self.users.update_one(
-                            {"employee_id": current_emp["employee_no_id"]},
+                            {"employee_no_id": current_emp["employee_no_id"]},
                             {"$set": user_update},
                         )
 
@@ -559,7 +559,7 @@ class Repository:
                 # I will soft delete or delete user. Let's delete for now to keep it clean CRUD.
                 if "employee_no_id" in employee:
                     await self.users.delete_one(
-                        {"employee_id": employee["employee_no_id"]}
+                        {"employee_no_id": employee["employee_no_id"]}
                     )
 
             return result.deleted_count > 0
@@ -580,7 +580,7 @@ class Repository:
 
             # 3. Update User
             result = await self.users.update_one(
-                {"employee_id": emp_no_id},
+                {"employee_no_id": emp_no_id},
                 {"$set": {"permissions": permissions, "updated_at": datetime.utcnow()}},
             )
             return result.matched_count > 0
@@ -597,7 +597,7 @@ class Repository:
             # 2. Get the business key
             emp_no_id = employee.get("employee_no_id")
 
-            user = await self.users.find_one({"employee_id": emp_no_id})
+            user = await self.users.find_one({"employee_no_id": emp_no_id})
             if not user:
                 return {"role_permissions": [], "direct_permissions": []}
 

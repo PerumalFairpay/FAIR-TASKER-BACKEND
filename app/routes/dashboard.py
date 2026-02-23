@@ -486,7 +486,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
 
         else:
             # --- EMPLOYEE DASHBOARD ---
-            employee_id = current_user.get("employee_id")
+            employee_id = current_user.get("employee_no_id")
             if not employee_id:
                 return JSONResponse(status_code=400, content={"success": False, "message": "No employee profile linked"})
 

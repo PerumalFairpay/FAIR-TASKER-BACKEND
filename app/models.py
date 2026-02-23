@@ -4,8 +4,8 @@ from datetime import datetime
 
 
 class UserBase(BaseModel):
-    employee_id: str
-    attendance_id: str
+    employee_no_id: str
+    biometric_id: Optional[str] = None
     name: str
     email: EmailStr
     mobile: str
