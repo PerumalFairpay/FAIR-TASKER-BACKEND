@@ -54,18 +54,19 @@ async def create_employee(
     pf_account_number: Optional[str] = Form(None),
     esic_number: Optional[str] = Form(None),
     pan_number: Optional[str] = Form(None),
-    biometric_id: Optional[str] = Form(None)
+    biometric_id: Optional[str] = Form(None),
+    shift_id: Optional[str] = Form(None)
 ):
     try:
         profile_pic_path = None
         if profile_picture:
-            uploaded = await file_handler.upload_file(profile_picture)
+            uploaded = await file_handler.upload_file(profile_picture, subfolder="employees")
             profile_pic_path = uploaded["url"]
 
         documents_list = []
         if document_proofs:
             for i, doc_file in enumerate(document_proofs):
-                uploaded_doc = await file_handler.upload_file(doc_file)
+                uploaded_doc = await file_handler.upload_file(doc_file, subfolder="employees/documents")
                 doc_path = uploaded_doc["url"]
                 # Use provided name or filename fallback
                 doc_name = document_names[i] if i < len(document_names) else doc_file.filename
@@ -101,6 +102,7 @@ async def create_employee(
             notice_period=notice_period,
             address=address,
             work_mode=work_mode,
+            shift_id=shift_id,
             documents=documents_list,
             onboarding_checklist=json.loads(onboarding_checklist) if onboarding_checklist else [],
             offboarding_checklist=json.loads(offboarding_checklist) if offboarding_checklist else [],
@@ -269,12 +271,13 @@ async def update_employee(
     pf_account_number: Optional[str] = Form(None),
     esic_number: Optional[str] = Form(None),
     pan_number: Optional[str] = Form(None),
-    biometric_id: Optional[str] = Form(None)
+    biometric_id: Optional[str] = Form(None),
+    shift_id: Optional[str] = Form(None)
 ):
     try:
         profile_pic_path = None
         if profile_picture:
-            uploaded = await file_handler.upload_file(profile_picture)
+            uploaded = await file_handler.upload_file(profile_picture, subfolder="employees")
             profile_pic_path = uploaded["url"]
 
         documents_list = []
@@ -285,7 +288,7 @@ async def update_employee(
                  documents_list = current_emp["documents"]
             
             for i, doc_file in enumerate(document_proofs):
-                uploaded_doc = await file_handler.upload_file(doc_file)
+                uploaded_doc = await file_handler.upload_file(doc_file, subfolder="employees/documents")
                 doc_path = uploaded_doc["url"]
                 doc_name = document_names[i] if i < len(document_names) else doc_file.filename
                 
@@ -319,6 +322,7 @@ async def update_employee(
             notice_period=notice_period,
             address=address,
             work_mode=work_mode,
+            shift_id=shift_id,
             documents=documents_list if documents_list else None,
             onboarding_checklist=json.loads(onboarding_checklist) if onboarding_checklist else None,
             offboarding_checklist=json.loads(offboarding_checklist) if offboarding_checklist else None,

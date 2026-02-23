@@ -23,7 +23,7 @@ async def create_feedback(
     try:
         attachment_urls = []
         for file in attachments:
-            uploaded = await file_handler.upload_file(file)
+            uploaded = await file_handler.upload_file(file, subfolder="feedback")
             attachment_urls.append({
                 "document_name": file.filename,
                 "document_proof": uploaded["url"],
@@ -88,7 +88,13 @@ async def update_feedback(
             existing = await repo.get_feedback(feedback_id)
             if not existing:
                 return error_response(message="Feedback not found", status_code=404)
-            if existing.get("employee_id") != current_user.get("employee_id"):
+            
+            # Fetch employee record to get Mongo ID for accurate comparison
+            emp_business_id = current_user.get("employee_no_id")
+            employee_record = await repo.db["employees"].find_one({"employee_no_id": emp_business_id})
+            employee_mongo_id = str(employee_record["_id"]) if employee_record else None
+
+            if existing.get("employee_id") != employee_mongo_id:
                 return error_response(
                     message="You are not authorized to edit this feedback",
                     status_code=403
@@ -97,7 +103,7 @@ async def update_feedback(
         attachment_urls = []
         if attachments:
             for file in attachments:
-                uploaded = await file_handler.upload_file(file)
+                uploaded = await file_handler.upload_file(file, subfolder="feedback")
                 attachment_urls.append({
                     "document_name": file.filename,
                     "document_proof": uploaded["url"],
@@ -158,7 +164,13 @@ async def delete_feedback(
             existing = await repo.get_feedback(feedback_id)
             if not existing:
                 return error_response(message="Feedback not found", status_code=404)
-            if existing.get("employee_id") != current_user.get("employee_id"):
+            
+            # Fetch employee record to get Mongo ID for accurate comparison
+            emp_business_id = current_user.get("employee_no_id")
+            employee_record = await repo.db["employees"].find_one({"employee_no_id": emp_business_id})
+            employee_mongo_id = str(employee_record["_id"]) if employee_record else None
+
+            if existing.get("employee_id") != employee_mongo_id:
                 return error_response(
                     message="You are not authorized to delete this feedback",
                     status_code=403

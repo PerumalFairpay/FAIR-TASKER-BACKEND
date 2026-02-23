@@ -4,7 +4,7 @@ from app.crud.repository import repository as repo
 from app.models import (
     AttendanceCreate,
     AttendanceUpdate,
-    AttendanceStatusUpdate,
+    AttendanceAdminEdit,
     BiometricSyncRequest,
 )
 from typing import Optional
@@ -22,18 +22,20 @@ async def clock_in(
     attendance: AttendanceCreate, current_user: dict = Depends(get_current_user)
 ):
     try:
-        employee_id = current_user.get("employee_id") or current_user.get("id")
+        employee_id = current_user.get("employee_no_id") or current_user.get("id")
         if not employee_id:
             # Fallback if employee_id isn't in user record, imply the user ID itself is the link (unlikely based on project structure but safe)
             employee_id = current_user.get("id")
 
         result = await repo.clock_in(attendance, employee_id)
+        metrics = await repo.get_dashboard_metrics(employee_id=result.get("employee_id"))
         return JSONResponse(
             status_code=201,
             content={
                 "message": "Clocked in successfully",
                 "success": True,
                 "data": result,
+                "metrics": metrics,
             },
         )
     except ValueError as e:
@@ -52,7 +54,7 @@ async def clock_out(
     attendance: AttendanceUpdate, current_user: dict = Depends(get_current_user)
 ):
     try:
-        employee_id = current_user.get("employee_id") or current_user.get("id")
+        employee_id = current_user.get("employee_no_id") or current_user.get("id")
 
         if not attendance.clock_out:
             raise HTTPException(status_code=400, detail="Clock out time required")
@@ -61,12 +63,14 @@ async def clock_out(
         clock_out_date = attendance.clock_out.split("T")[0]
 
         result = await repo.clock_out(attendance, employee_id, clock_out_date)
+        metrics = await repo.get_dashboard_metrics(employee_id=result.get("employee_id"))
         return JSONResponse(
             status_code=200,
             content={
                 "message": "Clocked out successfully",
                 "success": True,
                 "data": result,
+                "metrics": metrics,
             },
         )
     except ValueError as e:
@@ -80,47 +84,6 @@ async def clock_out(
         )
 
 
-@router.patch("/update-status/{attendance_id}", dependencies=[Depends(verify_token)])
-async def update_attendance_status(
-    attendance_id: str,
-    status_update: AttendanceStatusUpdate,
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Update attendance status for a specific record.
-    If status is changed to 'Leave', automatically creates a leave request with default reason.
-    """
-    try:
-        result = await repo.update_attendance_status(
-            attendance_id,
-            status_update.status,
-            status_update.reason,
-            status_update.notes,
-        )
-
-        if not result:
-            return JSONResponse(
-                status_code=404,
-                content={"message": "Attendance record not found", "success": False},
-            )
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "message": f"Attendance status updated to {status_update.status}",
-                "success": True,
-                "data": result,
-            },
-        )
-    except ValueError as e:
-        return JSONResponse(
-            status_code=400, content={"message": str(e), "success": False}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Server Error: {str(e)}", "success": False},
-        )
 
 
 @router.get("/my-history", dependencies=[Depends(verify_token)])
@@ -130,7 +93,7 @@ async def get_my_history(
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        employee_id = current_user.get("employee_id") or current_user.get("id")
+        employee_id = current_user.get("employee_no_id") or current_user.get("id")
         result = await repo.get_employee_attendance(employee_id, start_date, end_date)
         return JSONResponse(
             status_code=200,
@@ -165,6 +128,39 @@ async def get_all_attendance(
                 **result,
             },
         )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"Server Error: {str(e)}", "success": False},
+        )
+
+
+
+@router.put("/edit/{attendance_id}", dependencies=[Depends(verify_token)])
+async def edit_attendance(
+    attendance_id: str,
+    payload: AttendanceAdminEdit,
+    current_user: dict = Depends(get_current_user),
+):
+    """Admin-only: edit an existing attendance record (times, status, notes)."""
+    try:
+        if current_user.get("role") != "admin":
+            return JSONResponse(
+                status_code=403,
+                content={"message": "Only admins can edit attendance records", "success": False},
+            )
+
+        result = await repo.edit_attendance_record(attendance_id, payload)
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": "Attendance record updated successfully",
+                "success": True,
+                "data": result,
+            },
+        )
+    except ValueError as e:
+        return JSONResponse(status_code=404, content={"message": str(e), "success": False})
     except Exception as e:
         return JSONResponse(
             status_code=500,

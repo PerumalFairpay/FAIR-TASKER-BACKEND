@@ -29,7 +29,7 @@ async def create_task(
         task_attachments = []
         if attachments:
             for file in attachments:
-                uploaded = await file_handler.upload_file(file)
+                uploaded = await file_handler.upload_file(file, subfolder="tasks")
                 task_attachments.append(TaskAttachment(
                     file_name=file.filename,
                     file_url=uploaded["url"],
@@ -67,10 +67,12 @@ async def get_tasks(
     project_id: Optional[str] = None, 
     assigned_to: Optional[str] = None, 
     start_date: Optional[str] = None,
-    date: Optional[str] = None
+    date: Optional[str] = None,
+    status: Optional[str] = None,
+    priority: Optional[str] = None
 ):
     try:
-        tasks = await repo.get_tasks(project_id, assigned_to, start_date, date)
+        tasks = await repo.get_tasks(project_id, assigned_to, start_date, date, status, priority)
         return JSONResponse(
             status_code=200,
             content={"message": "Tasks fetched successfully", "success": True, "data": tasks}
@@ -94,7 +96,7 @@ async def process_eod_report(
         new_attachments = []
         if attachments:
             for file in attachments:
-                uploaded = await file_handler.upload_file(file)
+                uploaded = await file_handler.upload_file(file, subfolder="tasks")
                 new_attachments.append(TaskAttachment(
                     file_name=file.filename,
                     file_url=uploaded["url"],
@@ -184,7 +186,7 @@ async def update_task(
         task_attachments = []
         if attachments:
             for file in attachments:
-                uploaded = await file_handler.upload_file(file)
+                uploaded = await file_handler.upload_file(file, subfolder="tasks")
                 task_attachments.append(TaskAttachment(
                     file_name=file.filename,
                     file_url=uploaded["url"],

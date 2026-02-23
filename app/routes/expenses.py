@@ -24,7 +24,7 @@ async def create_expense(
         attachment_path = None
         file_type = None
         if attachment:
-            uploaded = await file_handler.upload_file(attachment)
+            uploaded = await file_handler.upload_file(attachment, subfolder="expenses")
             attachment_path = uploaded["url"]
             file_type = attachment.content_type
 
@@ -97,7 +97,7 @@ async def update_expense(
         attachment_path = None
         file_type = None
         if attachment:
-            uploaded = await file_handler.upload_file(attachment)
+            uploaded = await file_handler.upload_file(attachment, subfolder="expenses")
             attachment_path = uploaded["url"]
             file_type = attachment.content_type
 

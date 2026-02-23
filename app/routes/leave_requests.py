@@ -30,7 +30,7 @@ async def create_leave_request(
         attachment_path = None
         file_type = None
         if attachment:
-            attachment_path = await save_upload_file(attachment, "leave_attachments")
+            attachment_path = await save_upload_file(attachment, "leave")
             file_type = attachment.content_type
             
         leave_request = LeaveRequestCreate(
@@ -74,7 +74,7 @@ async def get_leave_requests(
         
         # If user is an employee, enforce filtering by their own ID
         if user_role == "employee":
-            emp_no_id = current_user.get("employee_id")
+            emp_no_id = current_user.get("employee_no_id")
             if emp_no_id:
                 # Find the employee mongo ID using the employee_no_id from user record
                 employee = await repo.employees.find_one({"employee_no_id": emp_no_id})
@@ -150,7 +150,7 @@ async def update_leave_request(
         attachment_path = None
         file_type = None
         if attachment:
-            attachment_path = await save_upload_file(attachment, "leave_attachments")
+            attachment_path = await save_upload_file(attachment, "leave")
             file_type = attachment.content_type
             
         update_data = LeaveRequestUpdate(

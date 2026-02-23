@@ -4,8 +4,8 @@ from datetime import datetime
 
 
 class UserBase(BaseModel):
-    employee_id: str
-    attendance_id: str
+    employee_no_id: str
+    biometric_id: Optional[str] = None
     name: str
     email: EmailStr
     mobile: str
@@ -95,6 +95,7 @@ class PermissionResponse(PermissionBase):
 class DepartmentBase(BaseModel):
     name: str
     parent_id: Optional[Union[str, int]] = None
+    default_shift_id: Optional[str] = None
 
 
 class DepartmentCreate(DepartmentBase):
@@ -104,9 +105,40 @@ class DepartmentCreate(DepartmentBase):
 class DepartmentUpdate(BaseModel):
     name: Optional[str] = None
     parent_id: Optional[Union[str, int]] = None
+    default_shift_id: Optional[str] = None
 
 
 class DepartmentResponse(DepartmentBase):
+    id: str
+    default_shift_id: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ShiftBase(BaseModel):
+    name: str = Field(..., description="e.g., General, Night Support A")
+    start_time: str = Field(..., description="Format HH:MM")
+    end_time: str = Field(..., description="Format HH:MM")
+    late_threshold_minutes: int = 15
+    is_night_shift: bool = False
+    department_ids: List[str] = []  # Departments that can use this shift
+
+
+class ShiftCreate(ShiftBase):
+    pass
+
+
+class ShiftUpdate(BaseModel):
+    name: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    late_threshold_minutes: Optional[int] = None
+    is_night_shift: Optional[bool] = None
+    department_ids: Optional[List[str]] = None
+
+
+class ShiftResponse(ShiftBase):
     id: str
 
     class Config:
@@ -168,6 +200,7 @@ class EmployeeBase(BaseModel):
     designation: Optional[str] = None
     role: Optional[str] = None
     status: Optional[str] = "Active"
+    shift_id: Optional[str] = None
     date_of_joining: Optional[str] = None
     confirmation_date: Optional[str] = None
     notice_period: Optional[str] = None
@@ -213,6 +246,7 @@ class EmployeeUpdate(BaseModel):
     designation: Optional[str] = None
     role: Optional[str] = None
     status: Optional[str] = None
+    shift_id: Optional[str] = None
     date_of_joining: Optional[str] = None
     confirmation_date: Optional[str] = None
     notice_period: Optional[str] = None
@@ -614,7 +648,7 @@ class LeaveTypeResponse(LeaveTypeBase):
 class LeaveRequestBase(BaseModel):
     employee_id: str
     leave_type_id: str
-    leave_duration_type: str  # "Single", "Multiple", "Half Day"
+    leave_duration_type: str  # "Single", "Multiple", "Half Day", "Permission"
     start_date: str
     end_date: str
     half_day_session: Optional[str] = None  # "First Half", "Second Half"
@@ -751,7 +785,6 @@ class AttendanceBase(BaseModel):
     date: str  # Format: "YYYY-MM-DD"
     clock_in: str  # ISO 8601 timestamp
 
-    # New Field
     device_type: str = "Web"  # Options: "Web", "Mobile", "Biometric", "Manual"
 
     clock_out: Optional[str] = None
@@ -759,9 +792,19 @@ class AttendanceBase(BaseModel):
     break_end: Optional[str] = None
     total_break_hours: float = 0.0
     total_work_hours: float = 0.0
+
+    # Primary status: Present | Absent | Leave | Holiday
     status: str = "Present"
+
+    # Detailed sub-status: Ontime | Late | Permission | Half Day
+    attendance_status: Optional[str] = None
+
     overtime_hours: float = 0.0
     is_late: bool = False
+    is_half_day: bool = False      # True when employee has an approved Half Day leave
+    is_permission: bool = False    # True when employee has an approved Permission leave request
+    leave_type_code: Optional[str] = None  # e.g. "CL", "SL", "LOP", "Half Day"
+
     notes: Optional[str] = None
     ip_address: Optional[str] = None
     location: Optional[str] = None
@@ -789,12 +832,19 @@ class AttendanceUpdate(BaseModel):
     status: Optional[str] = None
 
 
-class AttendanceStatusUpdate(BaseModel):
-    """Payload for updating attendance status"""
+class AttendanceAdminEdit(BaseModel):
+    """Payload for Admin-Only Attendance Record Edit"""
 
-    status: str
-    reason: Optional[str] = None
+    clock_in: Optional[str] = None           # ISO timestamp e.g. "2026-02-21T09:05:00"
+    clock_out: Optional[str] = None          # ISO timestamp
+    status: Optional[str] = None             # Present | Absent | Leave | Holiday
+    attendance_status: Optional[str] = None  # Ontime | Late | Permission | Half Day
+    is_late: Optional[bool] = None
+    is_half_day: Optional[bool] = None
+    is_permission: Optional[bool] = None
+    device_type: Optional[str] = None
     notes: Optional[str] = None
+
 
 
 
@@ -1020,6 +1070,51 @@ class FeedbackResponse(FeedbackBase):
     id: str
     created_at: datetime
     updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class MilestoneRoadmapAttachment(BaseModel):
+    file_name: str
+    file_url: str
+    file_type: Optional[str] = None
+
+
+class MilestoneRoadmapBase(BaseModel):
+    project_id: str
+    task_name: str
+    description: Optional[str] = None
+    start_date: str
+    end_date: str
+    priority: str = "Medium"
+    assigned_to: List[str] = []
+    attachments: List[MilestoneRoadmapAttachment] = []
+    tags: List[str] = []
+    status: str = "Backlog"
+
+
+class MilestoneRoadmapCreate(MilestoneRoadmapBase):
+    pass
+
+
+class MilestoneRoadmapUpdate(BaseModel):
+    project_id: Optional[str] = None
+    task_name: Optional[str] = None
+    description: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    priority: Optional[str] = None
+    assigned_to: Optional[List[str]] = None
+    attachments: Optional[List[MilestoneRoadmapAttachment]] = None
+    tags: Optional[List[str]] = None
+    status: Optional[str] = None
+
+
+class MilestoneRoadmapResponse(MilestoneRoadmapBase):
+    id: str
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

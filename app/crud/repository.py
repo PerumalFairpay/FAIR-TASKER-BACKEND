@@ -4,6 +4,8 @@ from app.models import (
     DepartmentUpdate,
     EmployeeCreate,
     EmployeeUpdate,
+    ShiftCreate,
+    ShiftUpdate,
     ExpenseCategoryCreate,
     ExpenseCategoryUpdate,
     ExpenseCreate,
@@ -33,6 +35,7 @@ from app.models import (
     EODReportItem,
     AttendanceCreate,
     AttendanceUpdate,
+    AttendanceAdminEdit,
     EmployeeChecklistTemplateCreate,
     EmployeeChecklistTemplateUpdate,
     BiometricLogItem,
@@ -45,6 +48,8 @@ from app.models import (
     PayslipComponentUpdate,
     FeedbackCreate,
     FeedbackUpdate,
+    MilestoneRoadmapCreate,
+    MilestoneRoadmapUpdate,
 )
 from app.utils import normalize, get_password_hash, get_employee_basic_details
 from bson import ObjectId
@@ -60,6 +65,7 @@ class Repository:
     def __init__(self):
         self.db = db
         self.departments = self.db["departments"]
+        self.shifts = self.db["shifts"]
         self.employees = self.db["employees"]
         self.users = self.db["users"]
         self.expense_categories = self.db["expense_categories"]
@@ -74,13 +80,14 @@ class Repository:
         self.blogs = self.db["blogs"]
         self.leave_types = self.db["leave_types"]
         self.leave_requests = self.db["leave_requests"]
-        self.tasks = self.db["tasks"]
+
         self.tasks = self.db["tasks"]
         self.attendance = self.db["attendance"]
         self.system_configurations = self.db["system_configurations"]
         self.nda_requests = self.db["nda_requests"]
         self.payslips = self.db["payslips"]
         self.payslip_components = self.db["payslip_components"]
+        self.milestones_roadmaps = self.db["milestones_roadmaps"]
 
     async def create_employee(
         self, employee: EmployeeCreate, profile_picture_path: str = None
@@ -167,10 +174,10 @@ class Repository:
             employee_data["created_at"] = datetime.utcnow()
 
             # Create User Entry
-            # User fields: employee_id, attendance_id, name, email, mobile, hashed_password
+            # User fields: employee_no_id, biometric_id, name, email, mobile, hashed_password
             user_data = {
-                "employee_id": employee.employee_no_id,
-                "attendance_id": employee.employee_no_id,  # Defaulting to emp_id
+                "employee_no_id": employee.employee_no_id,
+                "biometric_id": employee.biometric_id,  # Default to biometric_id
                 "name": employee.name,
                 "email": employee.email,
                 "mobile": employee.mobile,
@@ -532,7 +539,7 @@ class Repository:
                     current_emp = await self.get_employee(employee_id)
                     if current_emp and "employee_no_id" in current_emp:
                         await self.users.update_one(
-                            {"employee_id": current_emp["employee_no_id"]},
+                            {"employee_no_id": current_emp["employee_no_id"]},
                             {"$set": user_update},
                         )
 
@@ -552,7 +559,7 @@ class Repository:
                 # I will soft delete or delete user. Let's delete for now to keep it clean CRUD.
                 if "employee_no_id" in employee:
                     await self.users.delete_one(
-                        {"employee_id": employee["employee_no_id"]}
+                        {"employee_no_id": employee["employee_no_id"]}
                     )
 
             return result.deleted_count > 0
@@ -573,7 +580,7 @@ class Repository:
 
             # 3. Update User
             result = await self.users.update_one(
-                {"employee_id": emp_no_id},
+                {"employee_no_id": emp_no_id},
                 {"$set": {"permissions": permissions, "updated_at": datetime.utcnow()}},
             )
             return result.matched_count > 0
@@ -590,7 +597,7 @@ class Repository:
             # 2. Get the business key
             emp_no_id = employee.get("employee_no_id")
 
-            user = await self.users.find_one({"employee_id": emp_no_id})
+            user = await self.users.find_one({"employee_no_id": emp_no_id})
             if not user:
                 return {"role_permissions": [], "direct_permissions": []}
 
@@ -656,6 +663,50 @@ class Repository:
     async def delete_department(self, department_id: str) -> bool:
         try:
             result = await self.departments.delete_one({"_id": ObjectId(department_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+    # Shift CRUD
+    async def create_shift(self, shift: ShiftCreate) -> dict:
+        try:
+            shift_data = shift.dict()
+            shift_data["created_at"] = datetime.utcnow()
+            result = await self.shifts.insert_one(shift_data)
+            shift_data["id"] = str(result.inserted_id)
+            return normalize(shift_data)
+        except Exception as e:
+            raise e
+
+    async def get_shifts(self) -> List[dict]:
+        try:
+            shifts = await self.shifts.find().to_list(length=None)
+            return [normalize(s) for s in shifts]
+        except Exception as e:
+            raise e
+
+    async def get_shift(self, shift_id: str) -> dict:
+        try:
+            shift = await self.shifts.find_one({"_id": ObjectId(shift_id)})
+            return normalize(shift)
+        except Exception as e:
+            raise e
+
+    async def update_shift(self, shift_id: str, shift: ShiftUpdate) -> dict:
+        try:
+            update_data = {k: v for k, v in shift.dict().items() if v is not None}
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.shifts.update_one(
+                    {"_id": ObjectId(shift_id)}, {"$set": update_data}
+                )
+            return await self.get_shift(shift_id)
+        except Exception as e:
+            raise e
+
+    async def delete_shift(self, shift_id: str) -> bool:
+        try:
+            result = await self.shifts.delete_one({"_id": ObjectId(shift_id)})
             return result.deleted_count > 0
         except Exception as e:
             raise e
@@ -1610,7 +1661,8 @@ class Repository:
             result = []
             for r in requests:
                 r_norm = normalize(r)
-                r_norm["employee_details"] = emp_map.get(str(r_norm.get("employee_id")))
+                emp_norm = emp_map.get(str(r_norm.get("employee_id")))
+                r_norm["employee_details"] = get_employee_basic_details(emp_norm) if emp_norm else None
                 r_norm["leave_type_details"] = lt_map.get(
                     str(r_norm.get("leave_type_id"))
                 )
@@ -1634,7 +1686,7 @@ class Repository:
             employee = await self.employees.find_one(
                 {"_id": ObjectId(r_norm.get("employee_id"))}
             )
-            r_norm["employee_details"] = normalize(employee) if employee else None
+            r_norm["employee_details"] = get_employee_basic_details(normalize(employee)) if employee else None
 
             # Fetch Leave Type
             leave_type = await self.leave_types.find_one(
@@ -1702,9 +1754,9 @@ class Repository:
             if not employee:
                 return
 
-            emp_no_id = str(employee.get("employee_no_id"))
+            emp_no_id = str(employee.get("_id"))
 
-            # Remove "Leave" records for this employee in the date range
+            # 1. Remove "Leave" records for this employee in the date range
             # ONLY if they haven't clocked in (clock_in is None)
             await self.attendance.delete_many(
                 {
@@ -1712,6 +1764,44 @@ class Repository:
                     "date": {"$gte": start_date, "$lte": end_date},
                     "status": "Leave",
                     "clock_in": None,
+                }
+            )
+            
+            # 2. Revert "Permission" and "Half Day" detailed status back to "Present"
+            # if they are checked in (status = "Present")
+            await self.attendance.update_many(
+                {
+                    "employee_id": emp_no_id,
+                    "date": {"$gte": start_date, "$lte": end_date},
+                    "status": "Present",
+                    "attendance_status": {"$in": ["Permission", "Half Day"]}
+                },
+                {
+                    "$set": {
+                        "attendance_status": "Present",
+                        "is_half_day": False,
+                        "notes": "",
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+            
+            # 3. Revert "Leave" records back to "Present" if they have a clock-in
+            # This handles the case where a Full Day leave is rejected AFTER an employee clocked in
+            await self.attendance.update_many(
+                {
+                    "employee_id": emp_no_id,
+                    "date": {"$gte": start_date, "$lte": end_date},
+                    "status": "Leave",
+                    "clock_in": {"$ne": None},
+                },
+                {
+                    "$set": {
+                        "status": "Present",
+                        "attendance_status": "Present",
+                        "notes": "Reverted Leave to Present after leave rejection",
+                        "updated_at": datetime.utcnow()
+                    }
                 }
             )
         except Exception as e:
@@ -1732,56 +1822,93 @@ class Repository:
 
             # Check if today is covered by the leave
             if start_date <= today <= end_date:
-                # If it's a "Permission" type (short duration), do NOT mark as "Leave" in attendance.
-                if leave_req.get("leave_duration_type") == "Permission":
-                    return
+                duration_type = leave_req.get("leave_duration_type")
 
-                # Need to find the employee_no_id (which is used in attendance collection)
-                # using the mongo _id stored in leave request
+                # Fetch leave type code
+                leave_type_code = None
+                lt_id = leave_req.get("leave_type_id")
+                if lt_id:
+                    try:
+                        lt = await self.leave_types.find_one({"_id": ObjectId(lt_id)})
+                        if lt:
+                            leave_type_code = lt.get("code")
+                    except:
+                        pass
+
+                # Derive detailed status
+                attendance_status = leave_type_code or "Leave"
+                is_half_day = False
+                if duration_type == "Half Day":
+                    attendance_status = "Half Day"
+                    is_half_day = True
+                elif duration_type == "Permission":
+                    attendance_status = "Permission"
+
+                # Need to find the employee (standardizing on mongo _id string as employee_id)
                 employee = await self.employees.find_one(
                     {"_id": ObjectId(emp_mongo_id)}
                 )
                 if not employee:
                     return
 
-                emp_no_id = str(employee.get("employee_no_id"))
+                emp_standard_id = str(employee.get("_id"))
 
                 # Check existing attendance for today
                 existing = await self.attendance.find_one(
-                    {"employee_id": emp_no_id, "date": today}
+                    {"employee_id": emp_standard_id, "date": today}
                 )
 
                 if not existing:
-                    # Create Leave record
+                    # Create Leave record (Skip for Permission since it's a partial absence and they should show up)
+                    if duration_type == "Permission":
+                        return 
+                        
                     await self.attendance.insert_one(
                         {
-                            "employee_id": emp_no_id,
-                            "date": today,
-                            "status": "Leave",
-                            "notes": reason,
-                            "clock_in": None,
-                            "clock_out": None,
-                            "total_work_hours": 0.0,
-                            "overtime_hours": 0.0,
-                            "device_type": "Auto Sync",
-                            "created_at": datetime.utcnow(),
+                            "employee_id":       emp_standard_id,
+                            "date":              today,
+                            "status":            "Leave",
+                            "attendance_status": attendance_status,
+                            "is_half_day":       is_half_day,
+                            "leave_type_code":   leave_type_code,
+                            "notes":             reason,
+                            "clock_in":          None,
+                            "clock_out":         None,
+                            "total_work_hours":  0.0,
+                            "overtime_hours":    0.0,
+                            "device_type":       "Auto Sync",
+                            "created_at":        datetime.utcnow(),
                         }
                     )
-                elif existing.get("status") == "Absent":
-                    # Update Absent record to Leave
+                else:
+                    current_status = existing.get("status")
+                    update_fields = {
+                        "device_type": "Auto Sync",
+                        "updated_at": datetime.utcnow()
+                    }
+                    
+                    if current_status == "Absent":
+                        if duration_type != "Permission":
+                            update_fields["status"] = "Leave"
+                            
+                    if duration_type == "Permission":
+                        update_fields["attendance_status"] = "Permission"
+                        update_fields["notes"] = f"Approved Permission: {reason}"
+                    elif duration_type == "Half Day":
+                        update_fields["is_half_day"] = True
+                        update_fields["attendance_status"] = "Half Day"
+                        update_fields["notes"] = f"Approved Half Day: {reason}" # Changed from 'Approved Leave' to 'Approved Half Day' for clarity
+                    else:
+                        update_fields["status"] = "Leave"
+                        update_fields["attendance_status"] = attendance_status
+                        update_fields["is_half_day"] = False
+                        update_fields["leave_type_code"] = leave_type_code
+                        update_fields["notes"] = f"Approved Leave: {reason}"
+                        
                     await self.attendance.update_one(
                         {"_id": existing["_id"]},
-                        {
-                            "$set": {
-                                "status": "Leave",
-                                "notes": reason,
-                                "device_type": "Auto Sync",
-                                "updated_at": datetime.utcnow(),
-                            }
-                        },
+                        {"$set": update_fields}
                     )
-                # If status is "Present" (Clocked In), we typically don't overwrite it with Leave
-                # as presence usually takes precedence or requires manual fix.
 
         except Exception as e:
             # We don't want to fail the whole request if this background task fails
@@ -1824,6 +1951,8 @@ class Repository:
         assigned_to: Optional[str] = None,
         start_date: Optional[str] = None,
         date: Optional[str] = None,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
     ) -> List[dict]:
         try:
             query = {}
@@ -1832,6 +1961,12 @@ class Repository:
             if assigned_to:
                 # Matches if employee ID is in the list
                 query["assigned_to"] = assigned_to
+            
+            if status:
+                query["status"] = status
+            
+            if priority:
+                query["priority"] = priority
 
             if date:
                 # Determine the cutoff date for overdue calculation.
@@ -2099,6 +2234,59 @@ class Repository:
             raise e
 
     # Attendance CRUD
+
+    async def edit_attendance_record(self, attendance_id: str, data: "AttendanceAdminEdit") -> dict:
+        """Admin-only: patch an existing attendance record by its _id."""
+        try:
+            from bson import ObjectId as _ObjId
+            record = await self.attendance.find_one({"_id": _ObjId(attendance_id)})
+            if not record:
+                raise ValueError("Attendance record not found")
+
+            update_fields = {k: v for k, v in data.dict().items() if v is not None}
+
+            # Auto-recalculate total_work_hours when possible
+            clock_in_str  = update_fields.get("clock_in")  or record.get("clock_in")
+            clock_out_str = update_fields.get("clock_out") or record.get("clock_out")
+
+            if clock_in_str and clock_out_str:
+                try:
+                    ci = datetime.fromisoformat(clock_in_str.replace("Z", "+00:00"))
+                    co = datetime.fromisoformat(clock_out_str.replace("Z", "+00:00"))
+                    diff = (co - ci).total_seconds() / 3600
+                    if diff > 0:
+                        update_fields["total_work_hours"] = round(diff, 2)
+                except Exception:
+                    pass
+
+            update_fields["updated_at"] = datetime.utcnow()
+            await self.attendance.update_one(
+                {"_id": _ObjId(attendance_id)},
+                {"$set": update_fields}
+            )
+
+            updated = await self.attendance.find_one({"_id": _ObjId(attendance_id)})
+            r_norm = normalize(updated)
+
+            # Embed employee_details
+            emp = None
+            emp_id = r_norm.get("employee_id")
+            if emp_id:
+                emp = await self.employees.find_one({
+                    "$or": [
+                        {"_id": _ObjId(emp_id) if _ObjId.is_valid(emp_id) else "000000000000000000000000"},
+                        {"employee_no_id": emp_id},
+                    ]
+                })
+            if emp:
+                r_norm["employee_details"] = get_employee_basic_details(normalize(emp))
+            else:
+                r_norm["employee_details"] = None
+
+            return r_norm
+        except Exception as e:
+            raise e
+
     async def clock_in(self, attendance: AttendanceCreate, employee_id: str) -> dict:
         try:
             # Resolve to MongoDB _id to ensure consistency
@@ -2124,78 +2312,188 @@ class Repository:
             attendance_data["employee_id"] = target_emp_id
             attendance_data["updated_at"] = datetime.utcnow()
             
-            # Fetch system settings for late calculation
-            work_start_time_config = await self.system_configurations.find_one(
-                {"key": "work_start_time"}
-            )
-            late_grace_period_config = await self.system_configurations.find_one(
-                {"key": "late_grace_period_minutes"}
-            )
+            # --- SHIFT & LATE CALCULATION START ---
             
-            # Default values if settings not found
-            work_start_time = work_start_time_config.get("value", "09:00") if work_start_time_config else "09:00"
-            late_grace_period = late_grace_period_config.get("value", 15) if late_grace_period_config else 15
+            # 1. Get Shift Details
+            shift = None
+            shift_id = emp.get("shift_id") if emp else None
             
-            # Parse clock_in time and convert to IST (Asia/Kolkata)
-            from datetime import timezone, timedelta
+            if shift_id:
+                shift = await self.shifts.find_one({"_id": ObjectId(shift_id)})
             
+            # 2. Fallback to Department Default Shift if no personal shift
+            if not shift and emp and emp.get("department"):
+                dept = await self.departments.find_one({"name": emp.get("department")})
+                if dept and dept.get("default_shift_id"):
+                    shift = await self.shifts.find_one({"_id": ObjectId(dept["default_shift_id"])})
+            
+            # 3. Determine Work Start Time, End Time & Grace Period
+            work_start_time = "09:00"  # Default
+            work_end_time = "18:00"    # Default
+            late_grace_period = 15     # Default minutes
+            
+            if shift:
+                work_start_time = shift.get("start_time", "09:00")
+                work_end_time = shift.get("end_time", "18:00")
+                late_grace_period = shift.get("late_threshold_minutes", 15)
+            else:
+                work_start_time_config = await self.system_configurations.find_one({"key": "work_start_time"})
+                late_grace_period_config = await self.system_configurations.find_one({"key": "late_grace_period_minutes"})
+                if work_start_time_config:
+                    work_start_time = work_start_time_config.get("value", "09:00")
+                if late_grace_period_config:
+                    late_grace_period = late_grace_period_config.get("value", 15)
+
+            # 4. Parse Times
+            from datetime import timedelta as _timedelta
+
             clock_in_dt = datetime.fromisoformat(attendance.clock_in.replace("Z", "+00:00"))
-            
-            # Convert UTC to IST (UTC+5:30)
-            ist_offset = timedelta(hours=5, minutes=30)
+            ist_offset = _timedelta(hours=5, minutes=30)
             clock_in_ist = clock_in_dt + ist_offset
             clock_in_time = clock_in_ist.time()
-            
-            # Parse work start time
-            work_start = datetime.strptime(work_start_time, "%H:%M").time()
-            
-            # Calculate if late
+
+            def _parse_time(t_str, fallback="09:00"):
+                for fmt in ("%H:%M", "%H:%M:%S"):
+                    try:
+                        return datetime.strptime(t_str, fmt).time()
+                    except ValueError:
+                        pass
+                return datetime.strptime(fallback, "%H:%M").time()
+
+            work_start = _parse_time(work_start_time, "09:00")
+            work_end   = _parse_time(work_end_time,   "18:00")
+
+            # 5. Calculate Mid-Shift time for Half Day
+            start_minutes = work_start.hour * 60 + work_start.minute
+            end_minutes   = work_end.hour * 60 + work_end.minute
+            mid_minutes   = start_minutes + (end_minutes - start_minutes) // 2
+            mid_shift_hour, mid_shift_min = divmod(mid_minutes, 60)
+            from datetime import time as _time
+            mid_shift_time = _time(mid_shift_hour, mid_shift_min)
+
+            # 6. Fetch Approved Leave Request for this employee & date
+            approved_leave = await self.leave_requests.find_one({
+                "employee_id": target_emp_id,
+                "status": "Approved",
+                "start_date": {"$lte": attendance.date},
+                "end_date":   {"$gte": attendance.date},
+            })
+
+            leave_duration_type = approved_leave.get("leave_duration_type") if approved_leave else None
+            half_day_session    = approved_leave.get("half_day_session") if approved_leave else None
+
+            # Determine leave_type_code from the leave type document
+            leave_type_code = None
+            if approved_leave and approved_leave.get("leave_type_id"):
+                lt = await self.leave_types.find_one({"_id": ObjectId(approved_leave["leave_type_id"])})
+                if lt:
+                    leave_type_code = lt.get("code")
+
+            # 7. Effective start time (adjusted for Half Day)
+            effective_start = work_start
+            if leave_duration_type == "Half Day" and half_day_session == "First Half":
+                # Employee on leave for morning → expected in for afternoon
+                effective_start = mid_shift_time
+
+            # 8. Compute Late
             is_late = False
-            status = "Present"
-            
-            if clock_in_time > work_start:
-                # Calculate minutes late
-                clock_in_minutes = clock_in_time.hour * 60 + clock_in_time.minute
-                work_start_minutes = work_start.hour * 60 + work_start.minute
-                minutes_late = clock_in_minutes - work_start_minutes
-                
+            clock_in_minutes = clock_in_time.hour * 60 + clock_in_time.minute
+            eff_start_minutes = effective_start.hour * 60 + effective_start.minute
+
+            if clock_in_minutes > eff_start_minutes:
+                minutes_late = clock_in_minutes - eff_start_minutes
                 if minutes_late > late_grace_period:
                     is_late = True
-                    status = "Late"
+
+            # 9. Derive detailed status
+            is_permission = False
+            is_half_day   = False
+            attendance_status = "Ontime"
+
+            if leave_duration_type == "Permission":
+                is_permission     = True
+                attendance_status = "Permission"
+            elif leave_duration_type == "Half Day":
+                is_half_day       = True
+                attendance_status = "Half Day"
+            elif is_late:
+                attendance_status = "Late"
+            else:
+                attendance_status = "Ontime"
+
+            status = "Present"
+
+            # --- SHIFT & LATE CALCULATION END ---
             
-            attendance_data["is_late"] = is_late
-            attendance_data["status"] = status
+            attendance_data["is_late"]          = is_late
+            attendance_data["is_permission"]     = is_permission
+            attendance_data["is_half_day"]       = is_half_day
+            attendance_data["attendance_status"] = attendance_status
+            attendance_data["leave_type_code"]   = leave_type_code
+            attendance_data["status"]            = status
 
             if existing:
                 # If they are already marked "Present", "Late", or "Overtime", don't allow double clock-in
                 if existing.get("status") in ["Present", "Late", "Overtime"]:
                     raise ValueError("Already clocked in for this date")
 
-                # If they were marked "Absent", "Leave", or "Holiday" by the system,
-                # we OVERSHADOW it because the employee actually showed up to work.
-                await self.attendance.update_one(
-                    {"_id": existing["_id"]},
-                    {
-                        "$set": {
-                            "clock_in": attendance_data["clock_in"],
-                            "device_type": attendance_data["device_type"],
-                            "status": status,
-                            "is_late": is_late,
-                            "notes": f"Overrode {existing.get('status')} - Employee clocked in{' (Late)' if is_late else ''}",
-                            "updated_at": datetime.utcnow(),
-                        }
-                    },
+                # Option C: If the employee has a Full Day approved leave,
+                # preserve the Leave status (to keep leave balance deducted)
+                # but still record their clock-in time for work-hour tracking.
+                is_full_day_leave = (
+                    existing.get("status") == "Leave"
+                    and leave_duration_type not in ["Half Day", "Permission"]
                 )
+
+                if is_full_day_leave:
+                    # Keep Leave status, just record the clock-in time
+                    await self.attendance.update_one(
+                        {"_id": existing["_id"]},
+                        {
+                            "$set": {
+                                "clock_in":    attendance_data["clock_in"],
+                                "device_type": attendance_data["device_type"],
+                                "is_late":     is_late,
+                                "notes":       f"Employee clocked in while on Full Day Leave – leave balance remains deducted",
+                                "updated_at":  datetime.utcnow(),
+                            }
+                        },
+                    )
+                else:
+                    # Absent / Holiday / Half Day / Permission: override to Present
+                    await self.attendance.update_one(
+                        {"_id": existing["_id"]},
+                        {
+                            "$set": {
+                                "clock_in":          attendance_data["clock_in"],
+                                "device_type":       attendance_data["device_type"],
+                                "status":            status,
+                                "attendance_status": attendance_status,
+                                "is_late":           is_late,
+                                "is_permission":     is_permission,
+                                "is_half_day":       is_half_day,
+                                "leave_type_code":   leave_type_code,
+                                "notes": f"Overrode {existing.get('status')} - Employee clocked in ({attendance_status})",
+                                "updated_at": datetime.utcnow(),
+                            }
+                        },
+                    )
                 attendance_data["id"] = str(existing["_id"])
-                return normalize({**existing, **attendance_data})
+                res = {**existing, **attendance_data}
+                if emp:
+                    res["employee_details"] = get_employee_basic_details(emp)
+                return normalize(res)
 
             # No existing record, create new one
             attendance_data["created_at"] = datetime.utcnow()
             result = await self.attendance.insert_one(attendance_data)
             attendance_data["id"] = str(result.inserted_id)
+            if emp:
+                attendance_data["employee_details"] = get_employee_basic_details(emp)
             return normalize(attendance_data)
         except Exception as e:
             raise e
+
 
     async def clock_out(
         self, attendance: AttendanceUpdate, employee_id: str, date: str
@@ -2237,15 +2535,60 @@ class Repository:
             start_str = existing.get("clock_in")
             end_str = update_data.get("clock_out")
 
+            # --- OVERTIME CALCULATION START ---
             if start_str and end_str:
                 try:
-                    # Attempt generic ISO parsing
+                    # Parse Times
                     start_dt = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
                     end_dt = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
                     duration = (end_dt - start_dt).total_seconds() / 3600
-                    update_data["total_work_hours"] = round(duration, 2)
-                except:
-                    pass  # Fallback or skip if format issues
+                    
+                    total_work_hours = round(duration, 2)
+                    update_data["total_work_hours"] = total_work_hours
+                    
+                    # Get Shift for Overtime Calculation
+                    shift = None
+                    if emp and emp.get("shift_id"):
+                        shift = await self.shifts.find_one({"_id": ObjectId(emp["shift_id"])})
+                    
+                    if not shift and emp and emp.get("department"):
+                        dept = await self.departments.find_one({"name": emp.get("department")})
+                        if dept and dept.get("default_shift_id"):
+                            shift = await self.shifts.find_one({"_id": ObjectId(dept["default_shift_id"])})
+                    
+                    # Calculate Expected Shift Duration
+                    shift_duration = 9.00 # Default fallback (9 hours)
+                    
+                    if shift:
+                        try:
+                            s_start = datetime.strptime(shift.get("start_time", "09:00"), "%H:%M")
+                            s_end = datetime.strptime(shift.get("end_time", "18:00"), "%H:%M")
+                            
+                            # Handle crossing midnight (e.g. 20:00 - 05:00)
+                            if s_end < s_start:
+                                s_end += timedelta(days=1)
+                                
+                            shift_duration = (s_end - s_start).total_seconds() / 3600
+                        except:
+                            shift_duration = 9.00
+                            
+                    # Calculate Overtime
+                    # Logic: Overtime = Work Hours - Shift Duration
+                    overtime = max(0.0, total_work_hours - shift_duration)
+                    update_data["overtime_hours"] = round(overtime, 2)
+                    
+                    # Optional: Update status to "Overtime" if significant overtime?
+                    # valid statuses: Present, Late, Absent, Leave, Holiday, Overtime
+                    # If already Late, keep it Late? Or upgrade to Overtime?
+                    # Requirements usually keep "Late" entry status but maybe show OT flag.
+                    # For now, if overtime > 1 hour, maybe update status?
+                    # Let's keep status as is (Present/Late) unless specific requirement to change status.
+                    # update_data["status"] = "Overtime" if overtime > 0 else ...
+                    
+                except Exception as e:
+                    print(f"Error calculating OT: {e}")
+                    pass 
+            # --- OVERTIME CALCULATION END ---
 
             update_data["updated_at"] = datetime.utcnow()
 
@@ -2254,134 +2597,15 @@ class Repository:
             )
 
             updated_record = await self.attendance.find_one({"_id": existing["_id"]})
-            return normalize(updated_record)
+            res = normalize(updated_record)
+            if emp:
+                res["employee_details"] = get_employee_basic_details(emp)
+            return res
         except Exception as e:
             raise e
 
-    async def update_attendance_status(
-        self, attendance_id: str, status: str, reason: str = None, notes: str = None
-    ) -> dict:
-        """
-        Update attendance status for a specific record.
-        If status is 'Leave', creates a leave request with default reason if needed.
-        If status changes FROM 'Leave' to something else, deletes the associated leave request.
-        """
-        try:
-            # Find the attendance record
-            attendance_record = await self.attendance.find_one(
-                {"_id": ObjectId(attendance_id)}
-            )
-            if not attendance_record:
-                return None
 
-            old_status = attendance_record.get("status")
-            emp_no_id = attendance_record.get("employee_id")
-            date = attendance_record.get("date")
 
-            # Prepare update data
-            update_data = {"status": status, "updated_at": datetime.utcnow()}
-
-            if notes:
-                update_data["notes"] = notes
-
-            # Update the attendance record
-            await self.attendance.update_one(
-                {"_id": ObjectId(attendance_id)}, {"$set": update_data}
-            )
-
-            # Find employee by employee_no_id to get MongoDB _id
-            employee = await self.employees.find_one({"employee_no_id": emp_no_id})
-            if employee:
-                emp_mongo_id = str(employee.get("_id"))
-
-                # If status is changed FROM "Leave" to something else, reject the leave request
-                if old_status == "Leave" and status != "Leave":
-                    # Reject leave request that covers this specific date
-                    rejection_reason = (
-                        notes if notes else "Attendance status changed from Leave"
-                    )
-
-                    # Reject any approved leave that covers this date
-                    await self.leave_requests.update_many(
-                        {
-                            "employee_id": emp_mongo_id,
-                            "start_date": {"$lte": date},
-                            "end_date": {"$gte": date},
-                            "status": "Approved",
-                        },
-                        {
-                            "$set": {
-                                "status": "Rejected",
-                                "rejection_reason": rejection_reason,
-                                "updated_at": datetime.utcnow(),
-                            }
-                        },
-                    )
-
-                # If status is changed TO "Leave", create or update leave request
-                elif status == "Leave":
-                    # Check if a leave request already exists for this date (including rejected ones)
-                    existing_leave = await self.leave_requests.find_one(
-                        {
-                            "employee_id": emp_mongo_id,
-                            "start_date": {"$lte": date},
-                            "end_date": {"$gte": date},
-                        }
-                    )
-
-                    if existing_leave:
-                        # If leave exists but is rejected, re-approve it
-                        if existing_leave.get("status") == "Rejected":
-                            leave_reason = (
-                                reason
-                                if reason
-                                else existing_leave.get("reason", "Manual Leave Entry")
-                            )
-                            await self.leave_requests.update_one(
-                                {"_id": existing_leave["_id"]},
-                                {
-                                    "$set": {
-                                        "status": "Approved",
-                                        "reason": leave_reason,
-                                        "rejection_reason": None,  # Clear rejection reason
-                                        "updated_at": datetime.utcnow(),
-                                    }
-                                },
-                            )
-                    else:
-                        # No existing leave, create a new one
-                        # Get default leave type (first active leave type)
-                        default_leave_type = await self.leave_types.find_one(
-                            {"status": "Active"}
-                        )
-
-                        if default_leave_type:
-                            # Create leave request with default reason
-                            leave_reason = reason if reason else "Manual Leave Entry"
-
-                            leave_data = {
-                                "employee_id": emp_mongo_id,
-                                "leave_type_id": str(default_leave_type.get("_id")),
-                                "leave_duration_type": "Single",
-                                "start_date": date,
-                                "end_date": date,
-                                "total_days": 1.0,
-                                "reason": leave_reason,
-                                "status": "Approved",  # Auto-approve since it's manual entry
-                                "created_at": datetime.utcnow(),
-                                "updated_at": datetime.utcnow(),
-                            }
-
-                            await self.leave_requests.insert_one(leave_data)
-
-            # Return updated record
-            updated_record = await self.attendance.find_one(
-                {"_id": ObjectId(attendance_id)}
-            )
-            return normalize(updated_record)
-
-        except Exception as e:
-            raise e
 
     async def get_employee_attendance(
         self, employee_id: str, start_date: str = None, end_date: str = None
@@ -2529,56 +2753,71 @@ class Repository:
                     match_query["date"]["$lte"] = end_date
 
                 if employee_id:
-                    # If employee_id is a dict (from get_all_attendance query logic), use it directly
-                    # Otherwise treat as string
-                    if isinstance(employee_id, dict):
-                        match_query["employee_id"] = employee_id
-                    else:
-                        match_query["employee_id"] = employee_id
+                    match_query["employee_id"] = employee_id
 
-                pipeline = [
+                # Group by primary status
+                pipeline_status = [
                     {"$match": match_query},
                     {"$group": {"_id": "$status", "count": {"$sum": 1}}},
                 ]
-                cursor = await self.attendance.aggregate(pipeline)
-                
-                # Count each status separately
-                on_time = 0  # "Present" status
-                late = 0     # "Late" status
-                absent = 0
-                leave = 0
-                holiday = 0
-                overtime = 0
-                
-                async for doc in cursor:
-                    status_key = str(doc["_id"]).lower()
+                # Group by detailed attendance_status
+                pipeline_detail = [
+                    {"$match": match_query},
+                    {"$group": {"_id": "$attendance_status", "count": {"$sum": 1}}},
+                ]
+
+                status_cursor = await self.attendance.aggregate(pipeline_status)
+                detail_cursor = await self.attendance.aggregate(pipeline_detail)
+
+                # --- Primary counters ---
+                present_total = 0
+                absent        = 0
+                leave         = 0
+                holiday       = 0
+
+                async for doc in status_cursor:
+                    sk = str(doc["_id"] or "").lower()
                     count = doc["count"]
-                    
-                    if status_key == "present":
-                        on_time = count
-                    elif status_key == "late":
-                        late = count
-                    elif status_key == "absent":
+                    if sk == "present":
+                        present_total = count
+                    elif sk == "absent":
                         absent = count
-                    elif status_key == "leave":
+                    elif sk == "leave":
                         leave = count
-                    elif status_key == "holiday":
+                    elif sk == "holiday":
                         holiday = count
-                    elif status_key == "overtime":
-                        overtime = count
-                
-                # Calculate total_present as sum of on_time + late + overtime
-                total_present = on_time + late + overtime
-                
+
+                # --- Detailed sub-status counters ---
+                on_time    = 0
+                late       = 0
+                permission = 0
+                half_day   = 0
+
+                async for doc in detail_cursor:
+                    sk = str(doc["_id"] or "").lower()
+                    count = doc["count"]
+                    if sk == "ontime":
+                        on_time = count
+                    elif sk == "late":
+                        late = count
+                    elif sk == "permission":
+                        permission = count
+                    elif sk == "half day":
+                        half_day = count
+
                 return {
-                    "total_present": total_present,
-                    "on_time": on_time,
-                    "late": late,
-                    "absent": absent,
-                    "leave": leave,
-                    "holiday": holiday,
-                    "overtime": overtime,
+                    # Primary totals
+                    "total_present": present_total,
+                    "absent":        absent,
+                    "leave":         leave,
+                    "holiday":       holiday,
+                    # Detailed Present breakdown
+                    "on_time":       on_time,
+                    "late":          late,
+                    "permission":    permission,
+                    "half_day":      half_day,
                 }
+
 
             # Run aggregations
             # Today: Exact match on date, not range
@@ -2677,66 +2916,193 @@ class Repository:
                     if not employee:
                         continue
 
+                    # Use MongoDB ObjectId as the standard employee_id
                     employee_id = str(employee["_id"])
 
                     attendance = await self.attendance.find_one(
                         {"employee_id": employee_id, "date": date_str}
                     )
 
-                    if not attendance: 
-                        work_start_time_config = await self.system_configurations.find_one(
-                            {"key": "work_start_time"}
-                        )
-                        late_grace_period_config = await self.system_configurations.find_one(
-                            {"key": "late_grace_period_minutes"}
-                        )
+                    # --- UNIFIED CLOCK IN / OVERRIDE LOGIC ---
+                    # We handle clock-in if:
+                    # 1. No record exists yet.
+                    # 2. A record exists (e.g. "Leave") but has no clock_in time.
+                    if not attendance or not attendance.get("clock_in"):
+                        # 1. Get Shift Details
+                        shift = None
+                        shift_id = employee.get("shift_id")
                         
-                        work_start_time = work_start_time_config.get("value", "09:00") if work_start_time_config else "09:00"
-                        late_grace_period = late_grace_period_config.get("value", 15) if late_grace_period_config else 15
-                         
-                        work_start = datetime.strptime(work_start_time, "%H:%M").time()
+                        if shift_id:
+                            shift = await self.shifts.find_one({"_id": ObjectId(shift_id)})
                         
+                        # 2. Fallback to Department Default Shift if no personal shift
+                        if not shift and employee.get("department"):
+                            dept = await self.departments.find_one({"name": employee.get("department")})
+                            if dept and dept.get("default_shift_id"):
+                                shift = await self.shifts.find_one({"_id": ObjectId(dept["default_shift_id"])})
+                        
+                        # 3. Determine Work Start Time, End Time & Grace Period
+                        work_start_time_config = await self.system_configurations.find_one({"key": "work_start_time"})
+                        late_grace_period_config = await self.system_configurations.find_one({"key": "late_grace_period_minutes"})
+                        
+                        work_start_time = "09:00"  # Default
+                        work_end_time   = "18:00"  # Default
+                        late_grace_period = 15     # Default
+
+                        if shift:
+                            work_start_time   = shift.get("start_time", "09:00")
+                            work_end_time     = shift.get("end_time", "18:00")
+                            late_grace_period = shift.get("late_threshold_minutes", 15)
+                        else:
+                            if work_start_time_config:
+                                work_start_time = work_start_time_config.get("value", "09:00")
+                            if late_grace_period_config:
+                                late_grace_period = late_grace_period_config.get("value", 15)
+
+                        def _bio_parse_time(t_str, fallback="09:00"):
+                            for fmt in ("%H:%M", "%H:%M:%S"):
+                                try:
+                                    return datetime.strptime(t_str, fmt).time()
+                                except ValueError:
+                                    pass
+                            return datetime.strptime(fallback, "%H:%M").time()
+
+                        work_start = _bio_parse_time(work_start_time, "09:00")
+                        work_end   = _bio_parse_time(work_end_time, "18:00")
+
+                        # 4. Calculate Mid-Shift for Half Day
+                        s_min  = work_start.hour * 60 + work_start.minute
+                        e_min  = work_end.hour * 60 + work_end.minute
+                        mid_min = s_min + (e_min - s_min) // 2
+                        mid_h, mid_m = divmod(mid_min, 60)
+                        from datetime import time as _btime
+                        mid_shift_time = _btime(mid_h, mid_m)
+
                         clock_in_time = log_time.time()
-                         
+
+                        # 5. Fetch Approved Leave Request for this employee & date
+                        approved_leave = await self.leave_requests.find_one({
+                            "employee_id": employee_id,
+                            "status": "Approved",
+                            "start_date": {"$lte": date_str},
+                            "end_date":   {"$gte": date_str},
+                        })
+
+                        leave_duration_type = approved_leave.get("leave_duration_type") if approved_leave else None
+                        half_day_session    = approved_leave.get("half_day_session") if approved_leave else None
+
+                        # Determine leave_type_code
+                        leave_type_code = None
+                        if approved_leave and approved_leave.get("leave_type_id"):
+                            lt = await self.leave_types.find_one({"_id": ObjectId(approved_leave["leave_type_id"])})
+                            if lt:
+                                leave_type_code = lt.get("code")
+
+                        # 6. Effective start time (adjusted for First Half Leave)
+                        effective_start = work_start
+                        if leave_duration_type == "Half Day" and half_day_session == "First Half":
+                            effective_start = mid_shift_time
+
+                        # 7. Compute Late
                         is_late = False
-                        status = "Present"
-                        
-                        if clock_in_time > work_start: 
-                            clock_in_minutes = clock_in_time.hour * 60 + clock_in_time.minute
-                            work_start_minutes = work_start.hour * 60 + work_start.minute
-                            minutes_late = clock_in_minutes - work_start_minutes
-                            
+                        ci_min  = clock_in_time.hour * 60 + clock_in_time.minute
+                        es_min  = effective_start.hour * 60 + effective_start.minute
+                        if ci_min > es_min:
+                            minutes_late = ci_min - es_min
                             if minutes_late > late_grace_period:
                                 is_late = True
-                                status = "Late"
-                        
-                        new_record = {
-                            "employee_id": employee_id,
-                            "date": date_str,
-                            "clock_in": time_str,
-                            "device_type": "Biometric",
-                            "status": status,
-                            "is_late": is_late,
-                            "created_at": datetime.utcnow(),
-                        }
-                        await self.attendance.insert_one(new_record)
-                        processed_count += 1
-                    else: 
-                        clock_in_time = datetime.fromisoformat(attendance["clock_in"])
 
-                        if log_time > clock_in_time:
+                        # 8. Derive detailed attendance_status
+                        is_permission = False
+                        is_half_day   = False
+
+                        if leave_duration_type == "Permission":
+                            is_permission     = True
+                            attendance_status = "Permission"
+                        elif leave_duration_type == "Half Day":
+                            is_half_day       = True
+                            attendance_status = "Half Day"
+                        elif is_late:
+                            attendance_status = "Late"
+                        else:
+                            attendance_status = "Ontime"
+
+                        # --- UPDATE OR INSERT ---
+                        if attendance:
+                            # Option C: If the employee has a Full Day Leave,
+                            # preserve the Leave status but record the clock-in time.
+                            is_full_day_leave_bio = (
+                                attendance.get("status") == "Leave"
+                                and leave_duration_type not in ["Half Day", "Permission"]
+                            )
+
+                            if is_full_day_leave_bio:
+                                await self.attendance.update_one(
+                                    {"_id": attendance["_id"]},
+                                    {
+                                        "$set": {
+                                            "clock_in":    time_str,
+                                            "device_type": "Biometric",
+                                            "is_late":     is_late,
+                                            "notes":       "Employee clocked in while on Full Day Leave – leave balance remains deducted",
+                                            "updated_at":  datetime.utcnow(),
+                                        }
+                                    }
+                                )
+                            else:
+                                # Absent / Holiday / Half Day / Permission: override to Present
+                                await self.attendance.update_one(
+                                    {"_id": attendance["_id"]},
+                                    {
+                                        "$set": {
+                                            "clock_in":          time_str,
+                                            "status":            "Present",
+                                            "attendance_status": attendance_status,
+                                            "is_late":           is_late,
+                                            "is_permission":     is_permission,
+                                            "is_half_day":       is_half_day,
+                                            "leave_type_code":   leave_type_code,
+                                            "device_type":       "Biometric",
+                                            "updated_at":        datetime.utcnow(),
+                                        }
+                                    }
+                                )
+                        else:
+                            # No existing record → create new Present record
+                            new_record = {
+                                "employee_id":       employee_id,
+                                "date":              date_str,
+                                "clock_in":          time_str,
+                                "device_type":       "Biometric",
+                                "status":            "Present",
+                                "attendance_status": attendance_status,
+                                "is_late":           is_late,
+                                "is_permission":     is_permission,
+                                "is_half_day":       is_half_day,
+                                "leave_type_code":   leave_type_code,
+                                "created_at":        datetime.utcnow(),
+                            }
+                            await self.attendance.insert_one(new_record)
+                        
+                        processed_count += 1
+
+                    else: 
+                        # --- CLOCK OUT LOGIC ---
+                        # Only process if this log is later than the existing clock_in
+                        # Note: We use the existing clock_in string from the record
+                        clock_in_time_dt = datetime.fromisoformat(attendance["clock_in"])
+
+                        if log_time > clock_in_time_dt:
                             should_update = True
                             if attendance.get("clock_out"):
                                 current_clock_out = datetime.fromisoformat(
                                     attendance["clock_out"]
                                 )
                                 if log_time <= current_clock_out:
-                                    should_update = (
-                                        False  
-                                    )
+                                    should_update = False  
 
                             if should_update:
-                                work_duration = log_time - clock_in_time
+                                work_duration = log_time - clock_in_time_dt
                                 total_hours = round(
                                     work_duration.total_seconds() / 3600, 2
                                 )
@@ -2753,6 +3119,7 @@ class Repository:
                                     },
                                 )
                                 processed_count += 1
+
 
                 except Exception as e:
                     errors.append(f"Error processing log for {log.user_id}: {str(e)}")
@@ -3223,6 +3590,61 @@ class Repository:
     async def delete_feedback(self, feedback_id: str) -> bool:
         try:
             result = await self.db["feedback"].delete_one({"_id": ObjectId(feedback_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+    async def create_milestone_roadmap(self, item: MilestoneRoadmapCreate) -> dict:
+        try:
+            item_data = item.dict()
+            item_data["created_at"] = datetime.utcnow()
+            result = await self.milestones_roadmaps.insert_one(item_data)
+            item_data["id"] = str(result.inserted_id)
+            return normalize(item_data)
+        except Exception as e:
+            raise e
+
+    async def get_milestones_roadmaps(
+        self,
+        project_id: Optional[str] = None,
+        assigned_to: Optional[str] = None,
+        status: Optional[str] = None,
+        priority: Optional[str] = None
+    ) -> List[dict]:
+        try:
+            query = {}
+            if project_id: query["project_id"] = project_id
+            if assigned_to: query["assigned_to"] = assigned_to
+            if status: query["status"] = status
+            if priority: query["priority"] = priority
+
+            items = await self.milestones_roadmaps.find(query).to_list(length=None)
+            return [normalize(item) for item in items]
+        except Exception as e:
+            raise e
+
+    async def get_milestone_roadmap(self, item_id: str) -> dict:
+        try:
+            item = await self.milestones_roadmaps.find_one({"_id": ObjectId(item_id)})
+            return normalize(item)
+        except Exception as e:
+            raise e
+
+    async def update_milestone_roadmap(self, item_id: str, item: MilestoneRoadmapUpdate) -> dict:
+        try:
+            update_data = {k: v for k, v in item.dict().items() if v is not None}
+            if update_data:
+                update_data["updated_at"] = datetime.utcnow()
+                await self.milestones_roadmaps.update_one(
+                    {"_id": ObjectId(item_id)}, {"$set": update_data}
+                )
+            return await self.get_milestone_roadmap(item_id)
+        except Exception as e:
+            raise e
+
+    async def delete_milestone_roadmap(self, item_id: str) -> bool:
+        try:
+            result = await self.milestones_roadmaps.delete_one({"_id": ObjectId(item_id)})
             return result.deleted_count > 0
         except Exception as e:
             raise e
