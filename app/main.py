@@ -35,6 +35,7 @@ from app.routes import (
     feedback,
     shifts,
     milestone_roadmap,
+    ai_assistant,
 )
 
 from app.jobs.scheduler import init_scheduler, shutdown_scheduler
@@ -128,6 +129,7 @@ api_router.include_router(payslip_component.router)
 api_router.include_router(feedback.router)
 api_router.include_router(shifts.router)
 api_router.include_router(milestone_roadmap.router)
+api_router.include_router(ai_assistant.router)
 
 
 app.include_router(api_router)

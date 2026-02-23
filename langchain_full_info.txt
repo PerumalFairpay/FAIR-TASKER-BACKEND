@@ -1,0 +1,10 @@
+Name: langchain
+Version: 1.2.10
+Summary: Building applications with LLMs through composability
+Home-page: 
+Author: 
+Author-email: 
+License: MIT
+Location: /usr/local/lib/python3.10/site-packages
+Requires: langchain-core, langgraph, pydantic
+Required-by: 
