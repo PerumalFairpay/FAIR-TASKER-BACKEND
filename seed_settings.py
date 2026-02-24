@@ -20,7 +20,7 @@ settings_data = [
     {
         "key": "company_name",
         "label": "Company Name",
-        "value": "Fair Tasker",
+        "value": "FairPay",
         "input_type": "text",
         "group": "General",
         "is_public": True,
