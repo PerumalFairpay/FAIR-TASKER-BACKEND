@@ -15,3 +15,7 @@ jinja2
 weasyprint
 pypdf
 redis
+langchain
+langchain-google-genai
+langchain-community
+langchain-core
