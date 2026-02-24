@@ -12,12 +12,21 @@ import os
 # Gemini API Key will be read directly from env vars by the client
 # or passed explicitly in the tool constructor.
 
-def get_tools_for_user(user: dict):
+async def get_tools_for_user(user: dict):
     user_id = user.get("id")
     emp_no_id = user.get("employee_no_id")
     role = user.get("role", "employee").lower()
     name = user.get("name", "User")
-    identifiers = [id for id in [user_id, emp_no_id, name] if id]
+    
+    # Resolve Employee ID from employees collection
+    # The user_id is the User table ID, but most data is linked by Employee table ID
+    employee_mongo_id = None
+    if emp_no_id:
+        emp_record = await db["employees"].find_one({"employee_no_id": emp_no_id})
+        if emp_record:
+            employee_mongo_id = str(emp_record.get("_id"))
+            
+    identifiers = [id for id in [user_id, emp_no_id, name, employee_mongo_id] if id]
 
     @tool
     async def get_tasks() -> str:
@@ -144,10 +153,10 @@ async def chat_stream(query: str, user: dict) -> AsyncGenerator[str, None]:
         streaming=True
     )
     
-    tools = get_tools_for_user(user)
+    tools = await get_tools_for_user(user)
     
     system_prompt = (
-        "You are the FAIR-TASKER AI Assistant. You help users manage their tasks, attendance, leaves, projects, and expenses. "
+        "You are the FAIR-PAY AI Assistant. You help users manage their tasks, attendance, leaves, projects, and expenses. "
         "You have access to tools to fetch this data from the database. Always use the tools to answer questions about the user's data. "
         "If you do not find data via the tools, tell the user gracefully. Keep responses concise, professional, and helpful. "
         f"The current user's name is {user.get('name', 'User')} and their role is {user.get('role', 'employee')}."
