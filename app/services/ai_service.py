@@ -9,17 +9,12 @@ from typing import AsyncGenerator, List, Dict, Any
 from app.database import db
 import os
 
-# Gemini API Key will be read directly from env vars by the client
-# or passed explicitly in the tool constructor.
-
 async def get_tools_for_user(user: dict):
     user_id = user.get("id")
     emp_no_id = user.get("employee_no_id")
     role = user.get("role", "employee").lower()
     name = user.get("name", "User")
     
-    # Resolve Employee ID from employees collection
-    # The user_id is the User table ID, but most data is linked by Employee table ID
     employee_mongo_id = None
     if emp_no_id:
         emp_record = await db["employees"].find_one({"employee_no_id": emp_no_id})
@@ -137,8 +132,8 @@ async def get_tools_for_user(user: dict):
 
     return [get_tasks, get_projects, get_attendance, get_leaves, get_expenses, get_user_profile]
 
-async def chat_stream(query: str, user: dict) -> AsyncGenerator[str, None]:
-    """Generates a streaming response using LangChain's AgentExecutor."""
+async def chat_stream(query: str, history: list, user: dict) -> AsyncGenerator[str, None]:
+    """Generates a streaming response using LangChain's AgentExecutor, incorporating conversation history."""
     
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         
@@ -165,9 +160,22 @@ async def chat_stream(query: str, user: dict) -> AsyncGenerator[str, None]:
     agent = create_react_agent(llm, tools, prompt=system_prompt)
 
     try:
+        # Format the history into LangChain message tuples
+        langchain_messages = []
+        for msg in history:
+            role = msg.get("role")
+            content = msg.get("content")
+            if role and content:
+                # LangGraph typically uses "human" instead of "user" for the HumanMessage role
+                mapped_role = "human" if role == "user" else "assistant"
+                langchain_messages.append((mapped_role, content))
+                
+        # Append the current query
+        langchain_messages.append(("human", query))
+
         # LangGraph uses a different event streaming approach
         async for event in agent.astream_events(
-            {"messages": [("user", query)]},
+            {"messages": langchain_messages},
             version="v2"
         ):
             kind = event["event"]
