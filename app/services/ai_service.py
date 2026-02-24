@@ -159,14 +159,12 @@ async def chat_stream(query: str, history: list, user: dict) -> AsyncGenerator[s
     
     agent = create_react_agent(llm, tools, prompt=system_prompt)
 
-    try:
-        # Format the history into LangChain message tuples
+    try: 
         langchain_messages = []
         for msg in history:
             role = msg.get("role")
             content = msg.get("content")
-            if role and content:
-                # LangGraph typically uses "human" instead of "user" for the HumanMessage role
+            if role and content: 
                 mapped_role = "human" if role == "user" else "assistant"
                 langchain_messages.append((mapped_role, content))
                 
