@@ -107,7 +107,203 @@ async def get_tools_for_user(user: dict):
         except Exception as e:
             return f"Error: {str(e)}"
 
-    tools = [get_attendance, get_user_profile]
+    @tool
+    async def get_projects(status: str = None, search: str = None, employee_matcher: str = None) -> str:
+        """Fetch projects. Employees see their own assigned projects. Admins see all projects.
+        Admins can provide employee_matcher (name or employee ID) to see a specific employee's projects.
+        Optional: filter by status (Planned/Active/Completed/On Hold) or search by project name."""
+        try:
+            query = {}
+            # Resolve target identifiers: either the logged-in user or a looked-up employee
+            target_ids = identifiers
+            if role == "admin" and employee_matcher:
+                emp = await db["employees"].find_one({
+                    "$or": [
+                        {"name": {"$regex": employee_matcher, "$options": "i"}},
+                        {"employee_no_id": employee_matcher}
+                    ]
+                })
+                if not emp:
+                    return f"No employee found matching '{employee_matcher}'."
+                emp_mongo_id = str(emp["_id"])
+                target_ids = [i for i in [emp.get("employee_no_id"), emp_mongo_id, emp.get("name")] if i]
+
+            if role != "admin" or employee_matcher:
+                # Filter to projects where the target employee appears in any team field
+                query = {
+                    "$or": [
+                        {"project_manager_ids": {"$in": target_ids}},
+                        {"team_leader_ids": {"$in": target_ids}},
+                        {"team_member_ids": {"$in": target_ids}},
+                    ]
+                }
+
+            if status:
+                query["status"] = {"$regex": status, "$options": "i"}
+            if search:
+                query["name"] = {"$regex": search, "$options": "i"}
+
+            projects = await db["projects"].find(query).sort("created_at", -1).limit(20).to_list(length=20)
+            if not projects:
+                return "No projects found."
+
+            lines = []
+            for p in projects:
+                name = p.get("name", "Unnamed")
+                st = p.get("status", "N/A")
+                priority = p.get("priority", "N/A")
+                start = p.get("start_date", "N/A")
+                end = p.get("end_date", "N/A")
+                budget = p.get("budget", 0)
+                currency = p.get("currency", "")
+                lines.append(f"Project: {name} | Status: {st} | Priority: {priority} | Dates: {start} → {end} | Budget: {currency} {budget}")
+            return f"Found {len(lines)} project(s):\n" + "\n".join(lines)
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+    @tool
+    async def get_tasks(status: str = None, priority: str = None, project_name: str = None, employee_matcher: str = None, include_old: bool = False) -> str:
+        """Fetch tasks. Employees see tasks assigned to them. Admins see all tasks.
+        Admins can provide employee_matcher (name or employee ID) to see a specific employee's tasks.
+        By default shows only active/upcoming tasks. Set include_old=True to include old completed records.
+        Optional filters: status (Todo/In Progress/Done/Overdue), priority (Low/Medium/High/Critical), project name."""
+        try:
+            from datetime import timedelta
+            query = {}
+            # Resolve target identifiers: either the logged-in user or a looked-up employee
+            target_ids = identifiers
+            if role == "admin" and employee_matcher:
+                emp = await db["employees"].find_one({
+                    "$or": [
+                        {"name": {"$regex": employee_matcher, "$options": "i"}},
+                        {"employee_no_id": employee_matcher}
+                    ]
+                })
+                if not emp:
+                    return f"No employee found matching '{employee_matcher}'."
+                emp_mongo_id = str(emp["_id"])
+                target_ids = [i for i in [emp.get("employee_no_id"), emp_mongo_id, emp.get("name")] if i]
+
+            if role != "admin" or employee_matcher:
+                query = {"assigned_to": {"$in": target_ids}}
+
+            if status:
+                query["status"] = {"$regex": status, "$options": "i"}
+            elif not include_old:
+                # Default: exclude tasks that are fully done AND older than 30 days
+                cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+                query["$or"] = [
+                    {"status": {"$nin": ["Done", "Completed"]}},      # Still active
+                    {"end_date": {"$gte": cutoff}}                     # OR completed recently
+                ]
+
+            if priority:
+                query["priority"] = {"$regex": priority, "$options": "i"}
+            if project_name:
+                proj = await db["projects"].find_one({"name": {"$regex": project_name, "$options": "i"}})
+                if proj:
+                    query["project_id"] = str(proj["_id"])
+                else:
+                    return f"No project found matching '{project_name}'."
+
+            tasks = await db["tasks"].find(query).sort("end_date", 1).limit(20).to_list(length=20)
+            if not tasks:
+                return "No tasks found." + ("" if include_old or status else " (Showing active tasks only. Ask to include old records if needed.)")
+
+            lines = []
+            for t in tasks:
+                tname = t.get("task_name", "Unnamed")
+                st = t.get("status", "N/A")
+                pri = t.get("priority", "N/A")
+                prog = t.get("progress", 0)
+                end = t.get("end_date", "N/A")
+                lines.append(f"Task: {tname} | Status: {st} | Priority: {pri} | Progress: {prog}% | Due: {end}")
+            return f"Found {len(lines)} task(s):\n" + "\n".join(lines)
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+    @tool
+    async def get_assets(employee_matcher: str = None) -> str:
+        """Fetch assets assigned to the current employee. Admins can provide an employee name or ID to look up their assets, or leave empty to see all assets."""
+        try:
+            if role == "admin":
+                if employee_matcher:
+                    emp = await db["employees"].find_one({
+                        "$or": [
+                            {"name": {"$regex": employee_matcher, "$options": "i"}},
+                            {"employee_no_id": employee_matcher}
+                        ]
+                    })
+                    if not emp:
+                        return f"No employee found matching '{employee_matcher}'."
+                    target_id = str(emp["_id"])
+                    query = {"assigned_to": target_id}
+                else:
+                    query = {}  # Admins see all assets
+            else:
+                query = {"assigned_to": {"$in": identifiers}}
+
+            assets = await db["assets"].find(query).sort("created_at", -1).limit(20).to_list(length=20)
+            if not assets:
+                return "No assets found."
+
+            lines = []
+            for a in assets:
+                aname = a.get("asset_name", "Unnamed")
+                status = a.get("status", "N/A")
+                condition = a.get("condition", "N/A")
+                model = a.get("model_no", "N/A")
+                serial = a.get("serial_no", "N/A")
+                warranty = a.get("warranty_expiry", "N/A")
+                lines.append(f"Asset: {aname} | Status: {status} | Condition: {condition} | Model: {model} | Serial: {serial} | Warranty Expiry: {warranty}")
+            return f"Found {len(lines)} asset(s):\n" + "\n".join(lines)
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+    @tool
+    async def get_expenses(start_date: str = None, end_date: str = None, employee_matcher: str = None) -> str:
+        """Fetch expense records. Employees see their own expenses. Admins can provide an employee name/ID or leave empty to see all. Optionally filter by date range (YYYY-MM-DD)."""
+        try:
+            if role == "admin":
+                if employee_matcher:
+                    emp = await db["employees"].find_one({
+                        "$or": [
+                            {"name": {"$regex": employee_matcher, "$options": "i"}},
+                            {"employee_no_id": employee_matcher}
+                        ]
+                    })
+                    if not emp:
+                        return f"No employee found matching '{employee_matcher}'."
+                    target_ids = [str(emp["_id"]), emp.get("employee_no_id")]
+                    target_ids = [i for i in target_ids if i]
+                    query = {"employee_id": {"$in": target_ids}}
+                else:
+                    query = {}  # Admins see all expenses
+            else:
+                query = {"employee_id": {"$in": identifiers}}
+
+            if start_date:
+                query.setdefault("date", {})["$gte"] = start_date
+            if end_date:
+                query.setdefault("date", {})["$lte"] = end_date
+
+            expenses = await db["expenses"].find(query).sort("date", -1).limit(20).to_list(length=20)
+            if not expenses:
+                return "No expense records found."
+
+            total = sum(e.get("amount", 0) for e in expenses)
+            lines = []
+            for e in expenses:
+                amt = e.get("amount", 0)
+                purpose = e.get("purpose", "N/A")
+                payment_mode = e.get("payment_mode", "N/A")
+                date = e.get("date", "N/A")
+                lines.append(f"Date: {date} | Amount: {amt} | Purpose: {purpose} | Payment: {payment_mode}")
+            return f"Found {len(lines)} expense(s). Total: {total:.2f}\n" + "\n".join(lines)
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+    tools = [get_attendance, get_user_profile, get_projects, get_tasks, get_assets, get_expenses]
     
     return tools
 
@@ -131,9 +327,9 @@ async def chat_stream(query: str, history: list, user: dict) -> AsyncGenerator[s
     
     today = datetime.now().strftime("%Y-%m-%d, %A")
     system_prompt = (
-        "You are the FAIR-PAY AI Assistant. You help users manage their attendance and profile information. "
+        "You are the FAIR-PAY AI Assistant. You help users manage their work data including attendance, profile, projects, tasks, assets, and expenses. "
         "You have access to tools to fetch this data from the database. Always use the tools to answer questions about data. "
-        "If you are an admin, you can use parameters in tools to search for other employees' data and profiles. "
+        "If you are an admin, you can use parameters in tools to search for other employees' data. "
         "If you do not find data via the tools, tell the user gracefully. Keep responses concise, professional, and helpful. "
         f"The current user's name is {user.get('name', 'User')} and their role is {user.get('role', 'employee')}."
         f"\nIMPORTANT: The current date and time is {today}."
@@ -142,8 +338,12 @@ async def chat_stream(query: str, history: list, user: dict) -> AsyncGenerator[s
     agent = create_react_agent(llm, tools, prompt=system_prompt)
 
     try: 
+        # Trim history to last 10 messages to keep token count low and responses fast
+        MAX_HISTORY = 5
+        trimmed_history = history[-MAX_HISTORY:] if len(history) > MAX_HISTORY else history
+
         langchain_messages = []
-        for msg in history:
+        for msg in trimmed_history:
             role = msg.get("role")
             content = msg.get("content")
             if role and content: 
