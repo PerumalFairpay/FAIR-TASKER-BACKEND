@@ -303,7 +303,75 @@ async def get_tools_for_user(user: dict):
         except Exception as e:
             return f"Error: {str(e)}"
 
-    tools = [get_attendance, get_user_profile, get_projects, get_tasks, get_assets, get_expenses]
+    @tool
+    async def get_leaves(employee_matcher: str = None) -> str:
+        """Fetch leave records including approved, available, and rejected leaves. Admins can provide an employee name or ID."""
+        try:
+            target_ids = identifiers
+            target_name = name
+            if role == "admin" and employee_matcher:
+                emp = await db["employees"].find_one({
+                    "$or": [
+                        {"name": {"$regex": employee_matcher, "$options": "i"}},
+                        {"employee_no_id": employee_matcher}
+                    ]
+                })
+                if not emp:
+                    return f"No employee found matching '{employee_matcher}'."
+                emp_mongo_id = str(emp["_id"])
+                target_ids = [i for i in [emp.get("employee_no_id"), emp_mongo_id, emp.get("name")] if i]
+                target_name = emp.get("name", employee_matcher)
+
+            # 1. Fetch all leave types
+            leave_types = await db["leave_types"].find({"status": "Active"}).to_list(length=100)
+            if not leave_types:
+                return "No active leave types found in the system."
+
+            # 2. Fetch all leave requests for the target employee
+            leave_requests = await db["leave_requests"].find({"employee_id": {"$in": target_ids}}).to_list(length=100)
+            
+            # 3. Calculate used days per leave type (only Approved)
+            used_days = {} # leave_type_id -> total_days
+            history_lines = []
+            
+            for req in leave_requests:
+                lt_id = str(req.get("leave_type_id"))
+                status = req.get("status", "Pending")
+                days = req.get("total_days", 0)
+                
+                if status == "Approved":
+                    used_days[lt_id] = used_days.get(lt_id, 0) + days
+                
+                # Add to history
+                date_range = f"{req.get('start_date')} to {req.get('end_date')}"
+                if req.get('start_date') == req.get('end_date'):
+                    date_range = req.get('start_date')
+                
+                reason = f" | Reason: {req.get('rejection_reason')}" if status == "Rejected" and req.get("rejection_reason") else ""
+                history_lines.append(f"- {date_range}: {status} ({days} days){reason}")
+
+            # 4. Generate summary
+            summary = [f"Leave Status for {target_name}:"]
+            summary.append("\nAvailable Balance:")
+            for lt in leave_types:
+                lt_id = str(lt["_id"])
+                lt_name = lt.get("name")
+                allowed = lt.get("number_of_days", 0)
+                used = used_days.get(lt_id, 0)
+                available = allowed - used
+                summary.append(f"- {lt_name}: {available} days remaining (Allowed: {allowed}, Used: {used})")
+            
+            if history_lines:
+                summary.append("\nRecent Leave History:")
+                summary.extend(history_lines[-10:]) # Show last 10
+            else:
+                summary.append("\nNo leave history found.")
+                
+            return "\n".join(summary)
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+    tools = [get_attendance, get_user_profile, get_projects, get_tasks, get_assets, get_expenses, get_leaves]
     
     return tools
 
@@ -327,8 +395,9 @@ async def chat_stream(query: str, history: list, user: dict) -> AsyncGenerator[s
     
     today = datetime.now().strftime("%Y-%m-%d, %A")
     system_prompt = (
-        "You are the FAIR-PAY AI Assistant. You help users manage their work data including attendance, profile, projects, tasks, assets, and expenses. "
+        "You are the FAIR-PAY AI Assistant. You help users manage their work data including attendance, profile, projects, tasks, assets, expenses, and leaves. "
         "You have access to tools to fetch this data from the database. Always use the tools to answer questions about data. "
+        "For leave queries, use the 'get_leaves' tool to show available balance, approved leaves, and rejected leaves (with reasons). "
         "If you are an admin, you can use parameters in tools to search for other employees' data. "
         "If you do not find data via the tools, tell the user gracefully. Keep responses concise, professional, and helpful. "
         f"The current user's name is {user.get('name', 'User')} and their role is {user.get('role', 'employee')}."
