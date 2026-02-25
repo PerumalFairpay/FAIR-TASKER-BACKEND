@@ -80,16 +80,29 @@ async def get_tools_for_user(user: dict):
             emp_record = await db["employees"].find_one({"employee_no_id": target_emp_no})
             if not emp_record: return "Profile not found."
             
-            details = [
-                f"Name: {emp_record.get('name')}",
-                f"Role: {emp_record.get('role')}",
-                f"Employee ID: {emp_record.get('employee_no_id')}",
-                f"Email: {emp_record.get('email')}",
-                f"Department: {emp_record.get('department')}",
-                f"Designation: {emp_record.get('designation')}",
-                f"Status: {emp_record.get('status')}",
-                f"Joining Date: {emp_record.get('date_of_joining')}"
-            ]
+            # Exclude sensitive or internal fields
+            exclude_fields = ["_id", "password", "hashed_password", "tokens"]
+            
+            details = [f"Full Profile Details for {emp_record.get('name', 'Employee')}:"]
+            for key, value in emp_record.items():
+                if key in exclude_fields:
+                    continue
+                
+                # Format key for readability
+                display_key = key.replace("_", " ").title()
+                
+                # Handle different value types
+                if value is None:
+                    details.append(f"{display_key}: N/A")
+                elif isinstance(value, list):
+                    details.append(f"{display_key}: {len(value)} items recorded")
+                elif isinstance(value, dict):
+                    details.append(f"{display_key}: {json.dumps(value)}")
+                elif isinstance(value, datetime):
+                    details.append(f"{display_key}: {value.strftime('%Y-%m-%d %H:%M:%S')}")
+                else:
+                    details.append(f"{display_key}: {value}")
+            
             return "\n".join(details)
         except Exception as e:
             return f"Error: {str(e)}"
