@@ -163,8 +163,17 @@ async def chat_stream(query: str, history: list, user: dict) -> AsyncGenerator[s
                 # We only want to yield the AI's direct responses, not the tool calling internal thoughts
                 if "chunk" in event["data"]:
                     content = event["data"]["chunk"].content
-                    if content and isinstance(content, str):
+                    # content can be a plain string (direct answer) OR
+                    # a list of content parts (after a tool call with Gemini)
+                    if isinstance(content, str) and content:
                         yield content
+                    elif isinstance(content, list):
+                        # Extract text from each part in the list
+                        for part in content:
+                            if isinstance(part, dict) and part.get("type") == "text":
+                                text = part.get("text", "")
+                                if text:
+                                    yield text
     except Exception as e:
         yield f"\n\n[Error communicating with AI: {str(e)}]"
 
