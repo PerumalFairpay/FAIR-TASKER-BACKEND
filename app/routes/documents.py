@@ -50,9 +50,12 @@ async def create_document(
         )
 
 @router.get("/all", dependencies=[Depends(require_permission("document:view"))])
-async def get_documents():
+async def get_documents(
+    status: Optional[str] = None,
+    search: Optional[str] = None
+):
     try:
-        documents = await repo.get_documents()
+        documents = await repo.get_documents(status=status, search=search)
         return JSONResponse(
             status_code=200,
             content={"message": "Documents fetched successfully", "success": True, "data": documents}

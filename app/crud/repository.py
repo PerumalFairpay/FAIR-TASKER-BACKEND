@@ -910,9 +910,14 @@ class Repository:
         except Exception as e:
             raise e
 
-    async def get_documents(self) -> List[dict]:
+    async def get_documents(self, status: str = None, search: str = None) -> List[dict]:
         try:
-            documents = await self.documents.find().to_list(length=None)
+            query = {}
+            if status:
+                query["status"] = status
+            if search:
+                query["name"] = {"$regex": search, "$options": "i"}
+            documents = await self.documents.find(query).to_list(length=None)
             return [normalize(doc) for doc in documents]
         except Exception as e:
             raise e
