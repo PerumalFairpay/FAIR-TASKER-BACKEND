@@ -95,8 +95,6 @@ async def get_tools_for_user(user: dict):
             return f"Error: {str(e)}"
 
     tools = [get_attendance, get_user_profile]
-    if role == "admin":
-        tools.append(search_employees)
     
     return tools
 
