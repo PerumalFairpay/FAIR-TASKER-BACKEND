@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 from app.crud.repository import repository as repo
-from app.models import DocumentCreate, DocumentUpdate
+from app.models import DocumentCreate, DocumentUpdate, DocumentStatusUpdate
 from app.helper.file_handler import file_handler
 from typing import List, Optional
 import json
@@ -128,6 +128,25 @@ async def update_document(
         return JSONResponse(
             status_code=500,
             content={"message": f"Failed to update document: {str(e)}", "success": False}
+        )
+
+@router.patch("/update-status/{document_id}", dependencies=[Depends(require_permission("document:submit"))])
+async def update_document_status(document_id: str, status_data: DocumentStatusUpdate):
+    try:
+        updated_document = await repo.update_document_status(document_id, status_data.status)
+        if not updated_document:
+            return JSONResponse(
+                status_code=404,
+                content={"message": "Document not found", "success": False}
+            )
+        return JSONResponse(
+            status_code=200,
+            content={"message": "Document status updated successfully", "success": True, "data": updated_document}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"Failed to update document status: {str(e)}", "success": False}
         )
 
 @router.delete("/delete/{document_id}", dependencies=[Depends(require_permission("document:submit"))])

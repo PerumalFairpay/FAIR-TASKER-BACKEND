@@ -946,6 +946,16 @@ class Repository:
         except Exception as e:
             raise e
 
+    async def update_document_status(self, document_id: str, status: str) -> dict:
+        try:
+            await self.documents.update_one(
+                {"_id": ObjectId(document_id)},
+                {"$set": {"status": status, "updated_at": datetime.utcnow()}}
+            )
+            return await self.get_document(document_id)
+        except Exception as e:
+            raise e
+
     async def delete_document(self, document_id: str) -> bool:
         try:
             result = await self.documents.delete_one({"_id": ObjectId(document_id)})

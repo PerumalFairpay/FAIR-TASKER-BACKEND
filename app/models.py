@@ -382,6 +382,10 @@ class DocumentUpdate(BaseModel):
     file_type: Optional[str] = None
 
 
+class DocumentStatusUpdate(BaseModel):
+    status: str
+
+
 class DocumentResponse(DocumentBase):
     id: str
 
