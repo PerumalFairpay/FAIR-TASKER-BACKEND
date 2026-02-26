@@ -373,10 +373,14 @@ async def get_tools_for_user(user: dict):
             return f"Error: {str(e)}"
 
     @tool
-    async def search_documents(query: str) -> str:
-        """Search for information within uploaded documents (PDFs, Word files, etc.). Use this for questions about company policy, manuals, or specific document content."""
+    async def search_documents(query: str, metadata_filter: dict = None) -> str:
+        """Search for information within uploaded documents. 
+        Arguments:
+            query: The search string.
+            metadata_filter: Optional dictionary to filter by metadata (e.g. {"document_id": "...", "category_id": "..."}).
+        """
         try:
-            results = await vector_store_service.search_documents(query)
+            results = await vector_store_service.search_documents(query, filter_dict=metadata_filter)
             if not results:
                 return "No relevant information found in the documents."
             
