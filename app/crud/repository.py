@@ -55,6 +55,8 @@ from app.utils import normalize, get_password_hash, get_employee_basic_details
 from bson import ObjectId
 from datetime import datetime, timedelta
 from typing import List, Optional
+import asyncio
+from app.services.vector_store import vector_store_service
 
 
 class Repository:
@@ -906,6 +908,21 @@ class Repository:
             document_data["created_at"] = datetime.utcnow()
             result = await self.documents.insert_one(document_data)
             document_data["id"] = str(result.inserted_id)
+            
+            # Index document in vector store for AI analysis
+            if file_path:
+                asyncio.create_task(
+                    vector_store_service.index_document(
+                        file_url=file_path,
+                        metadata={
+                            "document_id": document_data["id"],
+                            "name": document_data["name"],
+                            "category_id": document_data.get("document_category_id"),
+                        },
+                        file_type=document_data.get("file_type")
+                    )
+                )
+
             return normalize(document_data)
         except Exception as e:
             raise e
@@ -942,6 +959,23 @@ class Repository:
                 await self.documents.update_one(
                     {"_id": ObjectId(document_id)}, {"$set": update_data}
                 )
+                
+                # Re-index if file changed
+                if file_path:
+                    # Clean up old vectors first
+                    asyncio.create_task(vector_store_service.delete_document(document_id))
+                    # Index new content
+                    asyncio.create_task(
+                        vector_store_service.index_document(
+                            file_url=file_path,
+                            metadata={
+                                "document_id": document_id,
+                                "name": update_data.get("name") or document.name,
+                                "category_id": update_data.get("document_category_id") or document.document_category_id,
+                            },
+                            file_type=update_data.get("file_type") or document.file_type
+                        )
+                    )
             return await self.get_document(document_id)
         except Exception as e:
             raise e
@@ -959,6 +993,11 @@ class Repository:
     async def delete_document(self, document_id: str) -> bool:
         try:
             result = await self.documents.delete_one({"_id": ObjectId(document_id)})
+            
+            if result.deleted_count > 0:
+                # Clean up vectors
+                asyncio.create_task(vector_store_service.delete_document(document_id))
+                
             return result.deleted_count > 0
         except Exception as e:
             raise e

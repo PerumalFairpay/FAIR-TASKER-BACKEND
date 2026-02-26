@@ -19,3 +19,6 @@ langchain
 langchain-google-genai
 langchain-community
 langchain-core
+qdrant-client
+langchain-qdrant
+python-docx

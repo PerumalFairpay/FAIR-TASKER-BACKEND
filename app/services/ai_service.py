@@ -8,6 +8,7 @@ from langchain_core.tools import tool
 from typing import AsyncGenerator, List, Dict, Any
 from app.database import db
 import os
+from app.services.vector_store import vector_store_service
 
 from bson import ObjectId
 
@@ -371,7 +372,24 @@ async def get_tools_for_user(user: dict):
         except Exception as e:
             return f"Error: {str(e)}"
 
-    tools = [get_attendance, get_user_profile, get_projects, get_tasks, get_assets, get_expenses, get_leaves]
+    @tool
+    async def search_documents(query: str) -> str:
+        """Search for information within uploaded documents (PDFs, Word files, etc.). Use this for questions about company policy, manuals, or specific document content."""
+        try:
+            results = await vector_store_service.search_documents(query)
+            if not results:
+                return "No relevant information found in the documents."
+            
+            snippets = []
+            for i, res in enumerate(results):
+                source = res["metadata"].get("name", "Unknown Document")
+                snippets.append(f"[Source: {source}]\n{res['content']}")
+            
+            return "Found the following relevant information in documents:\n\n" + "\n---\n".join(snippets)
+        except Exception as e:
+            return f"Error searching documents: {str(e)}"
+
+    tools = [get_attendance, get_user_profile, get_projects, get_tasks, get_assets, get_expenses, get_leaves, search_documents]
     
     return tools
 
