@@ -90,6 +90,7 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "http://localhost:3001",
         "http://127.0.0.1:3001",
+        "http://192.168.1.15:3000",
         "https://hrm.fairpaytechworks.com",
     ],
     allow_credentials=True,
