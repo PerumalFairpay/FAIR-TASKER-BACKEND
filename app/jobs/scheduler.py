@@ -61,10 +61,10 @@ def init_scheduler():
     )
     
     # 4. Daily Job: Process Unauthorized Absences (2 consecutive days -> LOP)
-    # Runs at 11:30 PM UTC (05:00 AM IST next day)
+    # Runs at 03:30 AM UTC (09:00 AM IST) to catch both Day and Night shift records
     scheduler.add_job(
         process_unauthorized_absences,
-        trigger=CronTrigger(hour=23, minute=30),
+        trigger=CronTrigger(hour=3, minute=30),
         id="process_unauthorized_absences",
         name="Process Unauthorized Absences to LOP",
         replace_existing=True

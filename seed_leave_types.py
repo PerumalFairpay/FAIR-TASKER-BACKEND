@@ -101,13 +101,13 @@ async def seed_leave_types():
         # Update if exists (by code), insert if not
         result = await collection.update_one(
             {"code": lt["code"]},
-            {"$setOnInsert": lt},
+            {"$set": lt},
             upsert=True
         )
         if result.upserted_id:
             print(f"Inserted: {lt['name']} ({lt['code']})")
         else:
-            print(f"Skipped (Exists): {lt['name']} ({lt['code']})")
+            print(f"Updated: {lt['name']} ({lt['code']})")
             
     print("\nLeave Types seeding completed.")
     await client.close()

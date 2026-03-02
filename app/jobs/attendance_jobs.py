@@ -344,48 +344,62 @@ async def process_unauthorized_absences():
             "status": "Absent"
         }).to_list(length=None)
         
-        absent_emp_ids = [a.get("employee_id") for a in yesterday_absences]
-        
-        if not absent_emp_ids:
+        if not yesterday_absences:
+            logger.info(f"No unauthorized absences found for {yesterday_str}")
             return {"success": True, "message": "No absences found yesterday"}
             
-        # Check if they were also absent the day before
-        consecutive_absent_emps = await repo.attendance.find({
-            "date": day_before_str,
-            "status": "Absent",
-            "employee_id": {"$in": absent_emp_ids}
-        }).to_list(length=None)
-        
-        target_emp_ids = [a.get("employee_id") for a in consecutive_absent_emps]
-        
         lop_type = await repo.leave_types.find_one({"code": "LOP"})
-        if not lop_type or not target_emp_ids:
-            return {"success": True, "converted_count": 0}
+        if not lop_type:
+            logger.error("LOP leave type not found.")
+            return {"success": False, "message": "LOP leave type not found"}
             
-        lop_type_id = str(lop_type["_id"])
         converted_count = 0
         
-        for emp_id in target_emp_ids:
-            # We don't automatically create a leave request for them usually, 
-            # we just convert the attendance status to "Leave" and "LOP" so HR sees it.
-            # But the requirement says "treat unauthorized absence for 2 consecutive working days as LOP".
-            await repo.attendance.update_many(
-                {
-                    "employee_id": emp_id,
-                    "date": {"$in": [day_before_str, yesterday_str]},
-                    "status": "Absent"
-                },
-                {"$set": {
-                    "status": "Leave",
-                    "attendance_status": "LOP",
-                    "leave_type_code": "LOP",
-                    "notes": "Auto-converted to LOP due to 2+ days consecutive absence",
-                    "updated_at": datetime.utcnow()
-                }}
-            )
-            converted_count += 1
+        for absence in yesterday_absences:
+            emp_id = absence.get("employee_id")
             
-        logger.info(f"Converted absences for {converted_count} employees to LOP.")
+            # Find the MOST RECENT record before yesterday that is NOT a Holiday
+            # This identifies the "Previous Working Day"
+            prev_record = await repo.attendance.find_one({
+                "employee_id": emp_id,
+                "date": {"$lt": yesterday_str},
+                "status": {"$ne": "Holiday"}
+            }, sort=[("date", -1)])
+            
+            # If the previous working day was also an unauthorized absence (Absent or auto-converted LOP)
+            if prev_record and (
+                prev_record.get("status") == "Absent" or 
+                (prev_record.get("status") == "Leave" and prev_record.get("attendance_status") == "LOP")
+            ):
+                # Mark YESTERDAY as LOP
+                await repo.attendance.update_one(
+                    {"_id": absence["_id"]},
+                    {"$set": {
+                        "status": "Leave",
+                        "attendance_status": "LOP",
+                        "leave_type_code": "LOP",
+                        "notes": "Auto-converted to LOP due to consecutive unauthorized absence (2+ working days)",
+                        "updated_at": datetime.utcnow()
+                    }}
+                )
+                
+                # If the PREVIOUS record was still marked as "Absent", update it to "LOP" too
+                # (This happens the first time we identify a 2-day consecutive block)
+                if prev_record.get("status") == "Absent":
+                    await repo.attendance.update_one(
+                        {"_id": prev_record["_id"]},
+                        {"$set": {
+                            "status": "Leave",
+                            "attendance_status": "LOP",
+                            "leave_type_code": "LOP",
+                            "notes": "Auto-converted to LOP due to consecutive unauthorized absence (2+ working days)",
+                            "updated_at": datetime.utcnow()
+                        }}
+                    )
+                
+                converted_count += 1
+                
+        logger.info(f"Processed {len(yesterday_absences)} absences. Converted {converted_count} instances to LOP for consecutive absences.")
         return {"success": True, "converted_count": converted_count}
         
     except Exception as e:

@@ -644,6 +644,10 @@ class LeaveTypeUpdate(BaseModel):
     number_of_days: Optional[int] = None
     monthly_allowed: Optional[int] = None
     allowed_hours: Optional[float] = None
+    can_carry_forward: Optional[bool] = None
+    can_encash: Optional[bool] = None
+    probation_period_months: Optional[int] = None
+    min_service_days: Optional[int] = None
 
 
 class LeaveTypeResponse(LeaveTypeBase):
