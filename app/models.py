@@ -626,6 +626,10 @@ class LeaveTypeBase(BaseModel):
     number_of_days: int
     monthly_allowed: int
     allowed_hours: Optional[float] = 0.0
+    can_carry_forward: bool = False
+    can_encash: bool = False
+    probation_period_months: int = 0
+    min_service_days: int = 0
 
 
 class LeaveTypeCreate(LeaveTypeBase):
@@ -668,6 +672,7 @@ class LeaveRequestBase(BaseModel):
     file_type: Optional[str] = None
     status: str = "Pending"
     rejection_reason: Optional[str] = None
+    is_compensated: bool = False
 
 
 class LeaveRequestCreate(LeaveRequestBase):
@@ -691,6 +696,7 @@ class LeaveRequestUpdate(BaseModel):
     file_type: Optional[str] = None
     status: Optional[str] = None
     rejection_reason: Optional[str] = None
+    is_compensated: Optional[bool] = None
 
 
 class LeaveRequestStatusUpdate(BaseModel):

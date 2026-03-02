@@ -300,59 +300,7 @@ class Repository:
         except Exception:
             return None
 
-    async def get_employee_leave_balances(self, employee_id: str) -> dict:
-        try:
-            employee = await self.get_employee(employee_id)
-            if not employee:
-                return None
-
-            leave_types = await self.leave_types.find().to_list(length=None)
-            query = {
-                "employee_id": employee.get("employee_no_id") or employee.get("id"),
-                "status": {"$in": ["Approved", "Pending"]}
-            }
-            leave_requests = await self.leave_requests.find(query).to_list(length=None)
-
-            balance_summary = {
-                "total_allocated": 0,
-                "used": 0,
-                "available": 0,
-                "pending_approval": 0,
-                "breakdown": []
-            }
-
-            for lt in leave_types:
-                allocated = float(lt.get("days_allowed", 0))
-                type_id = str(lt["_id"])
-                
-                used_count = 0.0
-                pending_count = 0.0
-                
-                for lr in leave_requests:
-                    if str(lr.get("leave_type_id")) == type_id:
-                        days = float(lr.get("total_days", 0))
-                        if lr.get("status") == "Approved":
-                            used_count += days
-                        elif lr.get("status") == "Pending":
-                            pending_count += days
-                
-                balance_summary["breakdown"].append({
-                    "type": lt.get("type_name"),
-                    "allocated": allocated,
-                    "used": used_count,
-                    "pending": pending_count,
-                    "available": max(0, allocated - used_count)
-                })
-
-                balance_summary["total_allocated"] += allocated
-                balance_summary["used"] += used_count
-                balance_summary["pending_approval"] += pending_count
-                balance_summary["available"] += max(0, allocated - used_count)
-
-            return balance_summary
-        except Exception as e:
-            print(f"Error in get_employee_leave_balances: {e}")
-            return {"total_allocated": 0, "used": 0, "available": 0, "pending_approval": 0, "breakdown": []}
+    # Removed unused get_employee_leave_balances (defined again later)
 
     async def get_employee_task_metrics(self, employee_id: str) -> dict:
         try:
@@ -1643,6 +1591,28 @@ class Repository:
                     f"A leave request already exists for the selected dates (Status: {existing_leave.get('status')})"
                 )
 
+            # --- Leave Balance Validation ---
+            leave_type = await self.leave_types.find_one({"_id": ObjectId(leave_request.leave_type_id)})
+            if not leave_type:
+                raise ValueError("Invalid leave type selected.")
+                
+            code = leave_type.get("code")
+            requested_days = float(leave_request.total_days)
+            
+            if code != "LOP" and code != "PER":
+                balances = await self.get_employee_leave_balances(leave_request.employee_id)
+                balance_info = next((b for b in balances if b["code"] == code), None)
+                
+                if not balance_info:
+                    raise ValueError(f"Eligibility not met for {leave_type.get('name')}.")
+                
+                if balance_info["available"] < requested_days:
+                    raise ValueError(
+                        f"Insufficient leave balance. Available: {balance_info['available']} days, "
+                        f"Requested: {requested_days} days. Please select Loss of Pay (LOP) if you wish to proceed."
+                    )
+            # --- End Leave Balance Validation ---
+
             if attachment_path:
                 leave_request_data["attachment"] = attachment_path
 
@@ -1655,33 +1625,87 @@ class Repository:
 
     async def get_employee_leave_balances(self, employee_id: str) -> List[dict]:
         try:
-            leave_types = await self.leave_types.find({"status": "Active"}).to_list(
-                length=None
-            )
+            employee = await self.employees.find_one({"_id": ObjectId(employee_id)})
+            if not employee:
+                return []
+                
+            leave_types = await self.leave_types.find({"status": "Active"}).to_list(length=None)
             current_year = str(datetime.utcnow().year)
+            
+            # Use both Approved and Pending to calculate used balance so employees don't overbook
             requests = await self.leave_requests.find(
                 {
                     "employee_id": employee_id,
-                    "status": "Approved",
+                    "status": {"$in": ["Approved", "Pending"]},
                     "start_date": {"$regex": f"^{current_year}"},
                 }
             ).to_list(length=None)
 
+            # Calculate Tenure
+            doj_str = employee.get("date_of_joining")
+            doj = datetime.utcnow()
+            months_of_service = 12
+            days_of_service = 365
+            if doj_str:
+                try:
+                    doj = datetime.strptime(doj_str[:10], "%Y-%m-%d")
+                    delta = datetime.utcnow() - doj
+                    days_of_service = delta.days
+                    months_of_service = max(0, days_of_service // 30)
+                    
+                    # If joining in current year, calculate prorated months for this year
+                    if doj.year == datetime.utcnow().year:
+                        months_in_current_year = 12 - doj.month + 1
+                    else:
+                        months_in_current_year = 12
+                except:
+                    months_in_current_year = 12
+            else:
+                months_in_current_year = 12
+
             balances = []
             for lt in leave_types:
                 lt_id = str(lt["_id"])
-                used = sum(
-                    [
+                
+                code = lt.get("code")
+                base_allowed = lt.get("number_of_days", 0)
+                
+                if code == "PER":
+                    # Count instances, not days, for Permissions. Track monthly total.
+                    used = sum([
+                        1 for r in requests
+                        if r.get("leave_type_id") == lt_id and r.get("start_date", "").startswith(f"{datetime.utcnow().year}-{datetime.utcnow().month:02d}")
+                    ])
+                    # Total allowed is monthly allowed (usually 2)
+                    total_allowed = lt.get("monthly_allowed", 2)
+                else:
+                    used = sum([
                         float(r.get("total_days", 0))
                         for r in requests
                         if r.get("leave_type_id") == lt_id
-                    ]
-                )
-                total_allowed = lt.get("number_of_days", 0)
+                    ])
+                    total_allowed = base_allowed
+                
+                # Apply rules based on leave type code
+                code = lt.get("code")
+                probation_months = lt.get("probation_period_months", 0)
+                min_service_days = lt.get("min_service_days", 0)
+                
+                if probation_months > 0 and months_of_service < probation_months:
+                    total_allowed = 0
+                elif min_service_days > 0 and days_of_service < min_service_days:
+                    total_allowed = 0
+                elif code == "EL" and total_allowed > 0:
+                    # 0.5 days per month of service max 6
+                    total_allowed = min(6, months_in_current_year * 0.5)
+                elif code == "CL_SL" and total_allowed > 0:
+                    # Prorated based on service months in current year (1 day/month)
+                    total_allowed = min(12, months_in_current_year * 1)
+                
                 balances.append(
                     {
                         "leave_type": lt.get("name"),
-                        "code": lt.get("code"),
+                        "code": code,
                         "total_allowed": total_allowed,
                         "used": used,
                         "available": max(0, total_allowed - used),

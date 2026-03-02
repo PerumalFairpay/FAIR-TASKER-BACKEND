@@ -4,6 +4,8 @@ from app.jobs.attendance_jobs import (
     generate_daily_attendance_records,
     generate_today_preplanned_records,
     generate_night_shift_attendance_records,
+    process_unauthorized_absences,
+    process_uncompensated_permissions
 )
 import logging
 
@@ -58,7 +60,27 @@ def init_scheduler():
         replace_existing=True
     )
     
-    logger.info("Scheduled jobs: Pre-planned at 12:05 AM IST, Day Full at 11:57 PM IST, Night Full at 08:00 AM IST")
+    # 4. Daily Job: Process Unauthorized Absences (2 consecutive days -> LOP)
+    # Runs at 11:30 PM UTC (05:00 AM IST next day)
+    scheduler.add_job(
+        process_unauthorized_absences,
+        trigger=CronTrigger(hour=23, minute=30),
+        id="process_unauthorized_absences",
+        name="Process Unauthorized Absences to LOP",
+        replace_existing=True
+    )
+    
+    # 5. Monthly Job: Process Uncompensated Permissions
+    # Runs on the 1st of every month at 01:00 AM UTC (06:30 AM IST)
+    scheduler.add_job(
+        process_uncompensated_permissions,
+        trigger=CronTrigger(day=1, hour=1, minute=0),
+        id="process_uncompensated_permissions",
+        name="Convert Uncompensated Permissions to LOP",
+        replace_existing=True
+    )
+    
+    logger.info("Scheduled all jobs successfully")
     
     # Start the scheduler
     scheduler.start()

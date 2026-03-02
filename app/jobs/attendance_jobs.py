@@ -260,3 +260,134 @@ async def generate_night_shift_attendance_records():
     except Exception as e:
         logger.error(f"Daily Night Shift job failed: {str(e)}")
         return {"success": False, "message": str(e)}
+
+async def process_uncompensated_permissions():
+    """
+    Job to convert Approved, Uncompensated "Permission" records to Half-Day LOP.
+    This should typically run at the end of the month or beginning of the next month.
+    """
+    try:
+        logger.info("Starting uncompensated permissions processing.")
+        
+        # Find all Approved Permission requests that are not compensated
+        uncompensated_permissions = await repo.leave_requests.find({
+            "status": "Approved",
+            "leave_duration_type": "Permission",
+            "is_compensated": {"$ne": True},
+            "start_date": {"$lt": datetime.utcnow().strftime("%Y-%m-%d")} # Process past permissions
+        }).to_list(length=None)
+        
+        lop_type = await repo.leave_types.find_one({"code": "LOP"})
+        if not lop_type:
+            logger.error("LOP leave type not found. Cannot convert permissions.")
+            return {"success": False, "message": "LOP leave type not found"}
+            
+        lop_type_id = str(lop_type["_id"])
+        converted_count = 0
+        
+        for perm in uncompensated_permissions:
+            perm_id = perm["_id"]
+            emp_id = perm.get("employee_id")
+            date = perm.get("start_date")
+            
+            update_data = {
+                "leave_type_id": lop_type_id,
+                "leave_duration_type": "Half Day",
+                "half_day_session": "First Half",
+                "total_days": 0.5,
+                "reason": perm.get("reason", "") + " (Converted from uncompensated permission)",
+                "is_compensated": True
+            }
+            
+            await repo.leave_requests.update_one(
+                {"_id": perm_id},
+                {"$set": update_data}
+            )
+            
+            emp = await repo.employees.find_one({"_id": ObjectId(emp_id)})
+            if emp:
+                await repo.attendance.update_one(
+                    {"employee_id": str(emp.get("_id")), "date": date},
+                    {"$set": {
+                        "attendance_status": "Half Day",
+                        "is_half_day": True,
+                        "leave_type_code": "LOP",
+                        "notes": "Uncompensated permission converted to Half-Day LOP",
+                        "updated_at": datetime.utcnow()
+                    }}
+                )
+            converted_count += 1
+            
+        logger.info(f"Successfully converted {converted_count} uncompensated permissions to Half-Day LOP.")
+        return {"success": True, "converted_count": converted_count}
+    except Exception as e:
+        logger.error(f"Error processing uncompensated permissions: {str(e)}")
+        return {"success": False, "message": str(e)}
+
+async def process_unauthorized_absences():
+    """
+    Daily job to check for 2 consecutive days of unauthorized absence and mark them as LOP.
+    """
+    try:
+        ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
+        yesterday_dt = ist_now - timedelta(days=1)
+        day_before_dt = ist_now - timedelta(days=2)
+        
+        yesterday_str = yesterday_dt.strftime("%Y-%m-%d")
+        day_before_str = day_before_dt.strftime("%Y-%m-%d")
+        
+        logger.info(f"Evaluating unauthorized absences for {day_before_str} and {yesterday_str}")
+        
+        # Find employees who were absent yesterday
+        yesterday_absences = await repo.attendance.find({
+            "date": yesterday_str,
+            "status": "Absent"
+        }).to_list(length=None)
+        
+        absent_emp_ids = [a.get("employee_id") for a in yesterday_absences]
+        
+        if not absent_emp_ids:
+            return {"success": True, "message": "No absences found yesterday"}
+            
+        # Check if they were also absent the day before
+        consecutive_absent_emps = await repo.attendance.find({
+            "date": day_before_str,
+            "status": "Absent",
+            "employee_id": {"$in": absent_emp_ids}
+        }).to_list(length=None)
+        
+        target_emp_ids = [a.get("employee_id") for a in consecutive_absent_emps]
+        
+        lop_type = await repo.leave_types.find_one({"code": "LOP"})
+        if not lop_type or not target_emp_ids:
+            return {"success": True, "converted_count": 0}
+            
+        lop_type_id = str(lop_type["_id"])
+        converted_count = 0
+        
+        for emp_id in target_emp_ids:
+            # We don't automatically create a leave request for them usually, 
+            # we just convert the attendance status to "Leave" and "LOP" so HR sees it.
+            # But the requirement says "treat unauthorized absence for 2 consecutive working days as LOP".
+            await repo.attendance.update_many(
+                {
+                    "employee_id": emp_id,
+                    "date": {"$in": [day_before_str, yesterday_str]},
+                    "status": "Absent"
+                },
+                {"$set": {
+                    "status": "Leave",
+                    "attendance_status": "LOP",
+                    "leave_type_code": "LOP",
+                    "notes": "Auto-converted to LOP due to 2+ days consecutive absence",
+                    "updated_at": datetime.utcnow()
+                }}
+            )
+            converted_count += 1
+            
+        logger.info(f"Converted absences for {converted_count} employees to LOP.")
+        return {"success": True, "converted_count": converted_count}
+        
+    except Exception as e:
+        logger.error(f"Error processing unauthorized absences: {str(e)}")
+        return {"success": False, "message": str(e)}
