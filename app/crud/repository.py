@@ -1678,6 +1678,7 @@ class Repository:
                     ])
                     # Total allowed is monthly allowed (usually 2)
                     total_allowed = lt.get("monthly_allowed", 2)
+                    monthly_cap_remaining = total_allowed - used
                 else:
                     used = sum([
                         float(r.get("total_days", 0))
@@ -1685,6 +1686,18 @@ class Repository:
                         if r.get("leave_type_id") == lt_id
                     ])
                     total_allowed = base_allowed
+                    
+                    # Handle monthly cap if specified
+                    monthly_allowed = lt.get("monthly_allowed", 0)
+                    if monthly_allowed > 0:
+                        monthly_used = sum([
+                            float(r.get("total_days", 0))
+                            for r in requests
+                            if r.get("leave_type_id") == lt_id and r.get("start_date", "").startswith(f"{datetime.utcnow().year}-{datetime.utcnow().month:02d}")
+                        ])
+                        monthly_cap_remaining = monthly_allowed - monthly_used
+                    else:
+                        monthly_cap_remaining = 999 # No monthly cap
                 
                 # Apply rules based on leave type code
                 code = lt.get("code")
@@ -1702,13 +1715,18 @@ class Repository:
                     # Prorated based on service months in current year (1 day/month)
                     total_allowed = min(12, months_in_current_year * 1)
                 
+                # Final available is yearly remaining but capped by monthly remaining
+                available = max(0, total_allowed - used)
+                if code != "PER": # PER total_allowed is already the monthly cap
+                    available = max(0, min(available, monthly_cap_remaining))
+
                 balances.append(
                     {
                         "leave_type": lt.get("name"),
                         "code": code,
                         "total_allowed": total_allowed,
                         "used": used,
-                        "available": max(0, total_allowed - used),
+                        "available": available,
                         "allowed_hours": lt.get("allowed_hours", 0),
                     }
                 )
