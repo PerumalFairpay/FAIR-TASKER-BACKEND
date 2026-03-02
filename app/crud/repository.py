@@ -1728,6 +1728,7 @@ class Repository:
                         "used": used,
                         "available": available,
                         "allowed_hours": lt.get("allowed_hours", 0),
+                        "monthly_allowed": lt.get("monthly_allowed", 0),
                     }
                 )
             return balances
