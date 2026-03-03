@@ -55,7 +55,8 @@ async def create_employee(
     esic_number: Optional[str] = Form(None),
     pan_number: Optional[str] = Form(None),
     biometric_id: Optional[str] = Form(None),
-    shift_id: Optional[str] = Form(None)
+    shift_id: Optional[str] = Form(None),
+    weekly_off: Optional[str] = Form(None),  # JSON string, e.g. "[5, 6]" for Sat+Sun
 ):
     try:
         profile_pic_path = None
@@ -116,7 +117,8 @@ async def create_employee(
             pf_account_number=pf_account_number,
             esic_number=esic_number,
             pan_number=pan_number,
-            biometric_id=biometric_id
+            biometric_id=biometric_id,
+            weekly_off=json.loads(weekly_off) if weekly_off else [6],
         )
 
         # Call repository. Note: repo signature change pending. passing profile_pic_path.
@@ -272,7 +274,8 @@ async def update_employee(
     esic_number: Optional[str] = Form(None),
     pan_number: Optional[str] = Form(None),
     biometric_id: Optional[str] = Form(None),
-    shift_id: Optional[str] = Form(None)
+    shift_id: Optional[str] = Form(None),
+    weekly_off: Optional[str] = Form(None),  # JSON string, e.g. "[5, 6]" for Sat+Sun
 ):
     try:
         profile_pic_path = None
@@ -336,7 +339,8 @@ async def update_employee(
             pf_account_number=pf_account_number,
             esic_number=esic_number,
             pan_number=pan_number,
-            biometric_id=biometric_id
+            biometric_id=biometric_id,
+            weekly_off=json.loads(weekly_off) if weekly_off else None,
         )
         
         updated_employee = await repo.update_employee(employee_id, update_data, profile_pic_path)

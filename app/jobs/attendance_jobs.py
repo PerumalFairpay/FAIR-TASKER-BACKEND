@@ -92,10 +92,10 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
             }
 
         
-        # Parse date to check if it's a weekend
+        # Parse date once (used inside loop for per-employee weekly_off check)
         dt_parsed = datetime.strptime(target_date, "%Y-%m-%d")
-        is_sunday = dt_parsed.weekday() == 6
-        
+        day_of_week = dt_parsed.weekday()  # 0=Mon, …, 6=Sun
+
         records_created = 0
         records_to_insert = []
         
@@ -135,6 +135,13 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
             attendance_status  = None
             is_half_day        = False
             
+            # --- PER-EMPLOYEE WEEKLY OFF CHECK ---
+            # Each employee can have a custom weekly_off list (e.g., [5] = Saturday, [6] = Sunday)
+            # Defaults to [6] (Sunday) to preserve backward-compatibility.
+            emp_weekly_off = emp.get("weekly_off", [6])
+            is_weekly_off = day_of_week in emp_weekly_off
+            # --- END WEEKLY OFF CHECK ---
+
             leave_info = leave_map.get(emp_mongo_id) or leave_map.get(emp_no_id)
 
             if holiday_name:
@@ -142,11 +149,13 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
                 status           = "Holiday"
                 attendance_status = "Holiday"
                 notes            = holiday_name
-            elif is_sunday:
-                # Sunday (weekend)
+            elif is_weekly_off:
+                # Employee's personal weekly off day
+                day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                off_day_name = day_names[day_of_week] if 0 <= day_of_week <= 6 else "Weekly Off"
                 status           = "Holiday"
                 attendance_status = "Holiday"
-                notes            = "Sunday"
+                notes            = off_day_name
             elif leave_info:
                 # Employee on approved leave
                 duration_type = leave_info.get("leave_duration_type", "Single")

@@ -205,6 +205,7 @@ class EmployeeBase(BaseModel):
     confirmation_date: Optional[str] = None
     notice_period: Optional[str] = None
     work_mode: Optional[str] = "Office"
+    weekly_off: List[int] = [6]  # 0=Mon, 1=Tue, ..., 6=Sun. Default: Sunday
     documents: List[EmployeeDocument] = []
     onboarding_checklist: List[ChecklistItem] = []
     offboarding_checklist: List[ChecklistItem] = []
@@ -251,6 +252,7 @@ class EmployeeUpdate(BaseModel):
     confirmation_date: Optional[str] = None
     notice_period: Optional[str] = None
     work_mode: Optional[str] = None
+    weekly_off: Optional[List[int]] = None  # 0=Mon, 1=Tue, ..., 6=Sun
     documents: Optional[List[EmployeeDocument]] = None
     onboarding_checklist: Optional[List[ChecklistItem]] = None
     offboarding_checklist: Optional[List[ChecklistItem]] = None

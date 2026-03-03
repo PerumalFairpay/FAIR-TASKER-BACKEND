@@ -609,14 +609,15 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
 
             # Loop through every day of month until today
             total_working_days_elapsed = 0
-            
+            emp_weekly_off = emp_doc.get("weekly_off", [6])  # 0=Mon…6=Sun, default Sunday
+
             for single_date in daterange(start_date_obj, current_date_obj):
                 d_str = single_date.strftime("%Y-%m-%d")
-                is_sunday = single_date.weekday() == 6
+                is_weekly_off = single_date.weekday() in emp_weekly_off
                 is_holiday = d_str in month_holidays
-                
-                # Check metrics if it's a working day (Include Saturdays, Exclude Sundays/Holidays)
-                if not is_sunday and not is_holiday:
+
+                # Check metrics if it's a working day (exclude employee's weekly-off days and company holidays)
+                if not is_weekly_off and not is_holiday:
                     
                     att_record = att_map.get(d_str)
                     is_leave = leave_date_map.get(d_str) == "Leave"
