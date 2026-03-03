@@ -1591,12 +1591,43 @@ class Repository:
                     f"A leave request already exists for the selected dates (Status: {existing_leave.get('status')})"
                 )
 
-            # --- Leave Balance Validation ---
-            leave_type = await self.leave_types.find_one({"_id": ObjectId(leave_request.leave_type_id)})
-            if not leave_type:
+            # --- Rule: Casual Leave cannot be combined with other types ---
+            requested_type = await self.leave_types.find_one({"_id": ObjectId(leave_request.leave_type_id)})
+            if not requested_type:
                 raise ValueError("Invalid leave type selected.")
+            requested_code = requested_type.get("code")
+
+            start_dt = datetime.strptime(leave_request.start_date, "%Y-%m-%d")
+            end_dt = datetime.strptime(leave_request.end_date, "%Y-%m-%d")
+            prev_day = (start_dt - timedelta(days=1)).strftime("%Y-%m-%d")
+            next_day = (end_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+
+            adjacent_leaves = await self.leave_requests.find({
+                "employee_id": leave_request.employee_id,
+                "status": {"$in": ["Approved", "Pending"]},
+                "$or": [
+                    {"end_date": prev_day},
+                    {"start_date": next_day}
+                ]
+            }).to_list(length=None)
+
+            for adj in adjacent_leaves:
+                adj_type = await self.leave_types.find_one({"_id": ObjectId(adj.get("leave_type_id"))})
+                adj_code = adj_type.get("code") if adj_type else None
                 
-            code = leave_type.get("code")
+                # Rule applies if one is CL_SL and the other is a different type (except PER)
+                if adj_code and adj_code != "PER" and requested_code != "PER":
+                    if (requested_code == "CL_SL" and adj_code != "CL_SL") or \
+                       (requested_code != "CL_SL" and adj_code == "CL_SL"):
+                        raise ValueError(
+                            f"Casual Leave (CL) cannot be combined with {adj_type.get('name')}. "
+                            f"Please maintain a working day between these leave types."
+                        )
+            # --- End Rule ---
+
+            # --- Leave Balance Validation ---
+            leave_type = requested_type
+            code = requested_code
             requested_days = float(leave_request.total_days)
             
             if code != "LOP" and code != "PER":
