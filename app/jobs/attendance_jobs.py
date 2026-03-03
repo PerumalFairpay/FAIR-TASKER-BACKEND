@@ -59,6 +59,11 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
         holiday = await repo.holidays.find_one({"date": target_date})
         holiday_name = holiday.get("name") if holiday else None
         
+        # Get Global Sandwich Rule Setting
+        sandwich_setting = await repo.system_configurations.find_one({"key": "sandwich_rule"})
+        apply_sandwich_rule = sandwich_setting.get("value", False) if sandwich_setting else False
+
+        
         # Fetch all approved leaves that overlap with this date
         approved_leaves = await repo.leave_requests.find({
             "status": "Approved",
@@ -144,18 +149,32 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
 
             leave_info = leave_map.get(emp_mongo_id) or leave_map.get(emp_no_id)
 
-            if holiday_name:
-                # Company-wide holiday
-                status           = "Holiday"
-                attendance_status = "Holiday"
-                notes            = holiday_name
-            elif is_weekly_off:
-                # Employee's personal weekly off day
-                day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-                off_day_name = day_names[day_of_week] if 0 <= day_of_week <= 6 else "Weekly Off"
-                status           = "Holiday"
-                attendance_status = "Holiday"
-                notes            = off_day_name
+            if holiday_name or is_weekly_off:
+                # First check sandwich rule if applicable
+                sandwiched = False
+                if apply_sandwich_rule and leave_info:
+                    # leave_info exists means there's an approved leave overlapping this date
+                    # So this off-day is sandwiched
+                    sandwiched = True
+
+                if sandwiched:
+                    status           = "Leave"
+                    attendance_status = leave_info.get("leave_type_code") or "Leave"
+                    leave_type_code  = leave_info.get("leave_type_code")
+                    notes            = f"Leave (Sandwich Rule)"
+                    is_half_day      = False # Usually sandwich rule gives a full day leave
+                elif holiday_name:
+                    # Company-wide holiday
+                    status           = "Holiday"
+                    attendance_status = "Holiday"
+                    notes            = holiday_name
+                else:
+                    # Employee's personal weekly off day
+                    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                    off_day_name = day_names[day_of_week] if 0 <= day_of_week <= 6 else "Weekly Off"
+                    status           = "Holiday"
+                    attendance_status = "Holiday"
+                    notes            = off_day_name
             elif leave_info:
                 # Employee on approved leave
                 duration_type = leave_info.get("leave_duration_type", "Single")

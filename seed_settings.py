@@ -67,6 +67,14 @@ settings_data = [
         "group": "Attendance",
         "is_public": False,
     },
+    {
+        "key": "sandwich_rule",
+        "label": "Apply Sandwich Rule",
+        "value": False,
+        "input_type": "boolean",
+        "group": "Leave Management",
+        "is_public": True,
+    },
 ]
 
 

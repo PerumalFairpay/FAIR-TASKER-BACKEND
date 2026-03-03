@@ -1644,7 +1644,59 @@ class Repository:
             # --- Leave Balance Validation ---
             leave_type = requested_type
             code = requested_code
-            requested_days = float(leave_request.total_days)
+            
+            # --- Server-Side Day Recalculation (including Sandwich Rule) ---
+            calculated_days = 0.0
+            
+            if leave_request.leave_duration_type == "Single":
+                calculated_days = 1.0
+            elif leave_request.leave_duration_type == "Half Day":
+                calculated_days = 0.5
+            elif leave_request.leave_duration_type == "Permission":
+                calculated_days = 0.0
+            elif leave_request.leave_duration_type == "Multiple":
+                # Get employee weekly off
+                employee = await self.employees.find_one({"_id": ObjectId(leave_request.employee_id)})
+                weekly_off = employee.get("weekly_off", [6]) if employee else [6]
+                
+                # Get global sandwich rule setting
+                sandwich_setting = await self.system_configurations.find_one({"key": "sandwich_rule"})
+                apply_sandwich_rule = sandwich_setting.get("value", False) if sandwich_setting else False
+                
+                # Get holidays
+                holidays_cursor = await self.holidays.find({"status": "Active"}).to_list(length=None)
+                holiday_dates = [h.get("date") for h in holidays_cursor if h.get("date")]
+                
+                # Iterate day by day
+                import math
+                current_dt = start_dt
+                total = 0.0
+                while current_dt <= end_dt:
+                    is_holiday = current_dt.strftime("%Y-%m-%d") in holiday_dates
+                    is_weekly_off = current_dt.weekday() in weekly_off
+                    
+                    if apply_sandwich_rule:
+                        # With sandwich rule, all days in range are counted
+                        total += 1.0
+                    else:
+                        # Without sandwich rule, skip holidays and off days
+                        if not is_holiday and not is_weekly_off:
+                            total += 1.0
+                    
+                    current_dt += timedelta(days=1)
+                
+                # Adjust for sessions
+                if leave_request.start_session == "Second Half":
+                    total -= 0.5
+                if leave_request.end_session == "First Half":
+                    total -= 0.5
+                
+                calculated_days = max(0.0, total)
+                
+            leave_request_data["total_days"] = calculated_days
+            requested_days = calculated_days
+            # --- End Recalculation ---
+
             
             if code != "LOP" and code != "PER":
                 balances = await self.get_employee_leave_balances(leave_request.employee_id)
@@ -1857,6 +1909,62 @@ class Repository:
             }
             if attachment_path:
                 update_data["attachment"] = attachment_path
+                
+            # --- Server-Side Day Recalculation (including Sandwich Rule) ---
+            if "start_date" in update_data and "end_date" in update_data and "leave_duration_type" in update_data:
+                calculated_days = 0.0
+                dur_type = update_data["leave_duration_type"]
+                
+                if dur_type == "Single":
+                    calculated_days = 1.0
+                elif dur_type == "Half Day":
+                    calculated_days = 0.5
+                elif dur_type == "Permission":
+                    calculated_days = 0.0
+                elif dur_type == "Multiple":
+                    start_dt = datetime.strptime(update_data["start_date"], "%Y-%m-%d")
+                    end_dt = datetime.strptime(update_data["end_date"], "%Y-%m-%d")
+                    
+                    # Need employee_id to get weekly_off
+                    emp_id = update_data.get("employee_id") or old_req.get("employee_id")
+                    
+                    employee = await self.employees.find_one({"_id": ObjectId(emp_id)})
+                    weekly_off = employee.get("weekly_off", [6]) if employee else [6]
+                    
+                    # Get global sandwich rule setting
+                    sandwich_setting = await self.system_configurations.find_one({"key": "sandwich_rule"})
+                    apply_sandwich_rule = sandwich_setting.get("value", False) if sandwich_setting else False
+                    
+                    # Get holidays
+                    holidays_cursor = await self.holidays.find({"status": "Active"}).to_list(length=None)
+                    holiday_dates = [h.get("date") for h in holidays_cursor if h.get("date")]
+                    
+                    current_dt = start_dt
+                    total = 0.0
+                    while current_dt <= end_dt:
+                        is_holiday = current_dt.strftime("%Y-%m-%d") in holiday_dates
+                        is_weekly_off = current_dt.weekday() in weekly_off
+                        
+                        if apply_sandwich_rule:
+                            total += 1.0
+                        else:
+                            if not is_holiday and not is_weekly_off:
+                                total += 1.0
+                        
+                        current_dt += timedelta(days=1)
+                    
+                    start_sess = update_data.get("start_session") or old_req.get("start_session")
+                    end_sess = update_data.get("end_session") or old_req.get("end_session")
+                    
+                    if start_sess == "Second Half":
+                        total -= 0.5
+                    if end_sess == "First Half":
+                        total -= 0.5
+                    
+                    calculated_days = max(0.0, total)
+                    
+                update_data["total_days"] = calculated_days
+            # --- End Recalculation ---
 
             if update_data:
                 update_data["updated_at"] = datetime.utcnow()
