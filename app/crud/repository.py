@@ -1625,6 +1625,22 @@ class Repository:
                         )
             # --- End Rule ---
 
+            # --- Rule: Only one active permission allowed ---
+            if requested_code == "PER":
+                uncompensated_permission = await self.leave_requests.find_one({
+                    "employee_id": leave_request.employee_id,
+                    "leave_type_id": str(requested_type["_id"]),
+                    "status": {"$in": ["Approved", "Pending"]},
+                    "is_compensated": False
+                })
+                
+                if uncompensated_permission:
+                    raise ValueError(
+                        "You already have an active permission that has not been compensated yet. "
+                        "Please compensate your previous permission before applying for a new one."
+                    )
+            # --- End Rule ---
+
             # --- Leave Balance Validation ---
             leave_type = requested_type
             code = requested_code
