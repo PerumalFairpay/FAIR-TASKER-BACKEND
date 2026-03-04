@@ -1699,18 +1699,27 @@ class Repository:
             # --- End Recalculation ---
 
             
-            if code != "LOP" and code != "PER":
+            if code != "LOP":
                 balances = await self.get_employee_leave_balances(leave_request.employee_id)
                 balance_info = next((b for b in balances if b["code"] == code), None)
                 
                 if not balance_info:
                     raise ValueError(f"Eligibility not met for {leave_type.get('name')}.")
                 
-                if balance_info["available"] < requested_days:
-                    raise ValueError(
-                        f"Insufficient leave balance. Available: {balance_info['available']} days, "
-                        f"Requested: {requested_days} days. Please select Loss of Pay (LOP) if you wish to proceed."
-                    )
+                if code == "PER":
+                    # For Permissions, check if they have at least 1 instance available
+                    if balance_info["available"] < 1:
+                         raise ValueError(
+                            f"Monthly limit for {leave_type.get('name')} reached. "
+                            f"Allowed: {balance_info['monthly_allowed']}, Used: {balance_info['used']}."
+                        )
+                else:
+                    # For other leaves, check day balance
+                    if balance_info["available"] < requested_days:
+                        raise ValueError(
+                            f"Insufficient leave balance. Available: {balance_info['available']} days, "
+                            f"Requested: {requested_days} days. Please select Loss of Pay (LOP) if you wish to proceed."
+                        )
             # --- End Leave Balance Validation ---
 
             if attachment_path:
