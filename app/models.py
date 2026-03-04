@@ -846,6 +846,7 @@ class AttendanceUpdate(BaseModel):
     device_type: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[str] = None
+    location: Optional[str] = None
 
 
 class AttendanceAdminEdit(BaseModel):

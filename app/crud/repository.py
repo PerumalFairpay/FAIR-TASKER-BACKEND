@@ -2715,6 +2715,7 @@ class Repository:
                             "$set": {
                                 "clock_in":    attendance_data["clock_in"],
                                 "device_type": attendance_data["device_type"],
+                                "location":    attendance_data.get("location"),
                                 "is_late":     is_late,
                                 "notes":       f"Employee clocked in while on Full Day Leave – leave balance remains deducted",
                                 "updated_at":  datetime.utcnow(),
@@ -2729,6 +2730,7 @@ class Repository:
                             "$set": {
                                 "clock_in":          attendance_data["clock_in"],
                                 "device_type":       attendance_data["device_type"],
+                                "location":          attendance_data.get("location"),
                                 "status":            status,
                                 "attendance_status": attendance_status,
                                 "is_late":           is_late,
@@ -2789,6 +2791,10 @@ class Repository:
                 raise ValueError("No clock-in record found for this date")
 
             update_data = {k: v for k, v in attendance.dict().items() if v is not None}
+
+            # If location is provided during clock out, merge it or overwrite
+            if attendance.location:
+                update_data["location"] = attendance.location
 
             # Calculate work hours logic could be added here or in frontend.
             # Simple duration calc if formats allow.
