@@ -266,6 +266,7 @@ class Repository:
                 "email": 1,
                 "status": 1,
                 "biometric_id": 1,
+                "weekly_off": 1,
             }
             employees = await self.employees.find({}, projection).to_list(length=None)
 
