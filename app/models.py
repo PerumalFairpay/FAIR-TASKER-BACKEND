@@ -824,6 +824,8 @@ class AttendanceBase(BaseModel):
     notes: Optional[str] = None
     ip_address: Optional[str] = None
     location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class AttendanceCreate(BaseModel):
@@ -834,6 +836,8 @@ class AttendanceCreate(BaseModel):
     device_type: str = "Web"  # Default to Web if not specified
     ip_address: Optional[str] = None
     location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     notes: Optional[str] = None
 
 
@@ -847,6 +851,8 @@ class AttendanceUpdate(BaseModel):
     notes: Optional[str] = None
     status: Optional[str] = None
     location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class AttendanceAdminEdit(BaseModel):
