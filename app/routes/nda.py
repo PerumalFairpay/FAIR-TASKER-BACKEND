@@ -1,20 +1,18 @@
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.templating import Jinja2Templates
 from app.models import NDARequestCreate, NDASignatureRequest, NDARegenerateRequest, NDAStatusUpdate
 from app.crud.repository import repository
 from app.helper.response_helper import success_response, error_response
 from datetime import datetime, timedelta
 import uuid
-import os
 from typing import List
 from fastapi import UploadFile, File, Form
 from app.helper.file_handler import file_handler
+from app.helper.template_helper import render_nda_template
+from weasyprint import HTML
+from io import BytesIO
+from fastapi.responses import Response
 
 router = APIRouter(prefix="/nda", tags=["NDA"])
-
-# Setup Jinja2 templates
-templates_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
-templates = Jinja2Templates(directory=templates_dir)
 
 
 @router.post("/generate")
@@ -162,13 +160,12 @@ async def verify_nda_access(token: str, request_body: dict):
         if not stored_email or stored_email.lower().strip() != email.lower().strip():
              raise HTTPException(status_code=403, detail="Invalid Email Address")
 
-        # Render template content as string (Full Access)
+        # Render template content using helper (Full Access)
         current_date = datetime.utcnow()
         formatted_date = current_date.strftime("%d/%m/%Y")
         
-        template = templates.get_template("nda_form.html")
-        html_content = template.render({
-            "request": nda_request, # Pass full object if needed
+        html_content = render_nda_template({
+            "request": nda_request,
             "employee_name": nda_request.get("employee_name"),
             "role": nda_request.get("role"),
             "employee_address": nda_request.get("address"),
@@ -359,9 +356,7 @@ async def sign_nda(token: str, request_body: NDASignatureRequest, request: Reque
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
-from weasyprint import HTML
-from io import BytesIO
-from fastapi.responses import Response
+
 
 
 def generate_pdf_from_request(nda_request: dict) -> bytes:
@@ -380,9 +375,8 @@ def generate_pdf_from_request(nda_request: dict) -> bytes:
     elif not isinstance(created_at, datetime):
         created_at = datetime.now()
 
-    # Render HTML
-    template = templates.get_template("nda_form.html")
-    html_content = template.render({
+    # Render HTML using centralized helper
+    html_content = render_nda_template({
         "request": nda_request, 
         "employee_name": nda_request.get("employee_name", "_________________"),
         "employee_address": nda_request.get("address", "_________________"),
