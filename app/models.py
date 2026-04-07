@@ -942,6 +942,8 @@ class NDARequestBase(BaseModel):
     address: str
     residential_address: str
     required_documents: List[str] = []
+    status: str = "Pending"
+    rejection_reason: Optional[str] = None
 
 
 class NDARequestCreate(NDARequestBase):
@@ -958,6 +960,12 @@ class NDARequestUpdate(BaseModel):
     device_type: Optional[str] = None
     user_agent: Optional[str] = None
     ip_address: Optional[str] = None
+    rejection_reason: Optional[str] = None
+
+
+class NDAStatusUpdate(BaseModel):
+    status: str
+    rejection_reason: Optional[str] = None
 
 
 class NDARequestResponse(NDARequestBase):

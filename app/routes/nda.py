@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from app.models import NDARequestCreate, NDARequestUpdate, NDARequestResponse, NDASignatureRequest, NDARegenerateRequest
+from app.models import NDARequestCreate, NDASignatureRequest, NDARegenerateRequest, NDAStatusUpdate
 from app.crud.repository import repository
 from app.helper.response_helper import success_response, error_response
 from datetime import datetime, timedelta
@@ -422,3 +421,39 @@ async def download_nda_pdf(token: str):
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=NDA_{request.get('employee_name', 'Signed')}.pdf"}
     )
+
+
+@router.patch("/{nda_id}/status")
+async def update_nda_status(nda_id: str, status_update: NDAStatusUpdate):
+    """
+    Admin endpoint to approve or reject an NDA.
+    If rejected, it automatically regenerates a fresh token for the employee,
+    requiring them to re-upload documents and re-sign.
+    """
+    try:
+        if status_update.status not in ["Approved", "Rejected"]:
+            return error_response(message="Status must be Approved or Rejected", status_code=400)
+            
+        # Update status
+        updated_nda = await repository.update_nda_status_by_id(
+            nda_id=nda_id,
+            status=status_update.status,
+            rejection_reason=status_update.rejection_reason if status_update.status == "Rejected" else None
+        )
+        
+        if not updated_nda:
+            return error_response(message="NDA request not found", status_code=404)
+        
+        # If rejected, automatically provide a fresh start URL
+        if status_update.status == "Rejected":
+            new_token = str(uuid.uuid4())
+            # Usually regenerates with 1 hour expiry
+            expires_at = datetime.utcnow() + timedelta(hours=1)
+            updated_nda = await repository.regenerate_nda_token(nda_id, new_token, expires_at)
+            
+        return success_response(
+            message=f"NDA status updated to {status_update.status}",
+            data=updated_nda
+        )
+    except Exception as e:
+        return error_response(message=str(e), status_code=500)

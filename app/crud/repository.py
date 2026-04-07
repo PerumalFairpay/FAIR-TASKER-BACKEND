@@ -39,11 +39,7 @@ from app.models import (
     EmployeeChecklistTemplateCreate,
     EmployeeChecklistTemplateUpdate,
     BiometricLogItem,
-    SystemConfigurationCreate,
-    SystemConfigurationUpdate,
     NDARequestCreate,
-    NDARequestUpdate,
-    PayslipCreate,
     PayslipComponentCreate,
     PayslipComponentUpdate,
     FeedbackCreate,
@@ -3503,6 +3499,21 @@ class Repository:
         except Exception as e:
             raise e
 
+    async def update_nda_status_by_id(self, nda_id: str, status: str, rejection_reason: Optional[str] = None) -> dict:
+        try:
+            update_data = {
+                "status": status,
+                "rejection_reason": rejection_reason,
+                "updated_at": datetime.utcnow()
+            }
+            await self.nda_requests.update_one(
+                {"_id": ObjectId(nda_id)}, {"$set": update_data}
+            )
+            updated_doc = await self.nda_requests.find_one({"_id": ObjectId(nda_id)})
+            return normalize(updated_doc)
+        except Exception as e:
+            raise e
+
     async def update_nda_request(self, token: str, update_data: dict) -> dict:
         try:
             if update_data:
@@ -3520,7 +3531,10 @@ class Repository:
                 "token": new_token,
                 "expires_at": expires_at,
                 "status": "Pending", 
-                "updated_at": datetime.utcnow()
+                "updated_at": datetime.utcnow(),
+                "documents": [],
+                "signature": None,
+                "signed_pdf_path": None
             }
             
             await self.nda_requests.update_one(
