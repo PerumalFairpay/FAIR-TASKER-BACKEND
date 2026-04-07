@@ -30,6 +30,8 @@ def render_nda_template(context: dict) -> str:
     context["watermark_base64"] = image_to_base64(os.path.join(ASSETS_DIR, "watermark.png"))
     context["header_base64"] = image_to_base64(os.path.join(ASSETS_DIR, "header.png"))
     context["footer_base64"] = image_to_base64(os.path.join(ASSETS_DIR, "footer.png"))
+    context["company_signature_base64"] = image_to_base64(os.path.join(ASSETS_DIR, "company_signature.png"))
+
 
     env = Environment()
     return env.from_string(raw_html).render(**context)
