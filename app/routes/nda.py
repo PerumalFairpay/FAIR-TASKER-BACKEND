@@ -444,6 +444,31 @@ async def update_nda_status(nda_id: str, status_update: NDAStatusUpdate):
             # Usually regenerates with 1 hour expiry
             expires_at = datetime.utcnow() + timedelta(hours=1)
             updated_nda = await repository.regenerate_nda_token(nda_id, new_token, expires_at)
+        
+        # If approved, regenerate and re-upload the PDF to remove watermarks and add signs
+        elif status_update.status == "Approved":
+            # Generate new PDF with the updated status
+            pdf_bytes = generate_pdf_from_request(updated_nda)
+            
+            # Re-upload PDF
+            employee_name = updated_nda.get("employee_name", "Employee")
+            token = updated_nda.get("token", str(uuid.uuid4()))
+            filename = f"NDA_{employee_name.replace(' ', '_')}_{token[:8]}.pdf"
+            
+            upload_result = await file_handler.upload_bytes(
+                file_data=pdf_bytes,
+                filename=filename,
+                content_type="application/pdf"
+            )
+            
+            # Update background check/NDA record with new PDF path
+            updated_nda = await repository.update_nda_request(token, {
+                "signed_pdf_path": {
+                    "document_name": filename,
+                    "document_proof": upload_result["url"],
+                    "file_type": "application/pdf"
+                }
+            })
             
         return success_response(
             message=f"NDA status updated to {status_update.status}",

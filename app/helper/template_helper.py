@@ -32,6 +32,11 @@ def render_nda_template(context: dict) -> str:
     context["footer_base64"] = image_to_base64(os.path.join(ASSETS_DIR, "footer.png"))
     context["company_signature_base64"] = image_to_base64(os.path.join(ASSETS_DIR, "company_signature.png"))
 
+    # Ensure status is directly available for easier template checks
+    if "request" in context and isinstance(context["request"], dict):
+        context["status"] = str(context["request"].get("status", "")).strip()
+    elif "status" not in context:
+        context["status"] = ""
 
     env = Environment()
     return env.from_string(raw_html).render(**context)

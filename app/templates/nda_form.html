@@ -46,10 +46,33 @@
             height: auto;
             display: block;
         }
+        .draft-watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 120pt;
+            color: rgba(200, 200, 200, 0.3); /* Translucent gray */
+            font-weight: bold;
+            z-index: 100;
+            pointer-events: none;
+            white-space: nowrap;
+            text-transform: uppercase;
+            letter-spacing: 15px;
+        }
+
+        .blur-content {
+            filter: blur(4px);
+            -webkit-filter: blur(4px);
+            opacity: 0.7;
+            user-select: none;
+            pointer-events: none;
+        }
         .content {
             position: relative;
             z-index: 1;
         }
+
         .header {
             /* height: 175px; */
             height: 130px;
@@ -239,6 +262,9 @@
         <div class="watermark">
             <img src="{{ watermark_base64 }}" alt="Watermark">
         </div>
+        {% if status|lower != 'approved' %}
+        <div class="draft-watermark">DRAFT</div>
+        {% endif %}
         <div class="header">
             <img src="{{ header_base64 }}" alt="Header">
         </div>
@@ -299,6 +325,9 @@
         <div class="watermark">
             <img src="{{ watermark_base64 }}" alt="Watermark">
         </div>
+        {% if status|lower != 'approved' %}
+        <div class="draft-watermark">DRAFT</div>
+        {% endif %}
         <div class="header">
             <img src="{{ header_base64 }}" alt="Header">
         </div>
@@ -390,6 +419,9 @@
         <div class="watermark">
             <img src="{{ watermark_base64 }}" alt="Watermark">
         </div>
+        {% if status|lower != 'approved' %}
+        <div class="draft-watermark">DRAFT</div>
+        {% endif %}
         <div class="header">
             <img src="{{ header_base64 }}" alt="Header">
         </div>
@@ -418,10 +450,12 @@
                     
                     <div class="signature-field-group">
                         <div class="signature-label">Signature</div>
-                        {% if request.status == 'Approved' %}
+                        {% if status|lower == 'approved' %}
                         <img src="{{ company_signature_base64 }}" alt="Signature" class="signature-img">
                         {% else %}
-                        <div class="signature-space"></div>
+                        <div class="signature-space blur-content" style="display: flex; align-items: flex-start; justify-content: flex-start; font-size: 24pt; font-weight: bold; color: #000;">
+                            xxxx
+                        </div>
                         {% endif %}
 
                         
