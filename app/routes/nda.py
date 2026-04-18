@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Request
-from app.models import NDARequestCreate, NDASignatureRequest, NDARegenerateRequest, NDAStatusUpdate
+from app.models import NDARequestCreate, NDASignatureRequest, NDARegenerateRequest, NDAStatusUpdate, NDARequestUpdate
 from app.crud.repository import repository
 from app.helper.response_helper import success_response, error_response
 from datetime import datetime, timedelta
@@ -228,6 +228,50 @@ async def view_nda_form(token: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/update/{token}")
+async def update_nda_details(token: str, update_data: NDARequestUpdate):
+    """
+    Update NDA request details (address, residential_address) by token.
+    Allows the employee to fill in their details after link generation.
+    """
+    try:
+        # Get NDA request
+        nda_request = await repository.get_nda_request_by_token(token)
+        
+        if not nda_request:
+            return error_response(message="NDA request not found", status_code=404)
+        
+        # Update details
+        # Filter out None values to avoid overwriting existing data with nulls
+        update_dict = {k: v for k, v in update_data.dict().items() if v is not None}
+        
+        updated_nda = await repository.update_nda_request(token, update_dict)
+        
+        # Render updated template content
+        current_date = datetime.utcnow()
+        formatted_date = current_date.strftime("%d/%m/%Y")
+        
+        html_content = render_nda_template({
+            "request": updated_nda,
+            "employee_name": updated_nda.get("employee_name"),
+            "role": updated_nda.get("role"),
+            "employee_address": updated_nda.get("address"),
+            "residential_address": updated_nda.get("residential_address"),
+            "date": formatted_date,
+            "token": token
+        })
+        
+        return success_response(
+            message="NDA details updated successfully",
+            data={
+                "html_content": html_content,
+                "nda": updated_nda
+            }
+        )
+    except Exception as e:
+        return error_response(message=str(e), status_code=500)
 
 
 @router.post("/upload/{token}")

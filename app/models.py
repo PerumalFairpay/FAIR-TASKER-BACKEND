@@ -939,8 +939,8 @@ class NDARequestBase(BaseModel):
     email: EmailStr
     mobile: str
     role: str
-    address: str
-    residential_address: str
+    address: Optional[str] = None
+    residential_address: Optional[str] = None
     required_documents: List[str] = []
     status: str = "Pending"
     rejection_reason: Optional[str] = None
@@ -952,6 +952,8 @@ class NDARequestCreate(NDARequestBase):
 
 class NDARequestUpdate(BaseModel):
     status: Optional[str] = None
+    address: Optional[str] = None
+    residential_address: Optional[str] = None
     documents: Optional[List[str]] = None
     signature: Optional[str] = None
     signed_pdf_path: Optional[dict] = None
