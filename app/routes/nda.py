@@ -170,6 +170,7 @@ async def verify_nda_access(token: str, request_body: dict):
             "role": nda_request.get("role"),
             "employee_address": nda_request.get("address"),
             "residential_address": nda_request.get("residential_address"),
+            "mobile": nda_request.get("mobile"),
             "date": formatted_date,
             "token": token
         })
@@ -259,6 +260,7 @@ async def update_nda_details(token: str, update_data: NDARequestUpdate):
             "role": updated_nda.get("role"),
             "employee_address": updated_nda.get("address"),
             "residential_address": updated_nda.get("residential_address"),
+            "mobile": updated_nda.get("mobile"),
             "date": formatted_date,
             "token": token
         })

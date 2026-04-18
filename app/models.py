@@ -954,6 +954,7 @@ class NDARequestUpdate(BaseModel):
     status: Optional[str] = None
     address: Optional[str] = None
     residential_address: Optional[str] = None
+    mobile: Optional[str] = None
     documents: Optional[List[str]] = None
     signature: Optional[str] = None
     signed_pdf_path: Optional[dict] = None
