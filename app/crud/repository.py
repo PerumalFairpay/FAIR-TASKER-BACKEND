@@ -39,11 +39,7 @@ from app.models import (
     EmployeeChecklistTemplateCreate,
     EmployeeChecklistTemplateUpdate,
     BiometricLogItem,
-    SystemConfigurationCreate,
-    SystemConfigurationUpdate,
     NDARequestCreate,
-    NDARequestUpdate,
-    PayslipCreate,
     PayslipComponentCreate,
     PayslipComponentUpdate,
     FeedbackCreate,
@@ -55,6 +51,8 @@ from app.utils import normalize, get_password_hash, get_employee_basic_details
 from bson import ObjectId
 from datetime import datetime, timedelta
 from typing import List, Optional
+import asyncio
+from app.services.vector_store import vector_store_service
 
 
 class Repository:
@@ -264,6 +262,7 @@ class Repository:
                 "email": 1,
                 "status": 1,
                 "biometric_id": 1,
+                "weekly_off": 1,
             }
             employees = await self.employees.find({}, projection).to_list(length=None)
 
@@ -298,59 +297,7 @@ class Repository:
         except Exception:
             return None
 
-    async def get_employee_leave_balances(self, employee_id: str) -> dict:
-        try:
-            employee = await self.get_employee(employee_id)
-            if not employee:
-                return None
-
-            leave_types = await self.leave_types.find().to_list(length=None)
-            query = {
-                "employee_id": employee.get("employee_no_id") or employee.get("id"),
-                "status": {"$in": ["Approved", "Pending"]}
-            }
-            leave_requests = await self.leave_requests.find(query).to_list(length=None)
-
-            balance_summary = {
-                "total_allocated": 0,
-                "used": 0,
-                "available": 0,
-                "pending_approval": 0,
-                "breakdown": []
-            }
-
-            for lt in leave_types:
-                allocated = float(lt.get("days_allowed", 0))
-                type_id = str(lt["_id"])
-                
-                used_count = 0.0
-                pending_count = 0.0
-                
-                for lr in leave_requests:
-                    if str(lr.get("leave_type_id")) == type_id:
-                        days = float(lr.get("total_days", 0))
-                        if lr.get("status") == "Approved":
-                            used_count += days
-                        elif lr.get("status") == "Pending":
-                            pending_count += days
-                
-                balance_summary["breakdown"].append({
-                    "type": lt.get("type_name"),
-                    "allocated": allocated,
-                    "used": used_count,
-                    "pending": pending_count,
-                    "available": max(0, allocated - used_count)
-                })
-
-                balance_summary["total_allocated"] += allocated
-                balance_summary["used"] += used_count
-                balance_summary["pending_approval"] += pending_count
-                balance_summary["available"] += max(0, allocated - used_count)
-
-            return balance_summary
-        except Exception as e:
-            print(f"Error in get_employee_leave_balances: {e}")
-            return {"total_allocated": 0, "used": 0, "available": 0, "pending_approval": 0, "breakdown": []}
+    # Removed unused get_employee_leave_balances (defined again later)
 
     async def get_employee_task_metrics(self, employee_id: str) -> dict:
         try:
@@ -906,13 +853,33 @@ class Repository:
             document_data["created_at"] = datetime.utcnow()
             result = await self.documents.insert_one(document_data)
             document_data["id"] = str(result.inserted_id)
+            
+            # Index document in vector store for AI analysis
+            if file_path:
+                asyncio.create_task(
+                    vector_store_service.index_document(
+                        file_url=file_path,
+                        metadata={
+                            "document_id": document_data["id"],
+                            "name": document_data["name"],
+                            "category_id": document_data.get("document_category_id"),
+                        },
+                        file_type=document_data.get("file_type")
+                    )
+                )
+
             return normalize(document_data)
         except Exception as e:
             raise e
 
-    async def get_documents(self) -> List[dict]:
+    async def get_documents(self, status: str = None, search: str = None) -> List[dict]:
         try:
-            documents = await self.documents.find().to_list(length=None)
+            query = {}
+            if status:
+                query["status"] = status
+            if search:
+                query["name"] = {"$regex": search, "$options": "i"}
+            documents = await self.documents.find(query).to_list(length=None)
             return [normalize(doc) for doc in documents]
         except Exception as e:
             raise e
@@ -937,6 +904,33 @@ class Repository:
                 await self.documents.update_one(
                     {"_id": ObjectId(document_id)}, {"$set": update_data}
                 )
+                
+                # Re-index if file changed
+                if file_path:
+                    # Clean up old vectors first
+                    asyncio.create_task(vector_store_service.delete_document(document_id))
+                    # Index new content
+                    asyncio.create_task(
+                        vector_store_service.index_document(
+                            file_url=file_path,
+                            metadata={
+                                "document_id": document_id,
+                                "name": update_data.get("name") or document.name,
+                                "category_id": update_data.get("document_category_id") or document.document_category_id,
+                            },
+                            file_type=update_data.get("file_type") or document.file_type
+                        )
+                    )
+            return await self.get_document(document_id)
+        except Exception as e:
+            raise e
+
+    async def update_document_status(self, document_id: str, status: str) -> dict:
+        try:
+            await self.documents.update_one(
+                {"_id": ObjectId(document_id)},
+                {"$set": {"status": status, "updated_at": datetime.utcnow()}}
+            )
             return await self.get_document(document_id)
         except Exception as e:
             raise e
@@ -944,6 +938,11 @@ class Repository:
     async def delete_document(self, document_id: str) -> bool:
         try:
             result = await self.documents.delete_one({"_id": ObjectId(document_id)})
+            
+            if result.deleted_count > 0:
+                # Clean up vectors
+                asyncio.create_task(vector_store_service.delete_document(document_id))
+                
             return result.deleted_count > 0
         except Exception as e:
             raise e
@@ -1589,6 +1588,136 @@ class Repository:
                     f"A leave request already exists for the selected dates (Status: {existing_leave.get('status')})"
                 )
 
+            # --- Rule: Casual Leave cannot be combined with other types ---
+            requested_type = await self.leave_types.find_one({"_id": ObjectId(leave_request.leave_type_id)})
+            if not requested_type:
+                raise ValueError("Invalid leave type selected.")
+            requested_code = requested_type.get("code")
+
+            start_dt = datetime.strptime(leave_request.start_date, "%Y-%m-%d")
+            end_dt = datetime.strptime(leave_request.end_date, "%Y-%m-%d")
+            prev_day = (start_dt - timedelta(days=1)).strftime("%Y-%m-%d")
+            next_day = (end_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+
+            adjacent_leaves = await self.leave_requests.find({
+                "employee_id": leave_request.employee_id,
+                "status": {"$in": ["Approved", "Pending"]},
+                "$or": [
+                    {"end_date": prev_day},
+                    {"start_date": next_day}
+                ]
+            }).to_list(length=None)
+
+            for adj in adjacent_leaves:
+                adj_type = await self.leave_types.find_one({"_id": ObjectId(adj.get("leave_type_id"))})
+                adj_code = adj_type.get("code") if adj_type else None
+                
+                # Rule applies if one is CL_SL and the other is a different type (except PER)
+                if adj_code and adj_code != "PER" and requested_code != "PER":
+                    if (requested_code == "CL_SL" and adj_code != "CL_SL") or \
+                       (requested_code != "CL_SL" and adj_code == "CL_SL"):
+                        raise ValueError(
+                            f"Casual Leave (CL) cannot be combined with {adj_type.get('name')}. "
+                            f"Please maintain a working day between these leave types."
+                        )
+            # --- End Rule ---
+
+            # --- Rule: Only one active permission allowed ---
+            if requested_code == "PER":
+                uncompensated_permission = await self.leave_requests.find_one({
+                    "employee_id": leave_request.employee_id,
+                    "leave_type_id": str(requested_type["_id"]),
+                    "status": {"$in": ["Approved", "Pending"]},
+                    "is_compensated": False
+                })
+                
+                if uncompensated_permission:
+                    raise ValueError(
+                        "You already have an active permission that has not been compensated yet. "
+                        "Please compensate your previous permission before applying for a new one."
+                    )
+            # --- End Rule ---
+
+            # --- Leave Balance Validation ---
+            leave_type = requested_type
+            code = requested_code
+            
+            # --- Server-Side Day Recalculation (including Sandwich Rule) ---
+            calculated_days = 0.0
+            
+            if leave_request.leave_duration_type == "Single":
+                calculated_days = 1.0
+            elif leave_request.leave_duration_type == "Half Day":
+                calculated_days = 0.5
+            elif leave_request.leave_duration_type == "Permission":
+                calculated_days = 0.0
+            elif leave_request.leave_duration_type == "Multiple":
+                # Get employee weekly off
+                employee = await self.employees.find_one({"_id": ObjectId(leave_request.employee_id)})
+                weekly_off = employee.get("weekly_off", [6]) if employee else [6]
+                
+                # Get global sandwich rule setting
+                sandwich_setting = await self.system_configurations.find_one({"key": "sandwich_rule"})
+                apply_sandwich_rule = sandwich_setting.get("value", False) if sandwich_setting else False
+                
+                # Get holidays
+                holidays_cursor = await self.holidays.find({"status": "Active"}).to_list(length=None)
+                holiday_dates = [h.get("date") for h in holidays_cursor if h.get("date")]
+                
+                # Iterate day by day
+                import math
+                current_dt = start_dt
+                total = 0.0
+                while current_dt <= end_dt:
+                    is_holiday = current_dt.strftime("%Y-%m-%d") in holiday_dates
+                    is_weekly_off = current_dt.weekday() in weekly_off
+                    
+                    if apply_sandwich_rule:
+                        # With sandwich rule, all days in range are counted
+                        total += 1.0
+                    else:
+                        # Without sandwich rule, skip holidays and off days
+                        if not is_holiday and not is_weekly_off:
+                            total += 1.0
+                    
+                    current_dt += timedelta(days=1)
+                
+                # Adjust for sessions
+                if leave_request.start_session == "Second Half":
+                    total -= 0.5
+                if leave_request.end_session == "First Half":
+                    total -= 0.5
+                
+                calculated_days = max(0.0, total)
+                
+            leave_request_data["total_days"] = calculated_days
+            requested_days = calculated_days
+            # --- End Recalculation ---
+
+            
+            if code != "LOP":
+                balances = await self.get_employee_leave_balances(leave_request.employee_id)
+                balance_info = next((b for b in balances if b["code"] == code), None)
+                
+                if not balance_info:
+                    raise ValueError(f"Eligibility not met for {leave_type.get('name')}.")
+                
+                if code == "PER":
+                    # For Permissions, check if they have at least 1 instance available
+                    if balance_info["available"] < 1:
+                         raise ValueError(
+                            f"Monthly limit for {leave_type.get('name')} reached. "
+                            f"Allowed: {balance_info['monthly_allowed']}, Used: {balance_info['used']}."
+                        )
+                else:
+                    # For other leaves, check day balance
+                    if balance_info["available"] < requested_days:
+                        raise ValueError(
+                            f"Insufficient leave balance. Available: {balance_info['available']} days, "
+                            f"Requested: {requested_days} days. Please select Loss of Pay (LOP) if you wish to proceed."
+                        )
+            # --- End Leave Balance Validation ---
+
             if attachment_path:
                 leave_request_data["attachment"] = attachment_path
 
@@ -1601,37 +1730,110 @@ class Repository:
 
     async def get_employee_leave_balances(self, employee_id: str) -> List[dict]:
         try:
-            leave_types = await self.leave_types.find({"status": "Active"}).to_list(
-                length=None
-            )
+            employee = await self.employees.find_one({"_id": ObjectId(employee_id)})
+            if not employee:
+                return []
+                
+            leave_types = await self.leave_types.find({"status": "Active"}).to_list(length=None)
             current_year = str(datetime.utcnow().year)
+            
+            # Use both Approved and Pending to calculate used balance so employees don't overbook
             requests = await self.leave_requests.find(
                 {
                     "employee_id": employee_id,
-                    "status": "Approved",
+                    "status": {"$in": ["Approved", "Pending"]},
                     "start_date": {"$regex": f"^{current_year}"},
                 }
             ).to_list(length=None)
 
+            # Calculate Tenure
+            doj_str = employee.get("date_of_joining")
+            doj = datetime.utcnow()
+            months_of_service = 12
+            days_of_service = 365
+            if doj_str:
+                try:
+                    doj = datetime.strptime(doj_str[:10], "%Y-%m-%d")
+                    delta = datetime.utcnow() - doj
+                    days_of_service = delta.days
+                    months_of_service = max(0, days_of_service // 30)
+                    
+                    # If joining in current year, calculate prorated months for this year
+                    if doj.year == datetime.utcnow().year:
+                        months_in_current_year = 12 - doj.month + 1
+                    else:
+                        months_in_current_year = 12
+                except:
+                    months_in_current_year = 12
+            else:
+                months_in_current_year = 12
+
             balances = []
             for lt in leave_types:
                 lt_id = str(lt["_id"])
-                used = sum(
-                    [
+                
+                code = lt.get("code")
+                base_allowed = lt.get("number_of_days", 0)
+                
+                if code == "PER":
+                    # Count instances, not days, for Permissions. Track monthly total.
+                    used = sum([
+                        1 for r in requests
+                        if r.get("leave_type_id") == lt_id and r.get("start_date", "").startswith(f"{datetime.utcnow().year}-{datetime.utcnow().month:02d}")
+                    ])
+                    # Total allowed is monthly allowed (usually 2)
+                    total_allowed = lt.get("monthly_allowed", 2)
+                    monthly_cap_remaining = total_allowed - used
+                else:
+                    used = sum([
                         float(r.get("total_days", 0))
                         for r in requests
                         if r.get("leave_type_id") == lt_id
-                    ]
-                )
-                total_allowed = lt.get("number_of_days", 0)
+                    ])
+                    total_allowed = base_allowed
+                    
+                    # Handle monthly cap if specified
+                    monthly_allowed = lt.get("monthly_allowed", 0)
+                    if monthly_allowed > 0:
+                        monthly_used = sum([
+                            float(r.get("total_days", 0))
+                            for r in requests
+                            if r.get("leave_type_id") == lt_id and r.get("start_date", "").startswith(f"{datetime.utcnow().year}-{datetime.utcnow().month:02d}")
+                        ])
+                        monthly_cap_remaining = monthly_allowed - monthly_used
+                    else:
+                        monthly_cap_remaining = 999 # No monthly cap
+                
+                # Apply rules based on leave type code
+                code = lt.get("code")
+                probation_months = lt.get("probation_period_months", 0)
+                min_service_days = lt.get("min_service_days", 0)
+                
+                if probation_months > 0 and months_of_service < probation_months:
+                    total_allowed = 0
+                elif min_service_days > 0 and days_of_service < min_service_days:
+                    total_allowed = 0
+                elif code == "EL" and total_allowed > 0:
+                    # 0.5 days per month of service max 6
+                    total_allowed = min(6, months_in_current_year * 0.5)
+                elif code == "CL_SL" and total_allowed > 0:
+                    # Prorated based on service months in current year (1 day/month)
+                    total_allowed = min(12, months_in_current_year * 1)
+                
+                # Final available is yearly remaining but capped by monthly remaining
+                available = max(0, total_allowed - used)
+                if code != "PER": # PER total_allowed is already the monthly cap
+                    available = max(0, min(available, monthly_cap_remaining))
+
                 balances.append(
                     {
                         "leave_type": lt.get("name"),
-                        "code": lt.get("code"),
+                        "code": code,
                         "total_allowed": total_allowed,
                         "used": used,
-                        "available": max(0, total_allowed - used),
+                        "available": available,
                         "allowed_hours": lt.get("allowed_hours", 0),
+                        "monthly_allowed": lt.get("monthly_allowed", 0),
                     }
                 )
             return balances
@@ -1713,6 +1915,62 @@ class Repository:
             }
             if attachment_path:
                 update_data["attachment"] = attachment_path
+                
+            # --- Server-Side Day Recalculation (including Sandwich Rule) ---
+            if "start_date" in update_data and "end_date" in update_data and "leave_duration_type" in update_data:
+                calculated_days = 0.0
+                dur_type = update_data["leave_duration_type"]
+                
+                if dur_type == "Single":
+                    calculated_days = 1.0
+                elif dur_type == "Half Day":
+                    calculated_days = 0.5
+                elif dur_type == "Permission":
+                    calculated_days = 0.0
+                elif dur_type == "Multiple":
+                    start_dt = datetime.strptime(update_data["start_date"], "%Y-%m-%d")
+                    end_dt = datetime.strptime(update_data["end_date"], "%Y-%m-%d")
+                    
+                    # Need employee_id to get weekly_off
+                    emp_id = update_data.get("employee_id") or old_req.get("employee_id")
+                    
+                    employee = await self.employees.find_one({"_id": ObjectId(emp_id)})
+                    weekly_off = employee.get("weekly_off", [6]) if employee else [6]
+                    
+                    # Get global sandwich rule setting
+                    sandwich_setting = await self.system_configurations.find_one({"key": "sandwich_rule"})
+                    apply_sandwich_rule = sandwich_setting.get("value", False) if sandwich_setting else False
+                    
+                    # Get holidays
+                    holidays_cursor = await self.holidays.find({"status": "Active"}).to_list(length=None)
+                    holiday_dates = [h.get("date") for h in holidays_cursor if h.get("date")]
+                    
+                    current_dt = start_dt
+                    total = 0.0
+                    while current_dt <= end_dt:
+                        is_holiday = current_dt.strftime("%Y-%m-%d") in holiday_dates
+                        is_weekly_off = current_dt.weekday() in weekly_off
+                        
+                        if apply_sandwich_rule:
+                            total += 1.0
+                        else:
+                            if not is_holiday and not is_weekly_off:
+                                total += 1.0
+                        
+                        current_dt += timedelta(days=1)
+                    
+                    start_sess = update_data.get("start_session") or old_req.get("start_session")
+                    end_sess = update_data.get("end_session") or old_req.get("end_session")
+                    
+                    if start_sess == "Second Half":
+                        total -= 0.5
+                    if end_sess == "First Half":
+                        total -= 0.5
+                    
+                    calculated_days = max(0.0, total)
+                    
+                update_data["total_days"] = calculated_days
+            # --- End Recalculation ---
 
             if update_data:
                 update_data["updated_at"] = datetime.utcnow()
@@ -2453,6 +2711,7 @@ class Repository:
                             "$set": {
                                 "clock_in":    attendance_data["clock_in"],
                                 "device_type": attendance_data["device_type"],
+                                "location":    attendance_data.get("location"),
                                 "is_late":     is_late,
                                 "notes":       f"Employee clocked in while on Full Day Leave – leave balance remains deducted",
                                 "updated_at":  datetime.utcnow(),
@@ -2467,6 +2726,7 @@ class Repository:
                             "$set": {
                                 "clock_in":          attendance_data["clock_in"],
                                 "device_type":       attendance_data["device_type"],
+                                "location":          attendance_data.get("location"),
                                 "status":            status,
                                 "attendance_status": attendance_status,
                                 "is_late":           is_late,
@@ -2527,6 +2787,10 @@ class Repository:
                 raise ValueError("No clock-in record found for this date")
 
             update_data = {k: v for k, v in attendance.dict().items() if v is not None}
+
+            # If location is provided during clock out, merge it or overwrite
+            if attendance.location:
+                update_data["location"] = attendance.location
 
             # Calculate work hours logic could be added here or in frontend.
             # Simple duration calc if formats allow.
@@ -3235,6 +3499,21 @@ class Repository:
         except Exception as e:
             raise e
 
+    async def update_nda_status_by_id(self, nda_id: str, status: str, rejection_reason: Optional[str] = None) -> dict:
+        try:
+            update_data = {
+                "status": status,
+                "rejection_reason": rejection_reason,
+                "updated_at": datetime.utcnow()
+            }
+            await self.nda_requests.update_one(
+                {"_id": ObjectId(nda_id)}, {"$set": update_data}
+            )
+            updated_doc = await self.nda_requests.find_one({"_id": ObjectId(nda_id)})
+            return normalize(updated_doc)
+        except Exception as e:
+            raise e
+
     async def update_nda_request(self, token: str, update_data: dict) -> dict:
         try:
             if update_data:
@@ -3252,7 +3531,10 @@ class Repository:
                 "token": new_token,
                 "expires_at": expires_at,
                 "status": "Pending", 
-                "updated_at": datetime.utcnow()
+                "updated_at": datetime.utcnow(),
+                "documents": [],
+                "signature": None,
+                "signed_pdf_path": None
             }
             
             await self.nda_requests.update_one(

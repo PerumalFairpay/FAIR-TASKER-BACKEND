@@ -59,6 +59,11 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
         holiday = await repo.holidays.find_one({"date": target_date})
         holiday_name = holiday.get("name") if holiday else None
         
+        # Get Global Sandwich Rule Setting
+        sandwich_setting = await repo.system_configurations.find_one({"key": "sandwich_rule"})
+        apply_sandwich_rule = sandwich_setting.get("value", False) if sandwich_setting else False
+
+        
         # Fetch all approved leaves that overlap with this date
         approved_leaves = await repo.leave_requests.find({
             "status": "Approved",
@@ -92,10 +97,10 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
             }
 
         
-        # Parse date to check if it's a weekend
+        # Parse date once (used inside loop for per-employee weekly_off check)
         dt_parsed = datetime.strptime(target_date, "%Y-%m-%d")
-        is_sunday = dt_parsed.weekday() == 6
-        
+        day_of_week = dt_parsed.weekday()  # 0=Mon, …, 6=Sun
+
         records_created = 0
         records_to_insert = []
         
@@ -135,18 +140,41 @@ async def generate_attendance_for_date(target_date: str = None, preplanned_only:
             attendance_status  = None
             is_half_day        = False
             
+            # --- PER-EMPLOYEE WEEKLY OFF CHECK ---
+            # Each employee can have a custom weekly_off list (e.g., [5] = Saturday, [6] = Sunday)
+            # Defaults to [6] (Sunday) to preserve backward-compatibility.
+            emp_weekly_off = emp.get("weekly_off", [6])
+            is_weekly_off = day_of_week in emp_weekly_off
+            # --- END WEEKLY OFF CHECK ---
+
             leave_info = leave_map.get(emp_mongo_id) or leave_map.get(emp_no_id)
 
-            if holiday_name:
-                # Company-wide holiday
-                status           = "Holiday"
-                attendance_status = "Holiday"
-                notes            = holiday_name
-            elif is_sunday:
-                # Sunday (weekend)
-                status           = "Holiday"
-                attendance_status = "Holiday"
-                notes            = "Sunday"
+            if holiday_name or is_weekly_off:
+                # First check sandwich rule if applicable
+                sandwiched = False
+                if apply_sandwich_rule and leave_info:
+                    # leave_info exists means there's an approved leave overlapping this date
+                    # So this off-day is sandwiched
+                    sandwiched = True
+
+                if sandwiched:
+                    status           = "Leave"
+                    attendance_status = leave_info.get("leave_type_code") or "Leave"
+                    leave_type_code  = leave_info.get("leave_type_code")
+                    notes            = f"Leave (Sandwich Rule)"
+                    is_half_day      = False # Usually sandwich rule gives a full day leave
+                elif holiday_name:
+                    # Company-wide holiday
+                    status           = "Holiday"
+                    attendance_status = "Holiday"
+                    notes            = holiday_name
+                else:
+                    # Employee's personal weekly off day
+                    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                    off_day_name = day_names[day_of_week] if 0 <= day_of_week <= 6 else "Weekly Off"
+                    status           = "Holiday"
+                    attendance_status = "Holiday"
+                    notes            = off_day_name
             elif leave_info:
                 # Employee on approved leave
                 duration_type = leave_info.get("leave_duration_type", "Single")
@@ -259,4 +287,149 @@ async def generate_night_shift_attendance_records():
         return await generate_attendance_for_date(yesterday_str, preplanned_only=False, shift_type_filter="Night")
     except Exception as e:
         logger.error(f"Daily Night Shift job failed: {str(e)}")
+        return {"success": False, "message": str(e)}
+
+async def process_uncompensated_permissions():
+    """
+    Job to convert Approved, Uncompensated "Permission" records to Half-Day LOP.
+    This should typically run at the end of the month or beginning of the next month.
+    """
+    try:
+        logger.info("Starting uncompensated permissions processing.")
+        
+        # Find all Approved Permission requests that are not compensated
+        uncompensated_permissions = await repo.leave_requests.find({
+            "status": "Approved",
+            "leave_duration_type": "Permission",
+            "is_compensated": {"$ne": True},
+            "start_date": {"$lt": datetime.utcnow().strftime("%Y-%m-%d")} # Process past permissions
+        }).to_list(length=None)
+        
+        lop_type = await repo.leave_types.find_one({"code": "LOP"})
+        if not lop_type:
+            logger.error("LOP leave type not found. Cannot convert permissions.")
+            return {"success": False, "message": "LOP leave type not found"}
+            
+        lop_type_id = str(lop_type["_id"])
+        converted_count = 0
+        
+        for perm in uncompensated_permissions:
+            perm_id = perm["_id"]
+            emp_id = perm.get("employee_id")
+            date = perm.get("start_date")
+            
+            update_data = {
+                "leave_type_id": lop_type_id,
+                "leave_duration_type": "Half Day",
+                "half_day_session": "First Half",
+                "total_days": 0.5,
+                "reason": perm.get("reason", "") + " (Converted from uncompensated permission)",
+                "is_compensated": True
+            }
+            
+            await repo.leave_requests.update_one(
+                {"_id": perm_id},
+                {"$set": update_data}
+            )
+            
+            emp = await repo.employees.find_one({"_id": ObjectId(emp_id)})
+            if emp:
+                await repo.attendance.update_one(
+                    {"employee_id": str(emp.get("_id")), "date": date},
+                    {"$set": {
+                        "attendance_status": "Half Day",
+                        "is_half_day": True,
+                        "leave_type_code": "LOP",
+                        "notes": "Uncompensated permission converted to Half-Day LOP",
+                        "updated_at": datetime.utcnow()
+                    }}
+                )
+            converted_count += 1
+            
+        logger.info(f"Successfully converted {converted_count} uncompensated permissions to Half-Day LOP.")
+        return {"success": True, "converted_count": converted_count}
+    except Exception as e:
+        logger.error(f"Error processing uncompensated permissions: {str(e)}")
+        return {"success": False, "message": str(e)}
+
+async def process_unauthorized_absences():
+    """
+    Daily job to check for 2 consecutive days of unauthorized absence and mark them as LOP.
+    """
+    try:
+        ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
+        yesterday_dt = ist_now - timedelta(days=1)
+        day_before_dt = ist_now - timedelta(days=2)
+        
+        yesterday_str = yesterday_dt.strftime("%Y-%m-%d")
+        day_before_str = day_before_dt.strftime("%Y-%m-%d")
+        
+        logger.info(f"Evaluating unauthorized absences for {day_before_str} and {yesterday_str}")
+        
+        # Find employees who were absent yesterday
+        yesterday_absences = await repo.attendance.find({
+            "date": yesterday_str,
+            "status": "Absent"
+        }).to_list(length=None)
+        
+        if not yesterday_absences:
+            logger.info(f"No unauthorized absences found for {yesterday_str}")
+            return {"success": True, "message": "No absences found yesterday"}
+            
+        lop_type = await repo.leave_types.find_one({"code": "LOP"})
+        if not lop_type:
+            logger.error("LOP leave type not found.")
+            return {"success": False, "message": "LOP leave type not found"}
+            
+        converted_count = 0
+        
+        for absence in yesterday_absences:
+            emp_id = absence.get("employee_id")
+            
+            # Find the MOST RECENT record before yesterday that is NOT a Holiday
+            # This identifies the "Previous Working Day"
+            prev_record = await repo.attendance.find_one({
+                "employee_id": emp_id,
+                "date": {"$lt": yesterday_str},
+                "status": {"$ne": "Holiday"}
+            }, sort=[("date", -1)])
+            
+            # If the previous working day was also an unauthorized absence (Absent or auto-converted LOP)
+            if prev_record and (
+                prev_record.get("status") == "Absent" or 
+                (prev_record.get("status") == "Leave" and prev_record.get("attendance_status") == "LOP")
+            ):
+                # Mark YESTERDAY as LOP
+                await repo.attendance.update_one(
+                    {"_id": absence["_id"]},
+                    {"$set": {
+                        "status": "Leave",
+                        "attendance_status": "LOP",
+                        "leave_type_code": "LOP",
+                        "notes": "Auto-converted to LOP due to consecutive unauthorized absence (2+ working days)",
+                        "updated_at": datetime.utcnow()
+                    }}
+                )
+                
+                # If the PREVIOUS record was still marked as "Absent", update it to "LOP" too
+                # (This happens the first time we identify a 2-day consecutive block)
+                if prev_record.get("status") == "Absent":
+                    await repo.attendance.update_one(
+                        {"_id": prev_record["_id"]},
+                        {"$set": {
+                            "status": "Leave",
+                            "attendance_status": "LOP",
+                            "leave_type_code": "LOP",
+                            "notes": "Auto-converted to LOP due to consecutive unauthorized absence (2+ working days)",
+                            "updated_at": datetime.utcnow()
+                        }}
+                    )
+                
+                converted_count += 1
+                
+        logger.info(f"Processed {len(yesterday_absences)} absences. Converted {converted_count} instances to LOP for consecutive absences.")
+        return {"success": True, "converted_count": converted_count}
+        
+    except Exception as e:
+        logger.error(f"Error processing unauthorized absences: {str(e)}")
         return {"success": False, "message": str(e)}

@@ -35,6 +35,7 @@ from app.routes import (
     feedback,
     shifts,
     milestone_roadmap,
+    ai,
 )
 
 from app.jobs.scheduler import init_scheduler, shutdown_scheduler
@@ -84,13 +85,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-        "https://hrm.fairpaytechworks.com",
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -128,6 +123,7 @@ api_router.include_router(payslip_component.router)
 api_router.include_router(feedback.router)
 api_router.include_router(shifts.router)
 api_router.include_router(milestone_roadmap.router)
+api_router.include_router(ai.router)
 
 
 app.include_router(api_router)
@@ -171,4 +167,4 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to Fair Tasker Backend"}
+    return {"message": "Welcome to FairPay Backend"}

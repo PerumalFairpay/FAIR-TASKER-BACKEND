@@ -144,6 +144,7 @@ async def update_leave_request(
     end_session: Optional[str] = Form(None),
     start_time: Optional[str] = Form(None),
     end_time: Optional[str] = Form(None),
+    is_compensated: Optional[bool] = Form(None),
     attachment: Optional[UploadFile] = File(None)
 ):
     try:
@@ -167,6 +168,7 @@ async def update_leave_request(
             end_session=end_session,
             start_time=start_time,
             end_time=end_time,
+            is_compensated=is_compensated,
             attachment=attachment_path,
             file_type=file_type
         )

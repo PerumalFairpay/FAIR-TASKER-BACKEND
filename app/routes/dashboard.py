@@ -390,31 +390,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                     "count": len(low_att_emps), "action_required": False, "link": "/attendance"
                 })
 
-            # 6. Recent Activities
-            recent_activities = []
-            # Recent Employee Joins
-            for e in sorted(employees, key=lambda x: x.get("created_at") or "", reverse=True)[:3]:
-                recent_activities.append({
-                    "type": "employee_joined", "icon": "user-plus",
-                    "message": f"{e.get('name')} joined as {e.get('designation')}",
-                    "timestamp": e.get("created_at"), "priority": "low"
-                })
-            # Recent Project Creations
-            for p in sorted(projects, key=lambda x: x.get("created_at") or "", reverse=True)[:3]:
-                recent_activities.append({
-                    "type": "project_created", "icon": "folder",
-                    "message": f"New project '{p.get('name')}' created",
-                    "timestamp": p.get("created_at"), "priority": "high"
-                })
-            # Recent Leave Requests
-            for l in sorted(leave_requests, key=lambda x: x.get("created_at") or "", reverse=True)[:3]:
-                msg = f"{(l.get('employee_details') or {}).get('name')} requested {(l.get('leave_type_details') or {}).get('name')}"
-                recent_activities.append({
-                    "type": "leave_request", "icon": "calendar",
-                    "message": msg, "timestamp": l.get("created_at"), "priority": "medium"
-                })
-            
-            recent_activities = sorted(recent_activities, key=lambda x: str(x["timestamp"]), reverse=True)[:10]
+
 
             # 7. Upcoming Events
             # Holidays
@@ -477,7 +453,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                 "project_analytics": project_analytics,
                 "task_analytics": task_analytics,
                 "alerts": alerts,
-                "recent_activities": recent_activities,
+
                 "upcoming_events": upcoming_events
             }
             
@@ -609,14 +585,15 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
 
             # Loop through every day of month until today
             total_working_days_elapsed = 0
-            
+            emp_weekly_off = emp_doc.get("weekly_off", [6])  # 0=Mon…6=Sun, default Sunday
+
             for single_date in daterange(start_date_obj, current_date_obj):
                 d_str = single_date.strftime("%Y-%m-%d")
-                is_sunday = single_date.weekday() == 6
+                is_weekly_off = single_date.weekday() in emp_weekly_off
                 is_holiday = d_str in month_holidays
-                
-                # Check metrics if it's a working day (Include Saturdays, Exclude Sundays/Holidays)
-                if not is_sunday and not is_holiday:
+
+                # Check metrics if it's a working day (exclude employee's weekly-off days and company holidays)
+                if not is_weekly_off and not is_holiday:
                     
                     att_record = att_map.get(d_str)
                     is_leave = leave_date_map.get(d_str) == "Leave"
@@ -785,28 +762,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                         "deadline": p.get("end_date")
                     })
 
-            # 7. Recent Activity (Mashup)
-            recent_activity = []
-            # Add tasks
-            for t in sorted_tasks[:3]:
-                msg = f"Task '{t.get('task_name')}' is {t.get('status')}"
-                if t.get("status") == "Completed": msg = f"You completed task '{t.get('task_name')}'"
-                recent_activity.append({
-                    "type": "task",
-                    "message": msg,
-                    "time": t.get("updated_at") or t.get("created_at")
-                })
-            # Add leaves
-            for l in sorted_leaves[:3]:
-                recent_activity.append({
-                    "type": "leave",
-                    "message": f"Leave request {l.get('status')}",
-                    "time": l.get("updated_at") or l.get("created_at")
-                })
-            
-            # Sort combined
-            recent_activity.sort(key=lambda x: str(x.get("time")), reverse=True)
-            recent_activity = recent_activity[:5]
+
 
             # 8. Birthdays
             all_employees, _ = await repo.get_employees(limit=1000)
@@ -850,7 +806,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                 "projects": my_projects,
                 "task_metrics": task_metric_counts,
                 "recent_tasks": recent_tasks_list,
-                "recent_activity": recent_activity,
+
                 "upcoming_holidays": upcoming_holidays,
                 "birthdays": birthdays
             }

@@ -20,7 +20,7 @@ settings_data = [
     {
         "key": "company_name",
         "label": "Company Name",
-        "value": "Fair Tasker",
+        "value": "FairPay",
         "input_type": "text",
         "group": "General",
         "is_public": True,
@@ -66,6 +66,14 @@ settings_data = [
         "options": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
         "group": "Attendance",
         "is_public": False,
+    },
+    {
+        "key": "sandwich_rule",
+        "label": "Apply Sandwich Rule",
+        "value": False,
+        "input_type": "boolean",
+        "group": "Leave Management",
+        "is_public": True,
     },
 ]
 

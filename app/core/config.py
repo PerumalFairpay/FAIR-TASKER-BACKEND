@@ -43,6 +43,13 @@ AWS_USE_PATH = os.getenv("AWS_USE_PATH", "dev-uploads")
 API_URL = os.getenv("API_URL")
 
 # ====================================================
+# Qdrant Environment Variables
+# ====================================================
+QDRANT_URL = os.getenv("QDRANT_URL")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+QDRANT_COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "documents")
+
+# ====================================================
 # Google Environment Variables
 # ====================================================
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")

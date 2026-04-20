@@ -1,21 +1,18 @@
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
-from app.models import NDARequestCreate, NDARequestUpdate, NDARequestResponse, NDASignatureRequest, NDARegenerateRequest
+from app.models import NDARequestCreate, NDASignatureRequest, NDARegenerateRequest, NDAStatusUpdate, NDARequestUpdate
 from app.crud.repository import repository
 from app.helper.response_helper import success_response, error_response
 from datetime import datetime, timedelta
 import uuid
-import os
 from typing import List
 from fastapi import UploadFile, File, Form
 from app.helper.file_handler import file_handler
+from app.helper.template_helper import render_nda_template
+from weasyprint import HTML
+from io import BytesIO
+from fastapi.responses import Response
 
 router = APIRouter(prefix="/nda", tags=["NDA"])
-
-# Setup Jinja2 templates
-templates_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
-templates = Jinja2Templates(directory=templates_dir)
 
 
 @router.post("/generate")
@@ -163,17 +160,17 @@ async def verify_nda_access(token: str, request_body: dict):
         if not stored_email or stored_email.lower().strip() != email.lower().strip():
              raise HTTPException(status_code=403, detail="Invalid Email Address")
 
-        # Render template content as string (Full Access)
+        # Render template content using helper (Full Access)
         current_date = datetime.utcnow()
         formatted_date = current_date.strftime("%d/%m/%Y")
         
-        template = templates.get_template("nda_form.html")
-        html_content = template.render({
-            "request": nda_request, # Pass full object if needed
+        html_content = render_nda_template({
+            "request": nda_request,
             "employee_name": nda_request.get("employee_name"),
             "role": nda_request.get("role"),
             "employee_address": nda_request.get("address"),
             "residential_address": nda_request.get("residential_address"),
+            "mobile": nda_request.get("mobile"),
             "date": formatted_date,
             "token": token
         })
@@ -232,6 +229,51 @@ async def view_nda_form(token: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/update/{token}")
+async def update_nda_details(token: str, update_data: NDARequestUpdate):
+    """
+    Update NDA request details (address, residential_address) by token.
+    Allows the employee to fill in their details after link generation.
+    """
+    try:
+        # Get NDA request
+        nda_request = await repository.get_nda_request_by_token(token)
+        
+        if not nda_request:
+            return error_response(message="NDA request not found", status_code=404)
+        
+        # Update details
+        # Filter out None values to avoid overwriting existing data with nulls
+        update_dict = {k: v for k, v in update_data.dict().items() if v is not None}
+        
+        updated_nda = await repository.update_nda_request(token, update_dict)
+        
+        # Render updated template content
+        current_date = datetime.utcnow()
+        formatted_date = current_date.strftime("%d/%m/%Y")
+        
+        html_content = render_nda_template({
+            "request": updated_nda,
+            "employee_name": updated_nda.get("employee_name"),
+            "role": updated_nda.get("role"),
+            "employee_address": updated_nda.get("address"),
+            "residential_address": updated_nda.get("residential_address"),
+            "mobile": updated_nda.get("mobile"),
+            "date": formatted_date,
+            "token": token
+        })
+        
+        return success_response(
+            message="NDA details updated successfully",
+            data={
+                "html_content": html_content,
+                "nda": updated_nda
+            }
+        )
+    except Exception as e:
+        return error_response(message=str(e), status_code=500)
 
 
 @router.post("/upload/{token}")
@@ -360,9 +402,7 @@ async def sign_nda(token: str, request_body: NDASignatureRequest, request: Reque
     except Exception as e:
         return error_response(message=str(e), status_code=500)
 
-from weasyprint import HTML
-from io import BytesIO
-from fastapi.responses import Response
+
 
 
 def generate_pdf_from_request(nda_request: dict) -> bytes:
@@ -381,9 +421,8 @@ def generate_pdf_from_request(nda_request: dict) -> bytes:
     elif not isinstance(created_at, datetime):
         created_at = datetime.now()
 
-    # Render HTML
-    template = templates.get_template("nda_form.html")
-    html_content = template.render({
+    # Render HTML using centralized helper
+    html_content = render_nda_template({
         "request": nda_request, 
         "employee_name": nda_request.get("employee_name", "_________________"),
         "employee_address": nda_request.get("address", "_________________"),
@@ -422,3 +461,64 @@ async def download_nda_pdf(token: str):
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=NDA_{request.get('employee_name', 'Signed')}.pdf"}
     )
+
+
+@router.patch("/{nda_id}/status")
+async def update_nda_status(nda_id: str, status_update: NDAStatusUpdate):
+    """
+    Admin endpoint to approve or reject an NDA.
+    If rejected, it automatically regenerates a fresh token for the employee,
+    requiring them to re-upload documents and re-sign.
+    """
+    try:
+        if status_update.status not in ["Approved", "Rejected"]:
+            return error_response(message="Status must be Approved or Rejected", status_code=400)
+            
+        # Update status
+        updated_nda = await repository.update_nda_status_by_id(
+            nda_id=nda_id,
+            status=status_update.status,
+            rejection_reason=status_update.rejection_reason if status_update.status == "Rejected" else None
+        )
+        
+        if not updated_nda:
+            return error_response(message="NDA request not found", status_code=404)
+        
+        # If rejected, automatically provide a fresh start URL
+        if status_update.status == "Rejected":
+            new_token = str(uuid.uuid4())
+            # Usually regenerates with 1 hour expiry
+            expires_at = datetime.utcnow() + timedelta(hours=1)
+            updated_nda = await repository.regenerate_nda_token(nda_id, new_token, expires_at)
+        
+        # If approved, regenerate and re-upload the PDF to remove watermarks and add signs
+        elif status_update.status == "Approved":
+            # Generate new PDF with the updated status
+            pdf_bytes = generate_pdf_from_request(updated_nda)
+            
+            # Re-upload PDF
+            employee_name = updated_nda.get("employee_name", "Employee")
+            token = updated_nda.get("token", str(uuid.uuid4()))
+            filename = f"NDA_{employee_name.replace(' ', '_')}_{token[:8]}.pdf"
+            
+            upload_result = await file_handler.upload_bytes(
+                file_data=pdf_bytes,
+                filename=filename,
+                content_type="application/pdf"
+            )
+            
+            # Update background check/NDA record with new PDF path
+            updated_nda = await repository.update_nda_request(token, {
+                "signed_pdf_path": {
+                    "document_name": filename,
+                    "document_proof": upload_result["url"],
+                    "file_type": "application/pdf"
+                }
+            })
+            
+        return success_response(
+            message=f"NDA status updated to {status_update.status}",
+            data=updated_nda
+        )
+    except Exception as e:
+        return error_response(message=str(e), status_code=500)

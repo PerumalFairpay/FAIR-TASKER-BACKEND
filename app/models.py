@@ -205,6 +205,7 @@ class EmployeeBase(BaseModel):
     confirmation_date: Optional[str] = None
     notice_period: Optional[str] = None
     work_mode: Optional[str] = "Office"
+    weekly_off: List[int] = [6]  # 0=Mon, 1=Tue, ..., 6=Sun. Default: Sunday
     documents: List[EmployeeDocument] = []
     onboarding_checklist: List[ChecklistItem] = []
     offboarding_checklist: List[ChecklistItem] = []
@@ -251,6 +252,7 @@ class EmployeeUpdate(BaseModel):
     confirmation_date: Optional[str] = None
     notice_period: Optional[str] = None
     work_mode: Optional[str] = None
+    weekly_off: Optional[List[int]] = None  # 0=Mon, 1=Tue, ..., 6=Sun
     documents: Optional[List[EmployeeDocument]] = None
     onboarding_checklist: Optional[List[ChecklistItem]] = None
     offboarding_checklist: Optional[List[ChecklistItem]] = None
@@ -380,6 +382,10 @@ class DocumentUpdate(BaseModel):
     status: Optional[str] = None
     file_path: Optional[str] = None
     file_type: Optional[str] = None
+
+
+class DocumentStatusUpdate(BaseModel):
+    status: str
 
 
 class DocumentResponse(DocumentBase):
@@ -622,6 +628,10 @@ class LeaveTypeBase(BaseModel):
     number_of_days: int
     monthly_allowed: int
     allowed_hours: Optional[float] = 0.0
+    can_carry_forward: bool = False
+    can_encash: bool = False
+    probation_period_months: int = 0
+    min_service_days: int = 0
 
 
 class LeaveTypeCreate(LeaveTypeBase):
@@ -636,6 +646,10 @@ class LeaveTypeUpdate(BaseModel):
     number_of_days: Optional[int] = None
     monthly_allowed: Optional[int] = None
     allowed_hours: Optional[float] = None
+    can_carry_forward: Optional[bool] = None
+    can_encash: Optional[bool] = None
+    probation_period_months: Optional[int] = None
+    min_service_days: Optional[int] = None
 
 
 class LeaveTypeResponse(LeaveTypeBase):
@@ -664,6 +678,7 @@ class LeaveRequestBase(BaseModel):
     file_type: Optional[str] = None
     status: str = "Pending"
     rejection_reason: Optional[str] = None
+    is_compensated: bool = False
 
 
 class LeaveRequestCreate(LeaveRequestBase):
@@ -687,6 +702,7 @@ class LeaveRequestUpdate(BaseModel):
     file_type: Optional[str] = None
     status: Optional[str] = None
     rejection_reason: Optional[str] = None
+    is_compensated: Optional[bool] = None
 
 
 class LeaveRequestStatusUpdate(BaseModel):
@@ -808,6 +824,8 @@ class AttendanceBase(BaseModel):
     notes: Optional[str] = None
     ip_address: Optional[str] = None
     location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class AttendanceCreate(BaseModel):
@@ -818,6 +836,8 @@ class AttendanceCreate(BaseModel):
     device_type: str = "Web"  # Default to Web if not specified
     ip_address: Optional[str] = None
     location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     notes: Optional[str] = None
 
 
@@ -830,6 +850,9 @@ class AttendanceUpdate(BaseModel):
     device_type: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[str] = None
+    location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class AttendanceAdminEdit(BaseModel):
@@ -916,9 +939,11 @@ class NDARequestBase(BaseModel):
     email: EmailStr
     mobile: str
     role: str
-    address: str
-    residential_address: str
+    address: Optional[str] = None
+    residential_address: Optional[str] = None
     required_documents: List[str] = []
+    status: str = "Pending"
+    rejection_reason: Optional[str] = None
 
 
 class NDARequestCreate(NDARequestBase):
@@ -927,6 +952,9 @@ class NDARequestCreate(NDARequestBase):
 
 class NDARequestUpdate(BaseModel):
     status: Optional[str] = None
+    address: Optional[str] = None
+    residential_address: Optional[str] = None
+    mobile: Optional[str] = None
     documents: Optional[List[str]] = None
     signature: Optional[str] = None
     signed_pdf_path: Optional[dict] = None
@@ -935,6 +963,12 @@ class NDARequestUpdate(BaseModel):
     device_type: Optional[str] = None
     user_agent: Optional[str] = None
     ip_address: Optional[str] = None
+    rejection_reason: Optional[str] = None
+
+
+class NDAStatusUpdate(BaseModel):
+    status: str
+    rejection_reason: Optional[str] = None
 
 
 class NDARequestResponse(NDARequestBase):
