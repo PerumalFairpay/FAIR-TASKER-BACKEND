@@ -10,6 +10,7 @@ import os
 from bson import ObjectId
 from langchain_core.tools import tool
 from app.crud.repository import repository as repo
+from app.services.vector_store import vector_store_service
 
 async def get_tools_for_user(user: dict):
     """Returns tools based on user roles and data access permissions."""
@@ -143,11 +144,13 @@ async def get_tools_for_user(user: dict):
             shifts = await repo.get_shifts()
             departments = await repo.get_departments()
             leave_types = await repo.get_leave_types()
+            doc_categories = await repo.get_document_categories()
             
             return {
                 "shifts": [{"id": s["id"], "name": s["name"], "time": f"{s['start_time']}-{s['end_time']}"} for s in shifts],
                 "departments": [{"id": d["id"], "name": d["name"]} for d in departments],
-                "leave_types": [{"id": lt["id"], "name": lt["name"], "days": lt["number_of_days"]} for lt in leave_types]
+                "leave_types": [{"id": lt["id"], "name": lt["name"], "days": lt["number_of_days"]} for lt in leave_types],
+                "document_categories": [{"id": dc["id"], "name": dc["name"]} for dc in doc_categories]
             }
         except Exception as e:
             return f"Error fetching organization metadata: {str(e)}"
@@ -170,8 +173,47 @@ async def get_tools_for_user(user: dict):
         except Exception as e:
             return f"Error listing leave requests: {str(e)}"
 
+    @tool
+    async def list_documents(
+        search: Optional[str] = None,
+        status: Optional[str] = "Active"
+    ):
+        """
+        Retrieves a list of company documents (Policies, Agreements, Manuals, etc.).
+        Use this to see what documents are available and their metadata like expiry dates.
+        'search': filter by document name.
+        'status': filter by status (Active, Archived, etc.). Use 'All' for everything.
+        """
+        try:
+            return await repo.get_documents(status=status, search=search)
+        except Exception as e:
+            return f"Error listing documents: {str(e)}"
+
+    @tool
+    async def search_document_content(
+        query: str,
+        category_id: Optional[str] = None,
+        limit: int = 5
+    ):
+        """
+        Searches INSIDE the actual text content of company documents for answers to questions.
+        Use this for questions about company policies, rules, procedures, or specifics inside PDFs/Docs.
+        'query': the natural language question or search terms to find inside the documents.
+        'category_id': optional filter to search only within a specific document category.
+        """
+        try:
+            filter_dict = {"category_id": category_id} if category_id else None
+            results = await vector_store_service.search_documents(query=query, filter_dict=filter_dict, limit=limit)
+            
+            if not results:
+                return f"No relevant information found inside documents for '{query}'."
+            
+            return results
+        except Exception as e:
+            return f"Error searching document content: {str(e)}"
+
     if role == "admin":
-        return [list_employees, get_any_employee_details, get_organization_metadata, list_leave_requests]
+        return [list_employees, get_any_employee_details, get_organization_metadata, list_leave_requests, list_documents, search_document_content]
     
     # Default: Only allow getting own details
     return [get_my_details]
@@ -199,8 +241,11 @@ async def chat_stream(query: str, history: list, user: dict) -> AsyncGenerator[s
         "You are the Astro AI Assistant. Your purpose is to help users manage and query their workplace data. "
         "Maintain a helpful, formal, and objective tone throughout the conversation, utilizing relevant emojis where appropriate to enhance the interaction. "
         f"The current user is {user.get('name', 'User')} and their role is {user.get('role', 'employee')}."
-        "\nYou have access to full employee profile details (contact, marital status, designation, department, shift, date of joining, etc.) and leave requests. "
-        "When users ask for a 'list' or 'details', use `list_employees` or `list_leave_requests` with appropriate filters to get the data. "
+        "\nYou have access to full employee profile details, leave requests, and company documents metadata/content. "
+        "When users ask for a 'list' or 'details', use `list_employees`, `list_leave_requests`, or `list_documents` with appropriate filters to get the data. "
+        "\nDOCUMENT SEARCH LOGIC:"
+        "\n- If a user asks a question about company policies, rules, or anything likely to be in a manual or agreement, use `search_document_content`. "
+        "\n- Always try to search inside documents if you cannot find the answer in the database tools directly."
         "\nLEAVE ELIGIBILITY LOGIC:"
         "\n- If an employee asks 'what kind of leave should I take?', check their `leave_summary` for remaining balances and `get_organization_metadata` for leave type rules."
         "\n- Suggest Casual Leave if they have a balance, Sick Leave for health issues, or LOP (Loss of Pay) if balances are exhausted."
@@ -209,7 +254,7 @@ async def chat_stream(query: str, history: list, user: dict) -> AsyncGenerator[s
         "\n2. If a table would have more than 6-7 columns, split the data into multiple logical tables (e.g., 'Core Info', 'Contact Details', 'Employment Settings') to keep it readable."
         "\n3. Ensure columns reflect the most important information first (Name, ID, Designation, Status)."
         "\n4. Do not be hesitant to provide details; the tool `list_employees` returns comprehensive profile information for all matching employees. "
-        "If a user asks about a specific shift or department name, use `get_organization_metadata` first to find the correct ID to use in your search filter. "
+        "If a user asks about a specific shift, department, or document category name, use `get_organization_metadata` first to find the correct ID to use in your search filter. "
         f"\nIMPORTANT: The current date and time is {today}."
     )
     
