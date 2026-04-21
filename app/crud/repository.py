@@ -209,6 +209,12 @@ class Repository:
         status: Optional[str] = None,
         role: Optional[str] = None,
         work_mode: Optional[str] = None,
+        shift_id: Optional[str] = None,
+        gender: Optional[str] = None,
+        marital_status: Optional[str] = None,
+        designation: Optional[str] = None,
+        department: Optional[str] = None,
+        employee_type: Optional[str] = None,
     ) -> (List[dict], int):
         try:
             query = {}
@@ -219,6 +225,18 @@ class Repository:
                 query["role"] = role
             if work_mode:
                 query["work_mode"] = work_mode
+            if shift_id:
+                query["shift_id"] = shift_id
+            if gender:
+                query["gender"] = gender
+            if marital_status:
+                query["marital_status"] = marital_status
+            if designation:
+                query["designation"] = designation
+            if department:
+                query["department"] = department
+            if employee_type:
+                query["employee_type"] = employee_type
 
             if search:
                 regex_pattern = {"$regex": search, "$options": "i"}

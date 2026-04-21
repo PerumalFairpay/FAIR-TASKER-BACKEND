@@ -4,14 +4,148 @@ from pydantic import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
 from langchain_core.prompts import ChatPromptTemplate
-from typing import AsyncGenerator, List, Dict, Any
+from typing import AsyncGenerator, List, Dict, Any, Optional
 import os
 
 from bson import ObjectId
+from langchain_core.tools import tool
+from app.crud.repository import repository as repo
 
 async def get_tools_for_user(user: dict):
-    """Returns an empty list as all tools have been removed."""
-    return []
+    """Returns tools based on user roles and data access permissions."""
+    role = user.get("role", "employee")
+    emp_no_id = user.get("employee_no_id")
+
+    @tool
+    async def list_employees(
+        search: Optional[str] = None,
+        status: Optional[str] = None,
+        role_filter: Optional[str] = None,
+        work_mode: Optional[str] = None,
+        shift_id: Optional[str] = None,
+        gender: Optional[str] = None,
+        marital_status: Optional[str] = None,
+        designation: Optional[str] = None,
+        department: Optional[str] = None,
+        employee_type: Optional[str] = None,
+        limit: int = 50
+    ):
+        """
+        Retrieves a filtered list of employees including their full profile details.
+        Use this for questions like 'who is married?', 'list onboarding employees', 
+        'who is a developer?', or 'who works in the first shift?'.
+        The results include personal information, contact details, marital status, designation, department, etc.
+        You can combine multiple filters. If no filters are provided, it returns all employees.
+        'search': general search string (name, email, mobile, id).
+        'status': e.g., 'Active', 'Joined', 'Resigned', 'Terminated'.
+        'role_filter': e.g., 'admin', 'employee', 'manager'.
+        'shift_id': the ID of the shift (use get_organization_metadata to find IDs).
+        """
+        try:
+            # If no filters are provided, return the lightweight summary of all employees
+            if not any([search, status, role_filter, work_mode, shift_id, gender, marital_status, designation, department, employee_type]):
+                return await repo.get_all_employees_summary()
+            
+            # Map parameters to repository method
+            employees, _ = await repo.get_employees(
+                limit=limit,
+                search=search,
+                status=status,
+                role=role_filter,
+                work_mode=work_mode,
+                shift_id=shift_id,
+                gender=gender,
+                marital_status=marital_status,
+                designation=designation,
+                department=department,
+                employee_type=employee_type
+            )
+            return employees
+        except Exception as e:
+            return f"Error listing filtered employees: {str(e)}"
+
+    @tool
+    async def get_my_details():
+        """
+        Retrieves your own comprehensive profile details, including personal info,
+        task metrics, leave balances, attendance stats, assigned projects, and assets.
+        Use this when you want to know about your own data.
+        """
+        try:
+            # Find employee by employee_no_id which is linked to the user
+            employee = await repo.employees.find_one({"employee_no_id": emp_no_id})
+            if not employee:
+                return "Your employee record could not be found."
+            
+            emp_id = str(employee["_id"])
+            
+            # Aggregate comprehensive data
+            data = {
+                "profile": await repo.get_employee(emp_id),
+                "leave_summary": await repo.get_employee_leave_balances(emp_id),
+                "task_metrics": await repo.get_employee_task_metrics(emp_id),
+                "attendance_stats": await repo.get_employee_attendance_stats(emp_id),
+                "assigned_projects": await repo.get_employee_assigned_projects(emp_id),
+                "assigned_assets": await repo.get_assets_by_employee(emp_id)
+            }
+            return data
+        except Exception as e:
+            return f"Error fetching your details: {str(e)}"
+
+    @tool
+    async def get_any_employee_details(search_query: str):
+        """
+        Retrieves full details for a specific employee identified by name, email, mobile, or ID.
+        Returns personal info, tasks, leave balances, attendance stats, projects, and assets.
+        'search_query': Any identifying information about the employee.
+        """
+        try:
+            # Search for the employee using the repository's search capability
+            employees, _ = await repo.get_employees(search=search_query, limit=1)
+            if not employees:
+                return f"No employee found matching '{search_query}'"
+            
+            emp = employees[0]
+            emp_id = emp["id"]
+
+            # Aggregate comprehensive data
+            data = {
+                "profile": await repo.get_employee(emp_id),
+                "leave_summary": await repo.get_employee_leave_balances(emp_id),
+                "task_metrics": await repo.get_employee_task_metrics(emp_id),
+                "attendance_stats": await repo.get_employee_attendance_stats(emp_id),
+                "assigned_projects": await repo.get_employee_assigned_projects(emp_id),
+                "assigned_assets": await repo.get_assets_by_employee(emp_id)
+            }
+            return data
+        except Exception as e:
+            return f"Error fetching employee details: {str(e)}"
+
+    @tool
+    async def get_organization_metadata():
+        """
+        Retrieves reference information about the organization, such as lists of 
+        Departments, Shifts, and Leave Types. 
+        Use this to find correct IDs or names when answering questions about specific company units or shifts.
+        """
+        try:
+            shifts = await repo.get_shifts()
+            departments = await repo.get_departments()
+            leave_types = await repo.get_leave_types()
+            
+            return {
+                "shifts": [{"id": s["id"], "name": s["name"], "time": f"{s['start_time']}-{s['end_time']}"} for s in shifts],
+                "departments": [{"id": d["id"], "name": d["name"]} for d in departments],
+                "leave_types": [{"id": lt["id"], "name": lt["name"], "days": lt["number_of_days"]} for lt in leave_types]
+            }
+        except Exception as e:
+            return f"Error fetching organization metadata: {str(e)}"
+
+    if role == "admin":
+        return [list_employees, get_any_employee_details, get_organization_metadata]
+    
+    # Default: Only allow getting own details
+    return [get_my_details]
 
 async def chat_stream(query: str, history: list, user: dict) -> AsyncGenerator[str, None]:
     """Generates a streaming response using LangChain's AgentExecutor, incorporating conversation history."""
@@ -36,6 +170,10 @@ async def chat_stream(query: str, history: list, user: dict) -> AsyncGenerator[s
         "You are the Astro AI Assistant. Your purpose is to help users manage and query their workplace data. "
         "Maintain a helpful, formal, and objective tone throughout the conversation, utilizing relevant emojis where appropriate to enhance the interaction. "
         f"The current user is {user.get('name', 'User')} and their role is {user.get('role', 'employee')}."
+        "\nYou have access to full employee profile details (contact, marital status, designation, department, shift, etc.). "
+        "When users ask for a 'list' or 'details', use `list_employees` with appropriate filters to get the data, and then present it clearly (using Markdown tables for multiple employees). "
+        "Do not be hesitant to provide details; the tool `list_employees` is efficient and returns comprehensive profile information for all matching employees. "
+        "If a user asks about a specific shift or department name, use `get_organization_metadata` first to find the correct ID to use in your search filter. "
         f"\nIMPORTANT: The current date and time is {today}."
     )
     
