@@ -281,6 +281,14 @@ class Repository:
                 "status": 1,
                 "biometric_id": 1,
                 "weekly_off": 1,
+                "marital_status": 1,
+                "designation": 1,
+                "department": 1,
+                "employee_type": 1,
+                "mobile": 1,
+                "gender": 1,
+                "work_mode": 1,
+                "date_of_joining": 1,
             }
             employees = await self.employees.find({}, projection).to_list(length=None)
 
@@ -1860,7 +1868,7 @@ class Repository:
             return []
 
     async def get_leave_requests(
-        self, employee_id: str = None, status: str = None
+        self, employee_id: str = None, status: str = None, date: str = None
     ) -> List[dict]:
         try:
             query = {}
@@ -1868,6 +1876,13 @@ class Repository:
                 query["employee_id"] = employee_id
             if status and status != "All":
                 query["status"] = status
+            
+            if date:
+                # Filter requests active on a specific date (YYYY-MM-DD)
+                query["$and"] = [
+                    {"start_date": {"$lte": date}},
+                    {"end_date": {"$gte": date}}
+                ]
 
             requests = await self.leave_requests.find(query).to_list(length=None)
 

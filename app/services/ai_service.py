@@ -18,6 +18,7 @@ async def get_tools_for_user(user: dict):
 
     @tool
     async def list_employees(
+        include_all_profile_details: bool = False,
         search: Optional[str] = None,
         status: Optional[str] = None,
         role_filter: Optional[str] = None,
@@ -31,22 +32,21 @@ async def get_tools_for_user(user: dict):
         limit: int = 50
     ):
         """
-        Retrieves a filtered list of employees including their full profile details.
+        Retrieves a filtered list of employees including their profile details.
         Use this for questions like 'who is married?', 'list onboarding employees', 
         'who is a developer?', or 'who works in the first shift?'.
-        The results include personal information, contact details, marital status, designation, department, etc.
-        You can combine multiple filters. If no filters are provided, it returns all employees.
+        'include_all_profile_details': Set to true if the user specifically asks for 'all details' or 'everything'.
         'search': general search string (name, email, mobile, id).
         'status': e.g., 'Active', 'Joined', 'Resigned', 'Terminated'.
         'role_filter': e.g., 'admin', 'employee', 'manager'.
         'shift_id': the ID of the shift (use get_organization_metadata to find IDs).
         """
         try:
-            # If no filters are provided, return the lightweight summary of all employees
-            if not any([search, status, role_filter, work_mode, shift_id, gender, marital_status, designation, department, employee_type]):
+            # If no specific filters and not asking for full details, return the summary (FAST)
+            if not include_all_profile_details and not any([search, status, role_filter, work_mode, shift_id, gender, marital_status, designation, department, employee_type]):
                 return await repo.get_all_employees_summary()
             
-            # Map parameters to repository method
+            # If filters are present OR include_all_profile_details is True, use the more comprehensive get_employees
             employees, _ = await repo.get_employees(
                 limit=limit,
                 search=search,
@@ -60,7 +60,18 @@ async def get_tools_for_user(user: dict):
                 department=department,
                 employee_type=employee_type
             )
-            return employees
+
+            # Clean up the data for better LLM context and table rendering
+            cleaned_employees = []
+            for emp in employees:
+                clean_emp = {k: v for k, v in emp.items() if v is not None and k not in ["_id", "id", "hashed_password", "password", "onboarding_checklist", "offboarding_checklist", "documents", "created_at", "updated_at"]}
+                # Add summarized versions of complex fields if helpful
+                if emp.get("onboarding_checklist"):
+                    completed = sum(1 for item in emp["onboarding_checklist"] if item.get("status") == "Completed")
+                    clean_emp["onboarding_status"] = f"{completed}/{len(emp['onboarding_checklist'])} completed"
+                cleaned_employees.append(clean_emp)
+            
+            return cleaned_employees
         except Exception as e:
             return f"Error listing filtered employees: {str(e)}"
 
@@ -141,8 +152,26 @@ async def get_tools_for_user(user: dict):
         except Exception as e:
             return f"Error fetching organization metadata: {str(e)}"
 
+    @tool
+    async def list_leave_requests(
+        employee_id: Optional[str] = None,
+        status: Optional[str] = "Pending",
+        date: Optional[str] = None
+    ):
+        """
+        Retrieves a list of leave requests from employees.
+        Use this for questions like 'who applied for leave today?' or 'what are my pending leaves?'.
+        'employee_id': filter by a specific employee's ID.
+        'status': filter by status (Pending, Approved, Rejected). Use 'All' for everything.
+        'date': filter for requests active on a specific date (YYYY-MM-DD). Use this for 'today' or a specific day.
+        """
+        try:
+            return await repo.get_leave_requests(employee_id=employee_id, status=status, date=date)
+        except Exception as e:
+            return f"Error listing leave requests: {str(e)}"
+
     if role == "admin":
-        return [list_employees, get_any_employee_details, get_organization_metadata]
+        return [list_employees, get_any_employee_details, get_organization_metadata, list_leave_requests]
     
     # Default: Only allow getting own details
     return [get_my_details]
@@ -170,9 +199,16 @@ async def chat_stream(query: str, history: list, user: dict) -> AsyncGenerator[s
         "You are the Astro AI Assistant. Your purpose is to help users manage and query their workplace data. "
         "Maintain a helpful, formal, and objective tone throughout the conversation, utilizing relevant emojis where appropriate to enhance the interaction. "
         f"The current user is {user.get('name', 'User')} and their role is {user.get('role', 'employee')}."
-        "\nYou have access to full employee profile details (contact, marital status, designation, department, shift, etc.). "
-        "When users ask for a 'list' or 'details', use `list_employees` with appropriate filters to get the data, and then present it clearly (using Markdown tables for multiple employees). "
-        "Do not be hesitant to provide details; the tool `list_employees` is efficient and returns comprehensive profile information for all matching employees. "
+        "\nYou have access to full employee profile details (contact, marital status, designation, department, shift, date of joining, etc.) and leave requests. "
+        "When users ask for a 'list' or 'details', use `list_employees` or `list_leave_requests` with appropriate filters to get the data. "
+        "\nLEAVE ELIGIBILITY LOGIC:"
+        "\n- If an employee asks 'what kind of leave should I take?', check their `leave_summary` for remaining balances and `get_organization_metadata` for leave type rules."
+        "\n- Suggest Casual Leave if they have a balance, Sick Leave for health issues, or LOP (Loss of Pay) if balances are exhausted."
+        "\nTABLE FORMATTING RULES:"
+        "\n1. Always use **Employees as ROWS** and **Fields as COLUMNS**."
+        "\n2. If a table would have more than 6-7 columns, split the data into multiple logical tables (e.g., 'Core Info', 'Contact Details', 'Employment Settings') to keep it readable."
+        "\n3. Ensure columns reflect the most important information first (Name, ID, Designation, Status)."
+        "\n4. Do not be hesitant to provide details; the tool `list_employees` returns comprehensive profile information for all matching employees. "
         "If a user asks about a specific shift or department name, use `get_organization_metadata` first to find the correct ID to use in your search filter. "
         f"\nIMPORTANT: The current date and time is {today}."
     )
