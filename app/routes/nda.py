@@ -75,8 +75,9 @@ def _send_nda_status_email(email: str, name: str, status: str, reason: str = Non
     except Exception as e:
         print(f"[Gmail] Failed to send status email: {e}")
 
-def _notify_admin_nda_signed(employee_name: str, email: str):
+def _notify_admin_nda_signed(first_name: str, last_name: str, email: str):
     """Notify admin that an NDA has been signed."""
+    employee_name = f"{first_name} {last_name}"
     body = f"""
     <div style="font-family: sans-serif; line-height: 1.6; color: #333;">
         <h2 style="color: #000;">NDA Signed Notification</h2>
@@ -127,7 +128,7 @@ async def generate_nda_link(nda_request: NDARequestCreate, background_tasks: Bac
         background_tasks.add_task(
             _send_nda_link_email, 
             nda_request.email, 
-            nda_request.employee_name, 
+            nda_request.first_name, 
             link_url
         )
         
@@ -162,7 +163,7 @@ async def regenerate_nda_link(nda_id: str, request: NDARegenerateRequest, backgr
         background_tasks.add_task(
             _send_nda_link_email, 
             updated_nda.get("email"), 
-            updated_nda.get("employee_name"), 
+            updated_nda.get("first_name"), 
             link_url
         )
 
@@ -268,7 +269,9 @@ async def verify_nda_access(token: str, request_body: dict):
         
         html_content = render_nda_template({
             "request": nda_request,
-            "employee_name": nda_request.get("employee_name"),
+            "first_name": nda_request.get("first_name"),
+            "last_name": nda_request.get("last_name"),
+            "employee_name": f"{nda_request.get('first_name', '')} {nda_request.get('last_name', '')}".strip(),
             "role": nda_request.get("role"),
             "employee_address": nda_request.get("address"),
             "residential_address": nda_request.get("residential_address"),
@@ -315,7 +318,8 @@ async def view_nda_form(token: str):
         
         # Return only safe data used for initial load / login check
         safe_data = {
-            "employee_name": nda_request.get("employee_name"),
+            "first_name": nda_request.get("first_name"),
+            "last_name": nda_request.get("last_name"),
             "status": nda_request.get("status"),
             "requires_auth": True 
         }
@@ -358,7 +362,9 @@ async def update_nda_details(token: str, update_data: NDARequestUpdate):
         
         html_content = render_nda_template({
             "request": updated_nda,
-            "employee_name": updated_nda.get("employee_name"),
+            "first_name": updated_nda.get("first_name"),
+            "last_name": updated_nda.get("last_name"),
+            "employee_name": f"{updated_nda.get('first_name', '')} {updated_nda.get('last_name', '')}".strip(),
             "role": updated_nda.get("role"),
             "employee_address": updated_nda.get("address"),
             "residential_address": updated_nda.get("residential_address"),
@@ -480,7 +486,9 @@ async def sign_nda(token: str, request_body: NDASignatureRequest, request: Reque
         pdf_bytes = generate_pdf_from_request(nda_request)
         
         # Upload PDF to storage
-        employee_name = nda_request.get("employee_name", "Employee")
+        first_name = nda_request.get("first_name", "Employee")
+        last_name = nda_request.get("last_name", "")
+        employee_name = f"{first_name}_{last_name}".strip("_")
         filename = f"NDA_{employee_name.replace(' ', '_')}_{token[:8]}.pdf"
         upload_result = await file_handler.upload_bytes(
             file_data=pdf_bytes,
@@ -500,7 +508,8 @@ async def sign_nda(token: str, request_body: NDASignatureRequest, request: Reque
         # Notify Admin in background
         background_tasks.add_task(
             _notify_admin_nda_signed, 
-            updated_nda.get("employee_name"), 
+            updated_nda.get("first_name"), 
+            updated_nda.get("last_name"), 
             updated_nda.get("email")
         )
 
@@ -531,9 +540,15 @@ def generate_pdf_from_request(nda_request: dict) -> bytes:
         created_at = datetime.now()
 
     # Render HTML using centralized helper
+    first_name = nda_request.get("first_name", "_________________")
+    last_name = nda_request.get("last_name", "_________________")
+    employee_name = f"{first_name} {last_name}"
+    
     html_content = render_nda_template({
         "request": nda_request, 
-        "employee_name": nda_request.get("employee_name", "_________________"),
+        "first_name": first_name,
+        "last_name": last_name,
+        "employee_name": employee_name,
         "employee_address": nda_request.get("address", "_________________"),
         "residential_address": nda_request.get("residential_address", "_________________"),
         "role": nda_request.get("role", "_________________"),
@@ -568,7 +583,7 @@ async def download_nda_pdf(token: str):
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=NDA_{request.get('employee_name', 'Signed')}.pdf"}
+        headers={"Content-Disposition": f"attachment; filename=NDA_{request.get('first_name', 'Signed')}_{request.get('last_name', '')}.pdf"}
     )
 
 
@@ -597,7 +612,7 @@ async def update_nda_status(nda_id: str, status_update: NDAStatusUpdate, backgro
         background_tasks.add_task(
             _send_nda_status_email, 
             updated_nda.get("email"), 
-            updated_nda.get("employee_name"), 
+            updated_nda.get("first_name"), 
             status_update.status,
             status_update.rejection_reason if status_update.status == "Rejected" else None
         )
@@ -613,7 +628,7 @@ async def update_nda_status(nda_id: str, status_update: NDAStatusUpdate, backgro
             background_tasks.add_task(
                 _send_nda_link_email, 
                 updated_nda.get("email"), 
-                updated_nda.get("employee_name"), 
+                updated_nda.get("first_name"), 
                 f"/employee/nda/{new_token}"
             )
         
@@ -623,7 +638,9 @@ async def update_nda_status(nda_id: str, status_update: NDAStatusUpdate, backgro
             pdf_bytes = generate_pdf_from_request(updated_nda)
             
             # Re-upload PDF
-            employee_name = updated_nda.get("employee_name", "Employee")
+            first_name = updated_nda.get("first_name", "Employee")
+            last_name = updated_nda.get("last_name", "")
+            employee_name = f"{first_name}_{last_name}".strip("_")
             token = updated_nda.get("token", str(uuid.uuid4()))
             filename = f"NDA_{employee_name.replace(' ', '_')}_{token[:8]}.pdf"
             

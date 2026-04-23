@@ -935,7 +935,8 @@ class SystemConfigurationResponse(SystemConfigurationBase):
 
 # NDA Models
 class NDARequestBase(BaseModel):
-    employee_name: str
+    first_name: str
+    last_name: str
     email: EmailStr
     mobile: str
     role: str
