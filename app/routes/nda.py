@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
 import os
-from app.models import NDARequestCreate, NDASignatureRequest, NDARegenerateRequest, NDAStatusUpdate, NDARequestUpdate
+from app.models import NDARequestCreate, NDASignatureRequest, NDARegenerateRequest, NDAStatusUpdate, NDARequestUpdate, NDADropdownItem
 from app.crud.repository import repository
 from app.helper.response_helper import success_response, error_response
 from datetime import datetime, timedelta
@@ -227,6 +227,22 @@ async def list_nda_requests(
             message="NDA requests retrieved successfully",
             data=nda_requests,
             meta=meta
+        )
+    except Exception as e:
+        return error_response(message=str(e), status_code=500)
+
+
+@router.get("/approved-list")
+async def get_approved_ndas():
+    """
+    Get a lightweight list of approved NDAs for dropdown selection.
+    Used during employee creation to pre-fill details.
+    """
+    try:
+        approved_ndas = await repository.get_approved_ndas()
+        return success_response(
+            message="Approved NDAs retrieved successfully",
+            data=approved_ndas
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)

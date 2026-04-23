@@ -3534,6 +3534,28 @@ class Repository:
         except Exception as e:
             raise e
 
+    async def get_approved_ndas(self) -> List[dict]:
+        try:
+            # We only want NDAs that have been Approved/Signed
+            # and only return fields necessary for employee creation
+            query = {"status": "Approved"}
+            projection = {
+                "first_name": 1,
+                "last_name": 1,
+                "email": 1,
+                "mobile": 1,
+                "address": 1,
+                "residential_address": 1,
+                "role": 1,
+                "status": 1
+            }
+            
+            cursor = self.nda_requests.find(query, projection).sort("created_at", -1)
+            results = await cursor.to_list(length=None)
+            return [normalize(res) for res in results]
+        except Exception as e:
+            raise e
+
     async def get_nda_request_by_token(self, token: str) -> dict:
         try:
             nda_request = await self.nda_requests.find_one({"token": token})
