@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException, Request
-from app.models import NDARequestCreate, NDASignatureRequest, NDARegenerateRequest, NDAStatusUpdate, NDARequestUpdate
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
+import os
+from app.models import NDARequestCreate, NDASignatureRequest, NDARegenerateRequest, NDAStatusUpdate, NDARequestUpdate, NDADropdownItem
 from app.crud.repository import repository
 from app.helper.response_helper import success_response, error_response
 from datetime import datetime, timedelta
@@ -11,12 +12,98 @@ from app.helper.template_helper import render_nda_template
 from weasyprint import HTML
 from io import BytesIO
 from fastapi.responses import Response
+from app.helper.gmail import gmail_helper
 
 router = APIRouter(prefix="/nda", tags=["NDA"])
 
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "fairpayhrm@gmail.com")
+
+
+# ------------------------------------------------------------------
+# Email notification helpers
+# ------------------------------------------------------------------
+
+def _send_nda_link_email(email: str, name: str, link: str):
+    """Send NDA link to the employee."""
+    full_link = f"{FRONTEND_URL}{link}"
+    body = f"""
+    <div style="font-family: sans-serif; line-height: 1.6; color: #333;">
+        <h2 style="color: #000;">Non-Disclosure Agreement (NDA)</h2>
+        <p>Hi {name},</p>
+        <p>A new Non-Disclosure Agreement (NDA) has been generated for you. Please click the link below to review, upload necessary documents, and sign the agreement:</p>
+        <p style="margin: 30px 0;">
+            <a href="{full_link}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Review and Sign NDA</a>
+        </p>
+        <p>Alternatively, you can copy and paste this URL into your browser:</p>
+        <p style="word-break: break-all; color: #666;">{full_link}</p>
+        <p><strong>Note:</strong> This link will expire soon. Please complete the process at your earliest convenience.</p>
+        <p>Best regards,<br/><strong>FairPay Team</strong></p>
+    </div>
+    """
+    try:
+        gmail_helper.send_email(
+            to=email,
+            subject="Action Required: Review and Sign your NDA",
+            body_html=body
+        )
+    except Exception as e:
+        print(f"[Gmail] Failed to send NDA link email: {e}")
+
+def _send_nda_status_email(email: str, name: str, status: str, reason: str = None):
+    """Notify employee of NDA status update."""
+    status_text = "Approved" if status == "Approved" else "Rejected"
+    color = "#28a745" if status == "Approved" else "#dc3545"
+    
+    rejection_html = f"<p><strong>Reason for rejection:</strong> {reason}</p><p>Please use the previous link or contact HR to re-submit your details.</p>" if reason else ""
+    
+    body = f"""
+    <div style="font-family: sans-serif; line-height: 1.6; color: #333;">
+        <h2 style="color: #000;">NDA Status Update</h2>
+        <p>Hi {name},</p>
+        <p>Your NDA submission has been <strong style="color: {color};">{status_text}</strong>.</p>
+        {rejection_html}
+        <p>Best regards,<br/><strong>FairPay Team</strong></p>
+    </div>
+    """
+    try:
+        gmail_helper.send_email(
+            to=email,
+            subject=f"NDA Status Update: {status_text}",
+            body_html=body
+        )
+    except Exception as e:
+        print(f"[Gmail] Failed to send status email: {e}")
+
+def _notify_admin_nda_signed(first_name: str, last_name: str, email: str):
+    """Notify admin that an NDA has been signed."""
+    employee_name = f"{first_name} {last_name}"
+    body = f"""
+    <div style="font-family: sans-serif; line-height: 1.6; color: #333;">
+        <h2 style="color: #000;">NDA Signed Notification</h2>
+        <p>Admin,</p>
+        <p>The employee <strong>{employee_name}</strong> ({email}) has just signed their NDA.</p>
+        <p>You can now review the document in the admin dashboard.</p>
+        <p style="margin-top: 20px;">
+            <a href="{FRONTEND_URL}/admin/nda" style="color: #000; font-weight: bold;">View NDA Dashboard</a>
+        </p>
+    </div>
+    """
+    try:
+        gmail_helper.send_email(
+            to=ADMIN_EMAIL,
+            subject=f"NDA Signed: {employee_name}",
+            body_html=body
+        )
+    except Exception as e:
+        print(f"[Gmail] Failed to notify admin: {e}")
+
+# ------------------------------------------------------------------
+# Routes
+# ------------------------------------------------------------------
 
 @router.post("/generate")
-async def generate_nda_link(nda_request: NDARequestCreate):
+async def generate_nda_link(nda_request: NDARequestCreate, background_tasks: BackgroundTasks):
     """
     Generate a new NDA link for an employee.
     Admin endpoint to create NDA request with 1-hour expiry.
@@ -37,8 +124,16 @@ async def generate_nda_link(nda_request: NDARequestCreate):
          
         link_url = f"/employee/nda/{token}"
         
+        # Send Email in background
+        background_tasks.add_task(
+            _send_nda_link_email, 
+            nda_request.email, 
+            nda_request.first_name, 
+            link_url
+        )
+        
         return success_response(
-            message="NDA link generated successfully",
+            message="NDA link generated successfully and email sent",
             data={"link": link_url, "nda": nda_data}
         )
     except Exception as e:
@@ -46,7 +141,7 @@ async def generate_nda_link(nda_request: NDARequestCreate):
 
 
 @router.post("/regenerate/{nda_id}")
-async def regenerate_nda_link(nda_id: str, request: NDARegenerateRequest):
+async def regenerate_nda_link(nda_id: str, request: NDARegenerateRequest, background_tasks: BackgroundTasks):
     """
     Regenerate an NDA link for an existing request.
     Useful for expired links.
@@ -64,8 +159,16 @@ async def regenerate_nda_link(nda_id: str, request: NDARegenerateRequest):
  
         link_url = f"/employee/nda/{new_token}"
         
+        # Send Email in background
+        background_tasks.add_task(
+            _send_nda_link_email, 
+            updated_nda.get("email"), 
+            updated_nda.get("first_name"), 
+            link_url
+        )
+
         return success_response(
-            message="NDA link regenerated successfully",
+            message="NDA link regenerated successfully and email sent",
             data={"link": link_url, "nda": updated_nda}
         )
     except Exception as e:
@@ -129,6 +232,22 @@ async def list_nda_requests(
         return error_response(message=str(e), status_code=500)
 
 
+@router.get("/approved-list")
+async def get_approved_ndas():
+    """
+    Get a lightweight list of approved NDAs for dropdown selection.
+    Used during employee creation to pre-fill details.
+    """
+    try:
+        approved_ndas = await repository.get_approved_ndas()
+        return success_response(
+            message="Approved NDAs retrieved successfully",
+            data=approved_ndas
+        )
+    except Exception as e:
+        return error_response(message=str(e), status_code=500)
+
+
 @router.post("/access/{token}")
 async def verify_nda_access(token: str, request_body: dict):
     """
@@ -166,7 +285,9 @@ async def verify_nda_access(token: str, request_body: dict):
         
         html_content = render_nda_template({
             "request": nda_request,
-            "employee_name": nda_request.get("employee_name"),
+            "first_name": nda_request.get("first_name"),
+            "last_name": nda_request.get("last_name"),
+            "employee_name": f"{nda_request.get('first_name', '')} {nda_request.get('last_name', '')}".strip(),
             "role": nda_request.get("role"),
             "employee_address": nda_request.get("address"),
             "residential_address": nda_request.get("residential_address"),
@@ -213,7 +334,8 @@ async def view_nda_form(token: str):
         
         # Return only safe data used for initial load / login check
         safe_data = {
-            "employee_name": nda_request.get("employee_name"),
+            "first_name": nda_request.get("first_name"),
+            "last_name": nda_request.get("last_name"),
             "status": nda_request.get("status"),
             "requires_auth": True 
         }
@@ -256,7 +378,9 @@ async def update_nda_details(token: str, update_data: NDARequestUpdate):
         
         html_content = render_nda_template({
             "request": updated_nda,
-            "employee_name": updated_nda.get("employee_name"),
+            "first_name": updated_nda.get("first_name"),
+            "last_name": updated_nda.get("last_name"),
+            "employee_name": f"{updated_nda.get('first_name', '')} {updated_nda.get('last_name', '')}".strip(),
             "role": updated_nda.get("role"),
             "employee_address": updated_nda.get("address"),
             "residential_address": updated_nda.get("residential_address"),
@@ -335,7 +459,7 @@ async def upload_documents(
 
 
 @router.post("/sign/{token}")
-async def sign_nda(token: str, request_body: NDASignatureRequest, request: Request):
+async def sign_nda(token: str, request_body: NDASignatureRequest, request: Request, background_tasks: BackgroundTasks):
     """
     Accept signature and update NDA status to Signed.
     Automatically generates and stores the signed PDF.
@@ -378,7 +502,9 @@ async def sign_nda(token: str, request_body: NDASignatureRequest, request: Reque
         pdf_bytes = generate_pdf_from_request(nda_request)
         
         # Upload PDF to storage
-        employee_name = nda_request.get("employee_name", "Employee")
+        first_name = nda_request.get("first_name", "Employee")
+        last_name = nda_request.get("last_name", "")
+        employee_name = f"{first_name}_{last_name}".strip("_")
         filename = f"NDA_{employee_name.replace(' ', '_')}_{token[:8]}.pdf"
         upload_result = await file_handler.upload_bytes(
             file_data=pdf_bytes,
@@ -395,6 +521,14 @@ async def sign_nda(token: str, request_body: NDASignatureRequest, request: Reque
             }
         })
         
+        # Notify Admin in background
+        background_tasks.add_task(
+            _notify_admin_nda_signed, 
+            updated_nda.get("first_name"), 
+            updated_nda.get("last_name"), 
+            updated_nda.get("email")
+        )
+
         return success_response(
             message="NDA signed successfully and PDF stored",
             data=updated_nda
@@ -422,9 +556,15 @@ def generate_pdf_from_request(nda_request: dict) -> bytes:
         created_at = datetime.now()
 
     # Render HTML using centralized helper
+    first_name = nda_request.get("first_name", "_________________")
+    last_name = nda_request.get("last_name", "_________________")
+    employee_name = f"{first_name} {last_name}"
+    
     html_content = render_nda_template({
         "request": nda_request, 
-        "employee_name": nda_request.get("employee_name", "_________________"),
+        "first_name": first_name,
+        "last_name": last_name,
+        "employee_name": employee_name,
         "employee_address": nda_request.get("address", "_________________"),
         "residential_address": nda_request.get("residential_address", "_________________"),
         "role": nda_request.get("role", "_________________"),
@@ -459,12 +599,12 @@ async def download_nda_pdf(token: str):
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=NDA_{request.get('employee_name', 'Signed')}.pdf"}
+        headers={"Content-Disposition": f"attachment; filename=NDA_{request.get('first_name', 'Signed')}_{request.get('last_name', '')}.pdf"}
     )
 
 
 @router.patch("/{nda_id}/status")
-async def update_nda_status(nda_id: str, status_update: NDAStatusUpdate):
+async def update_nda_status(nda_id: str, status_update: NDAStatusUpdate, background_tasks: BackgroundTasks):
     """
     Admin endpoint to approve or reject an NDA.
     If rejected, it automatically regenerates a fresh token for the employee,
@@ -484,12 +624,29 @@ async def update_nda_status(nda_id: str, status_update: NDAStatusUpdate):
         if not updated_nda:
             return error_response(message="NDA request not found", status_code=404)
         
+        # Notify employee in background
+        background_tasks.add_task(
+            _send_nda_status_email, 
+            updated_nda.get("email"), 
+            updated_nda.get("first_name"), 
+            status_update.status,
+            status_update.rejection_reason if status_update.status == "Rejected" else None
+        )
+
         # If rejected, automatically provide a fresh start URL
         if status_update.status == "Rejected":
             new_token = str(uuid.uuid4())
             # Usually regenerates with 1 hour expiry
             expires_at = datetime.utcnow() + timedelta(hours=1)
             updated_nda = await repository.regenerate_nda_token(nda_id, new_token, expires_at)
+            
+            # Send new link email
+            background_tasks.add_task(
+                _send_nda_link_email, 
+                updated_nda.get("email"), 
+                updated_nda.get("first_name"), 
+                f"/employee/nda/{new_token}"
+            )
         
         # If approved, regenerate and re-upload the PDF to remove watermarks and add signs
         elif status_update.status == "Approved":
@@ -497,7 +654,9 @@ async def update_nda_status(nda_id: str, status_update: NDAStatusUpdate):
             pdf_bytes = generate_pdf_from_request(updated_nda)
             
             # Re-upload PDF
-            employee_name = updated_nda.get("employee_name", "Employee")
+            first_name = updated_nda.get("first_name", "Employee")
+            last_name = updated_nda.get("last_name", "")
+            employee_name = f"{first_name}_{last_name}".strip("_")
             token = updated_nda.get("token", str(uuid.uuid4()))
             filename = f"NDA_{employee_name.replace(' ', '_')}_{token[:8]}.pdf"
             
@@ -517,7 +676,7 @@ async def update_nda_status(nda_id: str, status_update: NDAStatusUpdate):
             })
             
         return success_response(
-            message=f"NDA status updated to {status_update.status}",
+            message=f"NDA status updated to {status_update.status} and email sent",
             data=updated_nda
         )
     except Exception as e:

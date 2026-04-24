@@ -209,6 +209,12 @@ class Repository:
         status: Optional[str] = None,
         role: Optional[str] = None,
         work_mode: Optional[str] = None,
+        shift_id: Optional[str] = None,
+        gender: Optional[str] = None,
+        marital_status: Optional[str] = None,
+        designation: Optional[str] = None,
+        department: Optional[str] = None,
+        employee_type: Optional[str] = None,
     ) -> (List[dict], int):
         try:
             query = {}
@@ -219,6 +225,18 @@ class Repository:
                 query["role"] = role
             if work_mode:
                 query["work_mode"] = work_mode
+            if shift_id:
+                query["shift_id"] = shift_id
+            if gender:
+                query["gender"] = gender
+            if marital_status:
+                query["marital_status"] = marital_status
+            if designation:
+                query["designation"] = designation
+            if department:
+                query["department"] = department
+            if employee_type:
+                query["employee_type"] = employee_type
 
             if search:
                 regex_pattern = {"$regex": search, "$options": "i"}
@@ -263,6 +281,14 @@ class Repository:
                 "status": 1,
                 "biometric_id": 1,
                 "weekly_off": 1,
+                "marital_status": 1,
+                "designation": 1,
+                "department": 1,
+                "employee_type": 1,
+                "mobile": 1,
+                "gender": 1,
+                "work_mode": 1,
+                "date_of_joining": 1,
             }
             employees = await self.employees.find({}, projection).to_list(length=None)
 
@@ -1842,7 +1868,7 @@ class Repository:
             return []
 
     async def get_leave_requests(
-        self, employee_id: str = None, status: str = None
+        self, employee_id: str = None, status: str = None, date: str = None
     ) -> List[dict]:
         try:
             query = {}
@@ -1850,6 +1876,13 @@ class Repository:
                 query["employee_id"] = employee_id
             if status and status != "All":
                 query["status"] = status
+            
+            if date:
+                # Filter requests active on a specific date (YYYY-MM-DD)
+                query["$and"] = [
+                    {"start_date": {"$lte": date}},
+                    {"end_date": {"$gte": date}}
+                ]
 
             requests = await self.leave_requests.find(query).to_list(length=None)
 
@@ -3472,7 +3505,8 @@ class Repository:
             if search:
                 regex_pattern = {"$regex": search, "$options": "i"}
                 query["$or"] = [
-                    {"employee_name": regex_pattern},
+                    {"first_name": regex_pattern},
+                    {"last_name": regex_pattern},
                     {"email": regex_pattern},
                     {"token": regex_pattern},
                 ]
@@ -3488,13 +3522,47 @@ class Repository:
                 .to_list(length=limit)
             )
 
-            return [normalize(req) for req in nda_requests], total_items
+            normalized_requests = []
+            for req in nda_requests:
+                if "first_name" not in req and "employee_name" in req:
+                    parts = req["employee_name"].split(" ", 1)
+                    req["first_name"] = parts[0]
+                    req["last_name"] = parts[1] if len(parts) > 1 else ""
+                normalized_requests.append(normalize(req))
+
+            return normalized_requests, total_items
+        except Exception as e:
+            raise e
+
+    async def get_approved_ndas(self) -> List[dict]:
+        try:
+            # We only want NDAs that have been Approved/Signed
+            # and only return fields necessary for employee creation
+            query = {"status": "Approved"}
+            projection = {
+                "first_name": 1,
+                "last_name": 1,
+                "email": 1,
+                "mobile": 1,
+                "address": 1,
+                "residential_address": 1,
+                "role": 1,
+                "status": 1
+            }
+            
+            cursor = self.nda_requests.find(query, projection).sort("created_at", -1)
+            results = await cursor.to_list(length=None)
+            return [normalize(res) for res in results]
         except Exception as e:
             raise e
 
     async def get_nda_request_by_token(self, token: str) -> dict:
         try:
             nda_request = await self.nda_requests.find_one({"token": token})
+            if nda_request and "first_name" not in nda_request and "employee_name" in nda_request:
+                parts = nda_request["employee_name"].split(" ", 1)
+                nda_request["first_name"] = parts[0]
+                nda_request["last_name"] = parts[1] if len(parts) > 1 else ""
             return normalize(nda_request) if nda_request else None
         except Exception as e:
             raise e

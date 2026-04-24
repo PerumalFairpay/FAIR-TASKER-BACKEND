@@ -1,17 +1,21 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import JSONResponse
 from app.crud.repository import repository as repo
 from app.models import LeaveRequestCreate, LeaveRequestUpdate, LeaveRequestStatusUpdate
 from typing import List, Optional
 import os
 from app.helper.file_handler import save_upload_file
+from app.services.leave_email_service import send_leave_application_email, send_leave_status_email
 
 from app.auth import verify_token, get_current_user
 
 router = APIRouter(prefix="/leave-requests", tags=["leave-requests"], dependencies=[Depends(verify_token)])
 
+# --- Routes ---
+
 @router.post("/create")
 async def create_leave_request(
+    background_tasks: BackgroundTasks,
     employee_id: str = Form(...),
     leave_type_id: str = Form(...),
     leave_duration_type: str = Form(...),
@@ -52,6 +56,24 @@ async def create_leave_request(
         )
         
         new_request = await repo.create_leave_request(leave_request, attachment_path)
+        
+        # Send Email Notification
+        if new_request and new_request.get("success") is not False:
+            emp_details = new_request.get("employee_details")
+            lt_details = new_request.get("leave_type_details")
+            
+            if emp_details and lt_details:
+                background_tasks.add_task(
+                    send_leave_application_email,
+                    employee_name=emp_details.get("name"),
+                    employee_email=emp_details.get("email"),
+                    leave_type=lt_details.get("name"),
+                    start_date=start_date,
+                    end_date=end_date,
+                    total_days=new_request.get("total_days"),
+                    reason=reason
+                )
+
         return JSONResponse(
             status_code=201,
             content={"message": "Leave request submitted successfully", "success": True, "data": new_request}
@@ -190,7 +212,7 @@ async def update_leave_request(
         )
 
 @router.patch("/status/{leave_request_id}")
-async def update_leave_status(leave_request_id: str, status_update: LeaveRequestStatusUpdate):
+async def update_leave_status(leave_request_id: str, status_update: LeaveRequestStatusUpdate, background_tasks: BackgroundTasks):
     try:
         update_data = LeaveRequestUpdate(
             status=status_update.status,
@@ -202,6 +224,23 @@ async def update_leave_status(leave_request_id: str, status_update: LeaveRequest
                 status_code=404,
                 content={"message": "Leave request not found", "success": False}
             )
+            
+        # Send Email Notification
+        emp_details = updated_request.get("employee_details")
+        lt_details = updated_request.get("leave_type_details")
+        
+        if emp_details and lt_details:
+            background_tasks.add_task(
+                send_leave_status_email,
+                employee_name=emp_details.get("name"),
+                employee_email=emp_details.get("email"),
+                leave_type=lt_details.get("name"),
+                start_date=updated_request.get("start_date"),
+                end_date=updated_request.get("end_date"),
+                status=status_update.status,
+                rejection_reason=status_update.rejection_reason
+            )
+
         return JSONResponse(
             status_code=200,
             content={"message": f"Leave request {status_update.status} successfully", "success": True, "data": updated_request}

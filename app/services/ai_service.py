@@ -4,398 +4,219 @@ from pydantic import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.tools import tool
-from typing import AsyncGenerator, List, Dict, Any
-from app.database import db
+from typing import AsyncGenerator, List, Dict, Any, Optional
 import os
-from app.services.vector_store import vector_store_service
 
 from bson import ObjectId
+from langchain_core.tools import tool
+from app.crud.repository import repository as repo
+from app.services.vector_store import vector_store_service
 
 async def get_tools_for_user(user: dict):
-    user_id = user.get("id")
+    """Returns tools based on user roles and data access permissions."""
+    role = user.get("role", "employee")
     emp_no_id = user.get("employee_no_id")
-    role = user.get("role", "employee").lower()
-    name = user.get("name", "User")
-    
-    employee_mongo_id = None
-    if emp_no_id:
-        emp_record = await db["employees"].find_one({"employee_no_id": emp_no_id})
-        if emp_record:
-            employee_mongo_id = str(emp_record.get("_id"))
-            
-    # Common identifiers for filtering
-    identifiers = [id for id in [user_id, emp_no_id, name, employee_mongo_id] if id]
-
-    today = datetime.now().strftime("%Y-%m-%d")
 
     @tool
-    async def get_attendance(employee_matcher: str = None, date: str = None) -> str:
-        """Fetch attendance records. Use format 'YYYY-MM-DD' for a specific date. Admins can provide an employee name or ID."""
-        try:
-            query = {}
-            if role != "admin":
-                query = {"employee_id": {"$in": identifiers}}
-            elif employee_matcher:
-                emp = await db["employees"].find_one({
-                    "$or": [
-                        {"name": {"$regex": employee_matcher, "$options": "i"}},
-                        {"employee_no_id": employee_matcher}
-                    ]
-                })
-                if emp:
-                    emp_id = str(emp["_id"])
-                    query = {"employee_id": {"$in": [emp_id, emp.get("employee_no_id")]}}
-                else:
-                    return f"No employee found matching '{employee_matcher}'"
-            
-            if date:
-                query["date"] = date
-            
-            records = await db["attendance"].find(query).sort("date", -1).limit(10).to_list(length=10)
-            if not records: 
-                msg = f"No attendance records found"
-                if date: msg += f" for {date}"
-                return msg + f". (Current Date: {today})"
-            
-            summary = [f"Date: {r.get('date')} | Status: {r.get('status')} | In: {r.get('clock_in')} | Out: {r.get('clock_out')}" for r in records]
-            return f"(Today is {today})\n" + "\n".join(summary)
-        except Exception as e:
-            return f"Error: {str(e)}"
-
-    @tool
-    async def get_user_profile(employee_matcher: str = None) -> str:
-        """Get profile details. Admins can provide an employee name or ID."""
-        try:
-            target_emp_no = emp_no_id
-            if role == "admin" and employee_matcher:
-                emp = await db["employees"].find_one({
-                    "$or": [
-                        {"name": {"$regex": employee_matcher, "$options": "i"}},
-                        {"employee_no_id": employee_matcher}
-                    ]
-                })
-                if not emp: return f"Employee '{employee_matcher}' not found."
-                target_emp_no = emp.get("employee_no_id")
-
-            emp_record = await db["employees"].find_one({"employee_no_id": target_emp_no})
-            if not emp_record: return "Profile not found."
-            
-            # Exclude sensitive or internal fields
-            exclude_fields = ["_id", "password", "hashed_password", "tokens"]
-            
-            details = [f"Full Profile Details for {emp_record.get('name', 'Employee')}:"]
-            for key, value in emp_record.items():
-                if key in exclude_fields:
-                    continue
-                
-                # Format key for readability
-                display_key = key.replace("_", " ").title()
-                
-                # Handle different value types
-                if value is None:
-                    details.append(f"{display_key}: N/A")
-                elif isinstance(value, list):
-                    details.append(f"{display_key}: {len(value)} items recorded")
-                elif isinstance(value, dict):
-                    details.append(f"{display_key}: {json.dumps(value)}")
-                elif isinstance(value, datetime):
-                    details.append(f"{display_key}: {value.strftime('%Y-%m-%d %H:%M:%S')}")
-                else:
-                    details.append(f"{display_key}: {value}")
-            
-            return "\n".join(details)
-        except Exception as e:
-            return f"Error: {str(e)}"
-
-    @tool
-    async def get_projects(status: str = None, search: str = None, employee_matcher: str = None) -> str:
-        """Fetch projects. Employees see their own assigned projects. Admins see all projects.
-        Admins can provide employee_matcher (name or employee ID) to see a specific employee's projects.
-        Optional: filter by status (Planned/Active/Completed/On Hold) or search by project name."""
-        try:
-            query = {}
-            # Resolve target identifiers: either the logged-in user or a looked-up employee
-            target_ids = identifiers
-            if role == "admin" and employee_matcher:
-                emp = await db["employees"].find_one({
-                    "$or": [
-                        {"name": {"$regex": employee_matcher, "$options": "i"}},
-                        {"employee_no_id": employee_matcher}
-                    ]
-                })
-                if not emp:
-                    return f"No employee found matching '{employee_matcher}'."
-                emp_mongo_id = str(emp["_id"])
-                target_ids = [i for i in [emp.get("employee_no_id"), emp_mongo_id, emp.get("name")] if i]
-
-            if role != "admin" or employee_matcher:
-                # Filter to projects where the target employee appears in any team field
-                query = {
-                    "$or": [
-                        {"project_manager_ids": {"$in": target_ids}},
-                        {"team_leader_ids": {"$in": target_ids}},
-                        {"team_member_ids": {"$in": target_ids}},
-                    ]
-                }
-
-            if status:
-                query["status"] = {"$regex": status, "$options": "i"}
-            if search:
-                query["name"] = {"$regex": search, "$options": "i"}
-
-            projects = await db["projects"].find(query).sort("created_at", -1).limit(20).to_list(length=20)
-            if not projects:
-                return "No projects found."
-
-            lines = []
-            for p in projects:
-                name = p.get("name", "Unnamed")
-                st = p.get("status", "N/A")
-                priority = p.get("priority", "N/A")
-                start = p.get("start_date", "N/A")
-                end = p.get("end_date", "N/A")
-                budget = p.get("budget", 0)
-                currency = p.get("currency", "")
-                lines.append(f"Project: {name} | Status: {st} | Priority: {priority} | Dates: {start} → {end} | Budget: {currency} {budget}")
-            return f"Found {len(lines)} project(s):\n" + "\n".join(lines)
-        except Exception as e:
-            return f"Error: {str(e)}"
-
-    @tool
-    async def get_tasks(status: str = None, priority: str = None, project_name: str = None, employee_matcher: str = None, include_old: bool = False) -> str:
-        """Fetch tasks. Employees see tasks assigned to them. Admins see all tasks.
-        Admins can provide employee_matcher (name or employee ID) to see a specific employee's tasks.
-        By default shows only active/upcoming tasks. Set include_old=True to include old completed records.
-        Optional filters: status (Todo/In Progress/Done/Overdue), priority (Low/Medium/High/Critical), project name."""
-        try:
-            from datetime import timedelta
-            query = {}
-            # Resolve target identifiers: either the logged-in user or a looked-up employee
-            target_ids = identifiers
-            if role == "admin" and employee_matcher:
-                emp = await db["employees"].find_one({
-                    "$or": [
-                        {"name": {"$regex": employee_matcher, "$options": "i"}},
-                        {"employee_no_id": employee_matcher}
-                    ]
-                })
-                if not emp:
-                    return f"No employee found matching '{employee_matcher}'."
-                emp_mongo_id = str(emp["_id"])
-                target_ids = [i for i in [emp.get("employee_no_id"), emp_mongo_id, emp.get("name")] if i]
-
-            if role != "admin" or employee_matcher:
-                query = {"assigned_to": {"$in": target_ids}}
-
-            if status:
-                query["status"] = {"$regex": status, "$options": "i"}
-            elif not include_old:
-                # Default: exclude tasks that are fully done AND older than 30 days
-                cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
-                query["$or"] = [
-                    {"status": {"$nin": ["Done", "Completed"]}},      # Still active
-                    {"end_date": {"$gte": cutoff}}                     # OR completed recently
-                ]
-
-            if priority:
-                query["priority"] = {"$regex": priority, "$options": "i"}
-            if project_name:
-                proj = await db["projects"].find_one({"name": {"$regex": project_name, "$options": "i"}})
-                if proj:
-                    query["project_id"] = str(proj["_id"])
-                else:
-                    return f"No project found matching '{project_name}'."
-
-            tasks = await db["tasks"].find(query).sort("end_date", 1).limit(20).to_list(length=20)
-            if not tasks:
-                return "No tasks found." + ("" if include_old or status else " (Showing active tasks only. Ask to include old records if needed.)")
-
-            lines = []
-            for t in tasks:
-                tname = t.get("task_name", "Unnamed")
-                st = t.get("status", "N/A")
-                pri = t.get("priority", "N/A")
-                prog = t.get("progress", 0)
-                end = t.get("end_date", "N/A")
-                lines.append(f"Task: {tname} | Status: {st} | Priority: {pri} | Progress: {prog}% | Due: {end}")
-            return f"Found {len(lines)} task(s):\n" + "\n".join(lines)
-        except Exception as e:
-            return f"Error: {str(e)}"
-
-    @tool
-    async def get_assets(employee_matcher: str = None) -> str:
-        """Fetch assets assigned to the current employee. Admins can provide an employee name or ID to look up their assets, or leave empty to see all assets."""
-        try:
-            if role == "admin":
-                if employee_matcher:
-                    emp = await db["employees"].find_one({
-                        "$or": [
-                            {"name": {"$regex": employee_matcher, "$options": "i"}},
-                            {"employee_no_id": employee_matcher}
-                        ]
-                    })
-                    if not emp:
-                        return f"No employee found matching '{employee_matcher}'."
-                    target_id = str(emp["_id"])
-                    query = {"assigned_to": target_id}
-                else:
-                    query = {}  # Admins see all assets
-            else:
-                query = {"assigned_to": {"$in": identifiers}}
-
-            assets = await db["assets"].find(query).sort("created_at", -1).limit(20).to_list(length=20)
-            if not assets:
-                return "No assets found."
-
-            lines = []
-            for a in assets:
-                aname = a.get("asset_name", "Unnamed")
-                status = a.get("status", "N/A")
-                condition = a.get("condition", "N/A")
-                model = a.get("model_no", "N/A")
-                serial = a.get("serial_no", "N/A")
-                warranty = a.get("warranty_expiry", "N/A")
-                lines.append(f"Asset: {aname} | Status: {status} | Condition: {condition} | Model: {model} | Serial: {serial} | Warranty Expiry: {warranty}")
-            return f"Found {len(lines)} asset(s):\n" + "\n".join(lines)
-        except Exception as e:
-            return f"Error: {str(e)}"
-
-    @tool
-    async def get_expenses(start_date: str = None, end_date: str = None, employee_matcher: str = None) -> str:
-        """Fetch expense records. Employees see their own expenses. Admins can provide an employee name/ID or leave empty to see all. Optionally filter by date range (YYYY-MM-DD)."""
-        try:
-            if role == "admin":
-                if employee_matcher:
-                    emp = await db["employees"].find_one({
-                        "$or": [
-                            {"name": {"$regex": employee_matcher, "$options": "i"}},
-                            {"employee_no_id": employee_matcher}
-                        ]
-                    })
-                    if not emp:
-                        return f"No employee found matching '{employee_matcher}'."
-                    target_ids = [str(emp["_id"]), emp.get("employee_no_id")]
-                    target_ids = [i for i in target_ids if i]
-                    query = {"employee_id": {"$in": target_ids}}
-                else:
-                    query = {}  # Admins see all expenses
-            else:
-                query = {"employee_id": {"$in": identifiers}}
-
-            if start_date:
-                query.setdefault("date", {})["$gte"] = start_date
-            if end_date:
-                query.setdefault("date", {})["$lte"] = end_date
-
-            expenses = await db["expenses"].find(query).sort("date", -1).limit(20).to_list(length=20)
-            if not expenses:
-                return "No expense records found."
-
-            total = sum(e.get("amount", 0) for e in expenses)
-            lines = []
-            for e in expenses:
-                amt = e.get("amount", 0)
-                purpose = e.get("purpose", "N/A")
-                payment_mode = e.get("payment_mode", "N/A")
-                date = e.get("date", "N/A")
-                lines.append(f"Date: {date} | Amount: {amt} | Purpose: {purpose} | Payment: {payment_mode}")
-            return f"Found {len(lines)} expense(s). Total: {total:.2f}\n" + "\n".join(lines)
-        except Exception as e:
-            return f"Error: {str(e)}"
-
-    @tool
-    async def get_leaves(employee_matcher: str = None) -> str:
-        """Fetch leave records including approved, available, and rejected leaves. Admins can provide an employee name or ID."""
-        try:
-            target_ids = identifiers
-            target_name = name
-            if role == "admin" and employee_matcher:
-                emp = await db["employees"].find_one({
-                    "$or": [
-                        {"name": {"$regex": employee_matcher, "$options": "i"}},
-                        {"employee_no_id": employee_matcher}
-                    ]
-                })
-                if not emp:
-                    return f"No employee found matching '{employee_matcher}'."
-                emp_mongo_id = str(emp["_id"])
-                target_ids = [i for i in [emp.get("employee_no_id"), emp_mongo_id, emp.get("name")] if i]
-                target_name = emp.get("name", employee_matcher)
-
-            # 1. Fetch all leave types
-            leave_types = await db["leave_types"].find({"status": "Active"}).to_list(length=100)
-            if not leave_types:
-                return "No active leave types found in the system."
-
-            # 2. Fetch all leave requests for the target employee
-            leave_requests = await db["leave_requests"].find({"employee_id": {"$in": target_ids}}).to_list(length=100)
-            
-            # 3. Calculate used days per leave type (only Approved)
-            used_days = {} # leave_type_id -> total_days
-            history_lines = []
-            
-            for req in leave_requests:
-                lt_id = str(req.get("leave_type_id"))
-                status = req.get("status", "Pending")
-                days = req.get("total_days", 0)
-                
-                if status == "Approved":
-                    used_days[lt_id] = used_days.get(lt_id, 0) + days
-                
-                # Add to history
-                date_range = f"{req.get('start_date')} to {req.get('end_date')}"
-                if req.get('start_date') == req.get('end_date'):
-                    date_range = req.get('start_date')
-                
-                reason = f" | Reason: {req.get('rejection_reason')}" if status == "Rejected" and req.get("rejection_reason") else ""
-                history_lines.append(f"- {date_range}: {status} ({days} days){reason}")
-
-            # 4. Generate summary
-            summary = [f"Leave Status for {target_name}:"]
-            summary.append("\nAvailable Balance:")
-            for lt in leave_types:
-                lt_id = str(lt["_id"])
-                lt_name = lt.get("name")
-                allowed = lt.get("number_of_days", 0)
-                used = used_days.get(lt_id, 0)
-                available = allowed - used
-                summary.append(f"- {lt_name}: {available} days remaining (Allowed: {allowed}, Used: {used})")
-            
-            if history_lines:
-                summary.append("\nRecent Leave History:")
-                summary.extend(history_lines[-10:]) # Show last 10
-            else:
-                summary.append("\nNo leave history found.")
-                
-            return "\n".join(summary)
-        except Exception as e:
-            return f"Error: {str(e)}"
-
-    @tool
-    async def search_documents(query: str, metadata_filter: dict = None) -> str:
-        """Search for information within uploaded documents. 
-        Arguments:
-            query: The search string.
-            metadata_filter: Optional dictionary to filter by metadata (e.g. {"document_id": "...", "category_id": "..."}).
+    async def list_employees(
+        include_all_profile_details: bool = False,
+        search: Optional[str] = None,
+        status: Optional[str] = None,
+        role_filter: Optional[str] = None,
+        work_mode: Optional[str] = None,
+        shift_id: Optional[str] = None,
+        gender: Optional[str] = None,
+        marital_status: Optional[str] = None,
+        designation: Optional[str] = None,
+        department: Optional[str] = None,
+        employee_type: Optional[str] = None,
+        limit: int = 50
+    ):
+        """
+        Retrieves a filtered list of employees including their profile details.
+        Use this for questions like 'who is married?', 'list onboarding employees', 
+        'who is a developer?', or 'who works in the first shift?'.
+        'include_all_profile_details': Set to true if the user specifically asks for 'all details' or 'everything'.
+        'search': general search string (name, email, mobile, id).
+        'status': e.g., 'Active', 'Joined', 'Resigned', 'Terminated'.
+        'role_filter': e.g., 'admin', 'employee', 'manager'.
+        'shift_id': the ID of the shift (use get_organization_metadata to find IDs).
         """
         try:
-            results = await vector_store_service.search_documents(query, filter_dict=metadata_filter)
-            if not results:
-                return "No relevant information found in the documents."
+            # If no specific filters and not asking for full details, return the summary (FAST)
+            if not include_all_profile_details and not any([search, status, role_filter, work_mode, shift_id, gender, marital_status, designation, department, employee_type]):
+                return await repo.get_all_employees_summary()
             
-            snippets = []
-            for i, res in enumerate(results):
-                source = res["metadata"].get("name", "Unknown Document")
-                snippets.append(f"[Source: {source}]\n{res['content']}")
-            
-            return "Found the following relevant information in documents:\n\n" + "\n---\n".join(snippets)
-        except Exception as e:
-            return f"Error searching documents: {str(e)}"
+            # If filters are present OR include_all_profile_details is True, use the more comprehensive get_employees
+            employees, _ = await repo.get_employees(
+                limit=limit,
+                search=search,
+                status=status,
+                role=role_filter,
+                work_mode=work_mode,
+                shift_id=shift_id,
+                gender=gender,
+                marital_status=marital_status,
+                designation=designation,
+                department=department,
+                employee_type=employee_type
+            )
 
-    tools = [get_attendance, get_user_profile, get_projects, get_tasks, get_assets, get_expenses, get_leaves, search_documents]
+            # Clean up the data for better LLM context and table rendering
+            cleaned_employees = []
+            for emp in employees:
+                clean_emp = {k: v for k, v in emp.items() if v is not None and k not in ["_id", "id", "hashed_password", "password", "onboarding_checklist", "offboarding_checklist", "documents", "created_at", "updated_at"]}
+                # Add summarized versions of complex fields if helpful
+                if emp.get("onboarding_checklist"):
+                    completed = sum(1 for item in emp["onboarding_checklist"] if item.get("status") == "Completed")
+                    clean_emp["onboarding_status"] = f"{completed}/{len(emp['onboarding_checklist'])} completed"
+                cleaned_employees.append(clean_emp)
+            
+            return cleaned_employees
+        except Exception as e:
+            return f"Error listing filtered employees: {str(e)}"
+
+    @tool
+    async def get_my_details():
+        """
+        Retrieves your own comprehensive profile details, including personal info,
+        task metrics, leave balances, attendance stats, assigned projects, and assets.
+        Use this when you want to know about your own data.
+        """
+        try:
+            # Find employee by employee_no_id which is linked to the user
+            employee = await repo.employees.find_one({"employee_no_id": emp_no_id})
+            if not employee:
+                return "Your employee record could not be found."
+            
+            emp_id = str(employee["_id"])
+            
+            # Aggregate comprehensive data
+            data = {
+                "profile": await repo.get_employee(emp_id),
+                "leave_summary": await repo.get_employee_leave_balances(emp_id),
+                "task_metrics": await repo.get_employee_task_metrics(emp_id),
+                "attendance_stats": await repo.get_employee_attendance_stats(emp_id),
+                "assigned_projects": await repo.get_employee_assigned_projects(emp_id),
+                "assigned_assets": await repo.get_assets_by_employee(emp_id)
+            }
+            return data
+        except Exception as e:
+            return f"Error fetching your details: {str(e)}"
+
+    @tool
+    async def get_any_employee_details(search_query: str):
+        """
+        Retrieves full details for a specific employee identified by name, email, mobile, or ID.
+        Returns personal info, tasks, leave balances, attendance stats, projects, and assets.
+        'search_query': Any identifying information about the employee.
+        """
+        try:
+            # Search for the employee using the repository's search capability
+            employees, _ = await repo.get_employees(search=search_query, limit=1)
+            if not employees:
+                return f"No employee found matching '{search_query}'"
+            
+            emp = employees[0]
+            emp_id = emp["id"]
+
+            # Aggregate comprehensive data
+            data = {
+                "profile": await repo.get_employee(emp_id),
+                "leave_summary": await repo.get_employee_leave_balances(emp_id),
+                "task_metrics": await repo.get_employee_task_metrics(emp_id),
+                "attendance_stats": await repo.get_employee_attendance_stats(emp_id),
+                "assigned_projects": await repo.get_employee_assigned_projects(emp_id),
+                "assigned_assets": await repo.get_assets_by_employee(emp_id)
+            }
+            return data
+        except Exception as e:
+            return f"Error fetching employee details: {str(e)}"
+
+    @tool
+    async def get_organization_metadata():
+        """
+        Retrieves reference information about the organization, such as lists of 
+        Departments, Shifts, and Leave Types. 
+        Use this to find correct IDs or names when answering questions about specific company units or shifts.
+        """
+        try:
+            shifts = await repo.get_shifts()
+            departments = await repo.get_departments()
+            leave_types = await repo.get_leave_types()
+            doc_categories = await repo.get_document_categories()
+            
+            return {
+                "shifts": [{"id": s["id"], "name": s["name"], "time": f"{s['start_time']}-{s['end_time']}"} for s in shifts],
+                "departments": [{"id": d["id"], "name": d["name"]} for d in departments],
+                "leave_types": [{"id": lt["id"], "name": lt["name"], "days": lt["number_of_days"]} for lt in leave_types],
+                "document_categories": [{"id": dc["id"], "name": dc["name"]} for dc in doc_categories]
+            }
+        except Exception as e:
+            return f"Error fetching organization metadata: {str(e)}"
+
+    @tool
+    async def list_leave_requests(
+        employee_id: Optional[str] = None,
+        status: Optional[str] = "Pending",
+        date: Optional[str] = None
+    ):
+        """
+        Retrieves a list of leave requests from employees.
+        Use this for questions like 'who applied for leave today?' or 'what are my pending leaves?'.
+        'employee_id': filter by a specific employee's ID.
+        'status': filter by status (Pending, Approved, Rejected). Use 'All' for everything.
+        'date': filter for requests active on a specific date (YYYY-MM-DD). Use this for 'today' or a specific day.
+        """
+        try:
+            return await repo.get_leave_requests(employee_id=employee_id, status=status, date=date)
+        except Exception as e:
+            return f"Error listing leave requests: {str(e)}"
+
+    @tool
+    async def list_documents(
+        search: Optional[str] = None,
+        status: Optional[str] = "Active"
+    ):
+        """
+        Retrieves a list of company documents (Policies, Agreements, Manuals, etc.).
+        Use this to see what documents are available and their metadata like expiry dates.
+        'search': filter by document name.
+        'status': filter by status (Active, Archived, etc.). Use 'All' for everything.
+        """
+        try:
+            return await repo.get_documents(status=status, search=search)
+        except Exception as e:
+            return f"Error listing documents: {str(e)}"
+
+    @tool
+    async def search_document_content(
+        query: str,
+        category_id: Optional[str] = None,
+        limit: int = 5
+    ):
+        """
+        Searches INSIDE the actual text content of company documents for answers to questions.
+        Use this for questions about company policies, rules, procedures, or specifics inside PDFs/Docs.
+        'query': the natural language question or search terms to find inside the documents.
+        'category_id': optional filter to search only within a specific document category.
+        """
+        try:
+            filter_dict = {"category_id": category_id} if category_id else None
+            results = await vector_store_service.search_documents(query=query, filter_dict=filter_dict, limit=limit)
+            
+            if not results:
+                return f"No relevant information found inside documents for '{query}'."
+            
+            return results
+        except Exception as e:
+            return f"Error searching document content: {str(e)}"
+
+    if role == "admin":
+        return [list_employees, get_any_employee_details, get_organization_metadata, list_leave_requests, list_documents, search_document_content]
     
-    return tools
+    # Default: Only allow getting own details
+    return [get_my_details]
 
 async def chat_stream(query: str, history: list, user: dict) -> AsyncGenerator[str, None]:
     """Generates a streaming response using LangChain's AgentExecutor, incorporating conversation history."""
@@ -417,12 +238,23 @@ async def chat_stream(query: str, history: list, user: dict) -> AsyncGenerator[s
     
     today = datetime.now().strftime("%Y-%m-%d, %A")
     system_prompt = (
-        "You are the Astro AI Assistant. Your purpose is to help users manage and query their workplace data, including attendance, profiles, projects, tasks, assets, expenses, and leaves. "
-        "You must use the provided tools to fetch data from the database. Always rely on these tools for any data-specific inquiries. "
-        "For leave-related queries, use the 'get_leaves' tool to report on available balances, approved requests, and any rejected requests with their respective reasons. "
-        "Administrators are permitted to use tool parameters to access data for other employees. "
-        "If a tool returns no data, inform the user in a professional and direct manner. Maintain a helpful, formal, and objective tone throughout the conversation, utilizing relevant emojis where appropriate to enhance the interaction. "
+        "You are the Astro AI Assistant. Your purpose is to help users manage and query their workplace data. "
+        "Maintain a helpful, formal, and objective tone throughout the conversation, utilizing relevant emojis where appropriate to enhance the interaction. "
         f"The current user is {user.get('name', 'User')} and their role is {user.get('role', 'employee')}."
+        "\nYou have access to full employee profile details, leave requests, and company documents metadata/content. "
+        "When users ask for a 'list' or 'details', use `list_employees`, `list_leave_requests`, or `list_documents` with appropriate filters to get the data. "
+        "\nDOCUMENT SEARCH LOGIC:"
+        "\n- If a user asks a question about company policies, rules, or anything likely to be in a manual or agreement, use `search_document_content`. "
+        "\n- Always try to search inside documents if you cannot find the answer in the database tools directly."
+        "\nLEAVE ELIGIBILITY LOGIC:"
+        "\n- If an employee asks 'what kind of leave should I take?', check their `leave_summary` for remaining balances and `get_organization_metadata` for leave type rules."
+        "\n- Suggest Casual Leave if they have a balance, Sick Leave for health issues, or LOP (Loss of Pay) if balances are exhausted."
+        "\nTABLE FORMATTING RULES:"
+        "\n1. Always use **Employees as ROWS** and **Fields as COLUMNS**."
+        "\n2. If a table would have more than 6-7 columns, split the data into multiple logical tables (e.g., 'Core Info', 'Contact Details', 'Employment Settings') to keep it readable."
+        "\n3. Ensure columns reflect the most important information first (Name, ID, Designation, Status)."
+        "\n4. Do not be hesitant to provide details; the tool `list_employees` returns comprehensive profile information for all matching employees. "
+        "If a user asks about a specific shift, department, or document category name, use `get_organization_metadata` first to find the correct ID to use in your search filter. "
         f"\nIMPORTANT: The current date and time is {today}."
     )
     

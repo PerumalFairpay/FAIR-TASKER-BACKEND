@@ -935,7 +935,8 @@ class SystemConfigurationResponse(SystemConfigurationBase):
 
 # NDA Models
 class NDARequestBase(BaseModel):
-    employee_name: str
+    first_name: str
+    last_name: str
     email: EmailStr
     mobile: str
     role: str
@@ -987,6 +988,17 @@ class NDARequestResponse(NDARequestBase):
     ip_address: Optional[str] = None
     email: Optional[EmailStr] = None
     mobile: Optional[str] = None
+
+
+class NDADropdownItem(BaseModel):
+    id: str
+    first_name: str
+    last_name: str
+    email: str
+    mobile: str
+    address: Optional[str] = None
+    residential_address: Optional[str] = None
+    role: str
 
     class Config:
         from_attributes = True
