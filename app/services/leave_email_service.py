@@ -32,7 +32,7 @@ def _get_base_template(content_html: str, title: str):
     <body>
         <div class="container">
             <div class="header">
-                <h1>FAIR PAY</h1>
+                <h1>FairPAY</h1>
             </div>
             <div class="content">
                 <h2 style="margin-top: 0; color: #000;">{title}</h2>
