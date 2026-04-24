@@ -83,9 +83,15 @@ async def shutdown_event():
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+origins = [
+    "https://hrm.fairpaytechworks.com",
+    "http://localhost:3000",
+    "http://localhost:3001",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
