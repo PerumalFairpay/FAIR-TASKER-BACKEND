@@ -5,7 +5,7 @@ from app.crud.repository import repository
 from app.helper.response_helper import success_response, error_response
 from datetime import datetime, timedelta
 import uuid
-from typing import List
+from typing import List, Optional
 from fastapi import UploadFile, File, Form
 from app.helper.file_handler import file_handler
 from app.helper.template_helper import render_nda_template
@@ -97,6 +97,50 @@ def _notify_admin_nda_signed(first_name: str, last_name: str, email: str):
         )
     except Exception as e:
         print(f"[Gmail] Failed to notify admin: {e}")
+
+# ------------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------------
+
+def format_nda_response(nda: dict) -> dict:
+    """
+    Transforms a flat NDA document from MongoDB into the structured
+    API response format with nested address objects.
+    """
+    if not nda:
+        return nda
+
+    result = {k: v for k, v in nda.items() if k not in (
+        "perma_door_no", "perma_care_of_type", "perma_care_of_name",
+        "perma_street", "perma_city", "perma_state", "perma_pincode",
+        "res_door_no", "res_care_of_type", "res_care_of_name",
+        "res_street", "res_city", "res_state", "res_pincode",
+    )}
+
+    result["address"] = {
+        "permanent_address": nda.get("address"),
+        "perma_door_no": nda.get("perma_door_no"),
+        "perma_care_of_type": nda.get("perma_care_of_type"),
+        "perma_care_of_name": nda.get("perma_care_of_name"),
+        "perma_street": nda.get("perma_street"),
+        "perma_city": nda.get("perma_city"),
+        "perma_state": nda.get("perma_state"),
+        "perma_pincode": nda.get("perma_pincode"),
+    }
+
+    result["residential_address"] = {
+        "residential_address": nda.get("residential_address"),
+        "res_door_no": nda.get("res_door_no"),
+        "res_care_of_type": nda.get("res_care_of_type"),
+        "res_care_of_name": nda.get("res_care_of_name"),
+        "res_street": nda.get("res_street"),
+        "res_city": nda.get("res_city"),
+        "res_state": nda.get("res_state"),
+        "res_pincode": nda.get("res_pincode"),
+    }
+
+    return result
+
 
 # ------------------------------------------------------------------
 # Routes
@@ -201,6 +245,7 @@ async def list_nda_requests(
     limit: int = 10,
     search: str = None,
     status: str = None,
+    start_date: Optional[str] = None,
 ):
     """
     Get list of all NDA requests.
@@ -210,9 +255,20 @@ async def list_nda_requests(
         if status == "All":
              status = None
 
+        # Parse start_date if provided
+        start_date_dt = None
+        if start_date:
+            try:
+                start_date_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+            except:
+                pass
+
         nda_requests, total_items = await repository.get_nda_requests(
-            page, limit, search, status
+            page, limit, search, status, start_date_dt
         )
+        
+        # Format addresses in the list
+        formatted_requests = [format_nda_response(req) for req in nda_requests]
         
         total_pages = (total_items + limit - 1) // limit
         
@@ -220,12 +276,16 @@ async def list_nda_requests(
             "current_page": page,
             "total_pages": total_pages,
             "total_items": total_items,
-            "limit": limit
+            "limit": limit,
+            "page": page,
+            "status": status or "All",
+            "start_date": start_date,
+            "search_keyword": search
         }
         
         return success_response(
             message="NDA requests retrieved successfully",
-            data=nda_requests,
+            data=formatted_requests,
             meta=meta
         )
     except Exception as e:
@@ -300,7 +360,7 @@ async def verify_nda_access(token: str, request_body: dict):
             message="NDA access granted",
             data={
                 "html_content": html_content,
-                "nda": nda_request
+                "nda": format_nda_response(nda_request)
             }
         )
     except HTTPException:
@@ -393,7 +453,7 @@ async def update_nda_details(token: str, update_data: NDARequestUpdate):
             message="NDA details updated successfully",
             data={
                 "html_content": html_content,
-                "nda": updated_nda
+                "nda": format_nda_response(updated_nda)
             }
         )
     except Exception as e:
@@ -531,7 +591,7 @@ async def sign_nda(token: str, request_body: NDASignatureRequest, request: Reque
 
         return success_response(
             message="NDA signed successfully and PDF stored",
-            data=updated_nda
+            data=format_nda_response(updated_nda)
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)

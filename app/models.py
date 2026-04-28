@@ -942,6 +942,22 @@ class NDARequestBase(BaseModel):
     role: str
     address: Optional[str] = None
     residential_address: Optional[str] = None
+    # Granular Permanent Address
+    perma_door_no: Optional[str] = None
+    perma_care_of_type: Optional[str] = None
+    perma_care_of_name: Optional[str] = None
+    perma_street: Optional[str] = None
+    perma_city: Optional[str] = None
+    perma_state: Optional[str] = None
+    perma_pincode: Optional[str] = None
+    # Granular Residential Address
+    res_door_no: Optional[str] = None
+    res_care_of_type: Optional[str] = None
+    res_care_of_name: Optional[str] = None
+    res_street: Optional[str] = None
+    res_city: Optional[str] = None
+    res_state: Optional[str] = None
+    res_pincode: Optional[str] = None
     required_documents: List[str] = []
     status: str = "Pending"
     rejection_reason: Optional[str] = None
@@ -955,6 +971,22 @@ class NDARequestUpdate(BaseModel):
     status: Optional[str] = None
     address: Optional[str] = None
     residential_address: Optional[str] = None
+    # Granular Permanent Address
+    perma_door_no: Optional[str] = None
+    perma_care_of_type: Optional[str] = None
+    perma_care_of_name: Optional[str] = None
+    perma_street: Optional[str] = None
+    perma_city: Optional[str] = None
+    perma_state: Optional[str] = None
+    perma_pincode: Optional[str] = None
+    # Granular Residential Address
+    res_door_no: Optional[str] = None
+    res_care_of_type: Optional[str] = None
+    res_care_of_name: Optional[str] = None
+    res_street: Optional[str] = None
+    res_city: Optional[str] = None
+    res_state: Optional[str] = None
+    res_pincode: Optional[str] = None
     mobile: Optional[str] = None
     documents: Optional[List[str]] = None
     signature: Optional[str] = None
@@ -988,6 +1020,22 @@ class NDARequestResponse(NDARequestBase):
     ip_address: Optional[str] = None
     email: Optional[EmailStr] = None
     mobile: Optional[str] = None
+    # Granular Permanent Address
+    perma_door_no: Optional[str] = None
+    perma_care_of_type: Optional[str] = None
+    perma_care_of_name: Optional[str] = None
+    perma_street: Optional[str] = None
+    perma_city: Optional[str] = None
+    perma_state: Optional[str] = None
+    perma_pincode: Optional[str] = None
+    # Granular Residential Address
+    res_door_no: Optional[str] = None
+    res_care_of_type: Optional[str] = None
+    res_care_of_name: Optional[str] = None
+    res_street: Optional[str] = None
+    res_city: Optional[str] = None
+    res_state: Optional[str] = None
+    res_pincode: Optional[str] = None
 
 
 class NDADropdownItem(BaseModel):
