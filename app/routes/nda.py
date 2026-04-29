@@ -331,7 +331,7 @@ async def verify_nda_access(token: str, request_body: dict):
 
         # Render template content using helper (Full Access)
         current_date = datetime.utcnow()
-        formatted_date = current_date.strftime("%d/%m/%Y")
+        formatted_date = nda_request.get("nda_date") or current_date.strftime("%d/%m/%Y")
         
         html_content = render_nda_template({
             "request": nda_request,
@@ -424,7 +424,7 @@ async def update_nda_details(token: str, update_data: NDARequestUpdate):
         
         # Render updated template content
         current_date = datetime.utcnow()
-        formatted_date = current_date.strftime("%d/%m/%Y")
+        formatted_date = updated_nda.get("nda_date") or current_date.strftime("%d/%m/%Y")
         
         html_content = render_nda_template({
             "request": updated_nda,
@@ -605,6 +605,11 @@ def generate_pdf_from_request(nda_request: dict) -> bytes:
     elif not isinstance(created_at, datetime):
         created_at = datetime.now()
 
+    # Use nda_date if available, otherwise fallback to created_at
+    formatted_date = nda_request.get("nda_date")
+    if not formatted_date:
+        formatted_date = created_at.strftime("%d/%m/%Y")
+
     # Render HTML using centralized helper
     first_name = nda_request.get("first_name", "_________________")
     last_name = nda_request.get("last_name", "_________________")
@@ -618,7 +623,7 @@ def generate_pdf_from_request(nda_request: dict) -> bytes:
         "employee_address": nda_request.get("address", "_________________"),
         "residential_address": nda_request.get("residential_address", "_________________"),
         "role": nda_request.get("role", "_________________"),
-        "date": created_at.strftime("%d/%m/%Y"),
+        "date": formatted_date,
         "signature_data": signature_data,
         "token": nda_request.get("token")
     })

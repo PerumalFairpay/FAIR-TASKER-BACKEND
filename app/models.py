@@ -961,6 +961,7 @@ class NDARequestBase(BaseModel):
     required_documents: List[str] = []
     status: str = "Pending"
     rejection_reason: Optional[str] = None
+    nda_date: Optional[str] = None
 
 
 class NDARequestCreate(NDARequestBase):
@@ -997,6 +998,7 @@ class NDARequestUpdate(BaseModel):
     user_agent: Optional[str] = None
     ip_address: Optional[str] = None
     rejection_reason: Optional[str] = None
+    nda_date: Optional[str] = None
 
 
 class NDAStatusUpdate(BaseModel):
