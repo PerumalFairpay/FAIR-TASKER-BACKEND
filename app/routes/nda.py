@@ -245,7 +245,6 @@ async def list_nda_requests(
     limit: int = 10,
     search: str = None,
     status: str = None,
-    start_date: Optional[str] = None,
 ):
     """
     Get list of all NDA requests.
@@ -255,16 +254,8 @@ async def list_nda_requests(
         if status == "All":
              status = None
 
-        # Parse start_date if provided
-        start_date_dt = None
-        if start_date:
-            try:
-                start_date_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
-            except:
-                pass
-
         nda_requests, total_items = await repository.get_nda_requests(
-            page, limit, search, status, start_date_dt
+            page, limit, search, status
         )
         
         # Format addresses in the list
@@ -279,7 +270,6 @@ async def list_nda_requests(
             "limit": limit,
             "page": page,
             "status": status or "All",
-            "start_date": start_date,
             "search_keyword": search
         }
         
