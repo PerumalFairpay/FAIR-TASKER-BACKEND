@@ -56,7 +56,7 @@ def _send_nda_status_email(email: str, name: str, status: str, reason: str = Non
     status_text = "Approved" if status == "Approved" else "Rejected"
     color = "#28a745" if status == "Approved" else "#dc3545"
     
-    rejection_html = f"<p><strong>Reason for rejection:</strong> {reason}</p><p>Please use the previous link or contact HR to re-submit your details.</p>" if reason else ""
+    rejection_html = f"<p><strong>Reason for rejection:</strong> {reason}</p><p>Please contact HR to re-submit your details.</p>" if reason else ""
     
     body = f"""
     <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px;">
@@ -66,7 +66,7 @@ def _send_nda_status_email(email: str, name: str, status: str, reason: str = Non
         <p>The status of your submission is: <strong style="color: {color}; text-transform: uppercase;">{status_text}</strong>.</p>
         {rejection_html}
         <p style="margin-top: 25px;">Should you have any questions, please reach out to the HR department.</p>
-        <p style="margin-top: 30px;">Best regards,<br/><strong>FairPAY Tech Works</strong></p>
+        <p style="margin-top: 30px;">Best regards,<br/><strong>FairPAY Tech Works India Private Limited</strong></p>
     </div>
     """
     try:
