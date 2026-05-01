@@ -938,13 +938,30 @@ class NDARequestBase(BaseModel):
     first_name: str
     last_name: str
     email: EmailStr
-    mobile: str
-    role: str
+    mobile: Optional[str] = None
+    designation: str
     address: Optional[str] = None
     residential_address: Optional[str] = None
+    # Granular Permanent Address
+    perma_door_no: Optional[str] = None
+    perma_care_of_type: Optional[str] = None
+    perma_care_of_name: Optional[str] = None
+    perma_street: Optional[str] = None
+    perma_city: Optional[str] = None
+    perma_state: Optional[str] = None
+    perma_pincode: Optional[str] = None
+    # Granular Residential Address
+    res_door_no: Optional[str] = None
+    res_care_of_type: Optional[str] = None
+    res_care_of_name: Optional[str] = None
+    res_street: Optional[str] = None
+    res_city: Optional[str] = None
+    res_state: Optional[str] = None
+    res_pincode: Optional[str] = None
     required_documents: List[str] = []
     status: str = "Pending"
     rejection_reason: Optional[str] = None
+    nda_date: Optional[str] = None
 
 
 class NDARequestCreate(NDARequestBase):
@@ -955,6 +972,22 @@ class NDARequestUpdate(BaseModel):
     status: Optional[str] = None
     address: Optional[str] = None
     residential_address: Optional[str] = None
+    # Granular Permanent Address
+    perma_door_no: Optional[str] = None
+    perma_care_of_type: Optional[str] = None
+    perma_care_of_name: Optional[str] = None
+    perma_street: Optional[str] = None
+    perma_city: Optional[str] = None
+    perma_state: Optional[str] = None
+    perma_pincode: Optional[str] = None
+    # Granular Residential Address
+    res_door_no: Optional[str] = None
+    res_care_of_type: Optional[str] = None
+    res_care_of_name: Optional[str] = None
+    res_street: Optional[str] = None
+    res_city: Optional[str] = None
+    res_state: Optional[str] = None
+    res_pincode: Optional[str] = None
     mobile: Optional[str] = None
     documents: Optional[List[str]] = None
     signature: Optional[str] = None
@@ -965,6 +998,7 @@ class NDARequestUpdate(BaseModel):
     user_agent: Optional[str] = None
     ip_address: Optional[str] = None
     rejection_reason: Optional[str] = None
+    nda_date: Optional[str] = None
 
 
 class NDAStatusUpdate(BaseModel):
@@ -988,6 +1022,22 @@ class NDARequestResponse(NDARequestBase):
     ip_address: Optional[str] = None
     email: Optional[EmailStr] = None
     mobile: Optional[str] = None
+    # Granular Permanent Address
+    perma_door_no: Optional[str] = None
+    perma_care_of_type: Optional[str] = None
+    perma_care_of_name: Optional[str] = None
+    perma_street: Optional[str] = None
+    perma_city: Optional[str] = None
+    perma_state: Optional[str] = None
+    perma_pincode: Optional[str] = None
+    # Granular Residential Address
+    res_door_no: Optional[str] = None
+    res_care_of_type: Optional[str] = None
+    res_care_of_name: Optional[str] = None
+    res_street: Optional[str] = None
+    res_city: Optional[str] = None
+    res_state: Optional[str] = None
+    res_pincode: Optional[str] = None
 
 
 class NDADropdownItem(BaseModel):
@@ -998,7 +1048,7 @@ class NDADropdownItem(BaseModel):
     mobile: str
     address: Optional[str] = None
     residential_address: Optional[str] = None
-    role: str
+    designation: str
 
     class Config:
         from_attributes = True

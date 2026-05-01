@@ -39,7 +39,7 @@ def _get_base_template(content_html: str, title: str):
                 {content_html}
             </div>
             <div class="footer">
-                <p>&copy; {os.getenv("COMPANY_NAME", "FairPay Team")}. All rights reserved.</p>
+                <p>&copy; FairPAY Tech Works. All rights reserved.</p>
                 <p>This is an automated notification. Please do not reply directly to this email.</p>
             </div>
         </div>

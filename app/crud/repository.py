@@ -3546,7 +3546,7 @@ class Repository:
                 "mobile": 1,
                 "address": 1,
                 "residential_address": 1,
-                "role": 1,
+                "designation": 1,
                 "status": 1
             }
             

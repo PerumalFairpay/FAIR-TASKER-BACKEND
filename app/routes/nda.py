@@ -5,7 +5,7 @@ from app.crud.repository import repository
 from app.helper.response_helper import success_response, error_response
 from datetime import datetime, timedelta
 import uuid
-from typing import List
+from typing import List, Optional
 from fastapi import UploadFile, File, Form
 from app.helper.file_handler import file_handler
 from app.helper.template_helper import render_nda_template
@@ -28,17 +28,18 @@ def _send_nda_link_email(email: str, name: str, link: str):
     """Send NDA link to the employee."""
     full_link = f"{FRONTEND_URL}{link}"
     body = f"""
-    <div style="font-family: sans-serif; line-height: 1.6; color: #333;">
-        <h2 style="color: #000;">Non-Disclosure Agreement (NDA)</h2>
-        <p>Hi {name},</p>
-        <p>A new Non-Disclosure Agreement (NDA) has been generated for you. Please click the link below to review, upload necessary documents, and sign the agreement:</p>
-        <p style="margin: 30px 0;">
-            <a href="{full_link}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Review and Sign NDA</a>
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px;">
+        <h2 style="color: #000; border-bottom: 2px solid #eee; padding-bottom: 10px;">Non-Disclosure Agreement (NDA)</h2>
+        <p>Dear {name},</p>
+        <p>A Non-Disclosure Agreement (NDA) has been prepared for your review and execution. This document is a standard requirement for your engagement with <strong>FairPAY Tech Works</strong>.</p>
+        <p>Please use the secure link below to review the agreement, upload any necessary documentation, and complete the digital signature process:</p>
+        <p style="margin: 35px 0; text-align: center;">
+            <a href="{full_link}" style="background-color: #000; color: #fff; padding: 14px 28px; text-decoration: none; border-radius: 4px; font-weight: 600; display: inline-block;">Review and Execute NDA</a>
         </p>
-        <p>Alternatively, you can copy and paste this URL into your browser:</p>
-        <p style="word-break: break-all; color: #666;">{full_link}</p>
-        <p><strong>Note:</strong> This link will expire soon. Please complete the process at your earliest convenience.</p>
-        <p>Best regards,<br/><strong>FairPay Team</strong></p>
+        <p style="background-color: #fff9e6; border-left: 4px solid #ffcc00; padding: 15px; margin-top: 25px; font-size: 14px;">
+            <strong>Important:</strong> This secure link is time-sensitive. We kindly request that you complete the process at your earliest convenience to avoid any delays in your onboarding.
+        </p>
+        <p style="margin-top: 30px;">Best regards,<br/><strong>FairPAY Tech Works India Private Limited</strong></p>
     </div>
     """
     try:
@@ -55,15 +56,17 @@ def _send_nda_status_email(email: str, name: str, status: str, reason: str = Non
     status_text = "Approved" if status == "Approved" else "Rejected"
     color = "#28a745" if status == "Approved" else "#dc3545"
     
-    rejection_html = f"<p><strong>Reason for rejection:</strong> {reason}</p><p>Please use the previous link or contact HR to re-submit your details.</p>" if reason else ""
+    rejection_html = f"<p><strong>Reason for rejection:</strong> {reason}</p><p>Please contact HR to re-submit your details.</p>" if reason else ""
     
     body = f"""
-    <div style="font-family: sans-serif; line-height: 1.6; color: #333;">
-        <h2 style="color: #000;">NDA Status Update</h2>
-        <p>Hi {name},</p>
-        <p>Your NDA submission has been <strong style="color: {color};">{status_text}</strong>.</p>
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px;">
+        <h2 style="color: #000; border-bottom: 2px solid #eee; padding-bottom: 10px;">NDA Status Update</h2>
+        <p>Dear {name},</p>
+        <p>This email is to notify you that your recent NDA submission has been reviewed.</p>
+        <p>The status of your submission is: <strong style="color: {color}; text-transform: uppercase;">{status_text}</strong>.</p>
         {rejection_html}
-        <p>Best regards,<br/><strong>FairPay Team</strong></p>
+        <p style="margin-top: 25px;">Should you have any questions, please reach out to the HR department.</p>
+        <p style="margin-top: 30px;">Best regards,<br/><strong>FairPAY Tech Works India Private Limited</strong></p>
     </div>
     """
     try:
@@ -79,13 +82,16 @@ def _notify_admin_nda_signed(first_name: str, last_name: str, email: str):
     """Notify admin that an NDA has been signed."""
     employee_name = f"{first_name} {last_name}"
     body = f"""
-    <div style="font-family: sans-serif; line-height: 1.6; color: #333;">
-        <h2 style="color: #000;">NDA Signed Notification</h2>
-        <p>Admin,</p>
-        <p>The employee <strong>{employee_name}</strong> ({email}) has just signed their NDA.</p>
-        <p>You can now review the document in the admin dashboard.</p>
-        <p style="margin-top: 20px;">
-            <a href="{FRONTEND_URL}/admin/nda" style="color: #000; font-weight: bold;">View NDA Dashboard</a>
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px;">
+        <h2 style="color: #000; border-bottom: 2px solid #eee; padding-bottom: 10px;">NDA Signed Notification</h2>
+        <p>Administrative Team,</p>
+        <p>This is to inform you that <strong>{employee_name}</strong> ({email}) has successfully completed and signed their Non-Disclosure Agreement.</p>
+        <p>The document is now available for review within the administrative dashboard.</p>
+        <p style="margin: 30px 0;">
+            <a href="{FRONTEND_URL}/admin/nda" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: 600; display: inline-block;">View Signed Document</a>
+        </p>
+        <p style="font-size: 13px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
+            This is an automated system notification.
         </p>
     </div>
     """
@@ -97,6 +103,51 @@ def _notify_admin_nda_signed(first_name: str, last_name: str, email: str):
         )
     except Exception as e:
         print(f"[Gmail] Failed to notify admin: {e}")
+
+# ------------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------------
+
+def format_nda_response(nda: dict) -> dict:
+    """
+    Transforms a flat NDA document from MongoDB into the structured
+    API response format with nested address objects.
+    """
+    if not nda:
+        return nda
+
+    result = {k: v for k, v in nda.items() if k not in (
+        "perma_door_no", "perma_care_of_type", "perma_care_of_name",
+        "perma_street", "perma_city", "perma_state", "perma_pincode",
+        "res_door_no", "res_care_of_type", "res_care_of_name",
+        "res_street", "res_city", "res_state", "res_pincode",
+    )}
+
+    result["address"] = {
+        "permanent_address": nda.get("address"),
+        "perma_door_no": nda.get("perma_door_no"),
+        "perma_care_of_type": nda.get("perma_care_of_type"),
+        "perma_care_of_name": nda.get("perma_care_of_name"),
+        "perma_street": nda.get("perma_street"),
+        "perma_city": nda.get("perma_city"),
+        "perma_state": nda.get("perma_state"),
+        "perma_pincode": nda.get("perma_pincode"),
+    }
+
+    result["residential_address"] = {
+        "residential_address": nda.get("residential_address"),
+        "res_door_no": nda.get("res_door_no"),
+        "res_care_of_type": nda.get("res_care_of_type"),
+        "res_care_of_name": nda.get("res_care_of_name"),
+        "res_street": nda.get("res_street"),
+        "res_city": nda.get("res_city"),
+        "res_state": nda.get("res_state"),
+        "res_pincode": nda.get("res_pincode"),
+    }
+
+
+    return result
+
 
 # ------------------------------------------------------------------
 # Routes
@@ -214,18 +265,24 @@ async def list_nda_requests(
             page, limit, search, status
         )
         
+        # Format addresses in the list
+        formatted_requests = [format_nda_response(req) for req in nda_requests]
+        
         total_pages = (total_items + limit - 1) // limit
         
         meta = {
             "current_page": page,
             "total_pages": total_pages,
             "total_items": total_items,
-            "limit": limit
+            "limit": limit,
+            "page": page,
+            "status": status or "All",
+            "search_keyword": search
         }
         
         return success_response(
             message="NDA requests retrieved successfully",
-            data=nda_requests,
+            data=formatted_requests,
             meta=meta
         )
     except Exception as e:
@@ -281,14 +338,14 @@ async def verify_nda_access(token: str, request_body: dict):
 
         # Render template content using helper (Full Access)
         current_date = datetime.utcnow()
-        formatted_date = current_date.strftime("%d/%m/%Y")
+        formatted_date = nda_request.get("nda_date") or current_date.strftime("%d/%m/%Y")
         
         html_content = render_nda_template({
             "request": nda_request,
             "first_name": nda_request.get("first_name"),
             "last_name": nda_request.get("last_name"),
             "employee_name": f"{nda_request.get('first_name', '')} {nda_request.get('last_name', '')}".strip(),
-            "role": nda_request.get("role"),
+            "designation": nda_request.get("designation"),
             "employee_address": nda_request.get("address"),
             "residential_address": nda_request.get("residential_address"),
             "mobile": nda_request.get("mobile"),
@@ -300,7 +357,7 @@ async def verify_nda_access(token: str, request_body: dict):
             message="NDA access granted",
             data={
                 "html_content": html_content,
-                "nda": nda_request
+                "nda": format_nda_response(nda_request)
             }
         )
     except HTTPException:
@@ -374,14 +431,14 @@ async def update_nda_details(token: str, update_data: NDARequestUpdate):
         
         # Render updated template content
         current_date = datetime.utcnow()
-        formatted_date = current_date.strftime("%d/%m/%Y")
+        formatted_date = updated_nda.get("nda_date") or current_date.strftime("%d/%m/%Y")
         
         html_content = render_nda_template({
             "request": updated_nda,
             "first_name": updated_nda.get("first_name"),
             "last_name": updated_nda.get("last_name"),
             "employee_name": f"{updated_nda.get('first_name', '')} {updated_nda.get('last_name', '')}".strip(),
-            "role": updated_nda.get("role"),
+            "designation": updated_nda.get("designation"),
             "employee_address": updated_nda.get("address"),
             "residential_address": updated_nda.get("residential_address"),
             "mobile": updated_nda.get("mobile"),
@@ -393,7 +450,7 @@ async def update_nda_details(token: str, update_data: NDARequestUpdate):
             message="NDA details updated successfully",
             data={
                 "html_content": html_content,
-                "nda": updated_nda
+                "nda": format_nda_response(updated_nda)
             }
         )
     except Exception as e:
@@ -531,7 +588,7 @@ async def sign_nda(token: str, request_body: NDASignatureRequest, request: Reque
 
         return success_response(
             message="NDA signed successfully and PDF stored",
-            data=updated_nda
+            data=format_nda_response(updated_nda)
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
@@ -555,6 +612,11 @@ def generate_pdf_from_request(nda_request: dict) -> bytes:
     elif not isinstance(created_at, datetime):
         created_at = datetime.now()
 
+    # Use nda_date if available, otherwise fallback to created_at
+    formatted_date = nda_request.get("nda_date")
+    if not formatted_date:
+        formatted_date = created_at.strftime("%d/%m/%Y")
+
     # Render HTML using centralized helper
     first_name = nda_request.get("first_name", "_________________")
     last_name = nda_request.get("last_name", "_________________")
@@ -567,8 +629,8 @@ def generate_pdf_from_request(nda_request: dict) -> bytes:
         "employee_name": employee_name,
         "employee_address": nda_request.get("address", "_________________"),
         "residential_address": nda_request.get("residential_address", "_________________"),
-        "role": nda_request.get("role", "_________________"),
-        "date": created_at.strftime("%d/%m/%Y"),
+        "designation": nda_request.get("designation", "_________________"),
+        "date": formatted_date,
         "signature_data": signature_data,
         "token": nda_request.get("token")
     })

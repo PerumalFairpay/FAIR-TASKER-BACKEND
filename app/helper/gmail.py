@@ -61,11 +61,14 @@ class GmailHelper:
         to: str,
         subject: str,
         body_html: str,
-        sender: str = "me",
+        sender: str = None,
         reply_to_message_id: Optional[str] = None,
         thread_id: Optional[str] = None,
     ) -> dict:
         """Build a raw MIME message ready to send via the Gmail API."""
+        if sender is None:
+            sender = "FairPAY Tech Works <fairpayhrm@gmail.com>"
+
         msg = MIMEMultipart("alternative")
         msg["To"] = to
         msg["From"] = sender

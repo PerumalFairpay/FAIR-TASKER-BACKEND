@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, BackgroundTasks
 from app.helper.response_helper import success_response, error_response
+from app.services.employee_email_service import send_welcome_email
 from app.crud.repository import repository as repo
 from app.models import EmployeeCreate, EmployeeUpdate, EmployeeDocument, UserPermissionsUpdate
 from app.helper.file_handler import file_handler
@@ -11,6 +12,7 @@ router = APIRouter(prefix="/employees", tags=["employees"], dependencies=[Depend
 
 @router.post("/create", dependencies=[Depends(require_permission("employee:submit"))])
 async def create_employee(
+    background_tasks: BackgroundTasks,
     first_name: str = Form(...),
     last_name: str = Form(...),
     name: str = Form(...),
@@ -126,6 +128,14 @@ async def create_employee(
         # But python allows kwargs or defaults. The old signature had default None. 
         # So invoking with 2 args works if I removed the 3rd or if 3rd has default.
         new_employee = await repo.create_employee(employee_data, profile_picture_path=profile_pic_path)
+        
+        # Send Welcome Email to the company email with credentials
+        background_tasks.add_task(
+            send_welcome_email,
+            employee_name=name,
+            employee_email=email,
+            password=password
+        )
         
         return success_response(
             message="Employee created successfully",
