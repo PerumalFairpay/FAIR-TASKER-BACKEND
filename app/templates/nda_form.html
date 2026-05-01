@@ -281,23 +281,26 @@
                 <p>And</p>
                 
                 <p>
-                    <strong>{% if request.perma_door_no or request.perma_street or request.perma_city %}
+                    <strong>{{employee_name|upper}}</strong>,
+                    <strong>
+                    {% if request.perma_care_of_name %}{{request.perma_care_of_type}} {{request.perma_care_of_name}}, {% endif %}
+                    {% if request.perma_door_no or request.perma_street or request.perma_city %}
                         {{request.perma_door_no}}{% if request.perma_door_no %}, {% endif %}
-                        {% if request.perma_care_of_name %}{{request.perma_care_of_type}} {{request.perma_care_of_name}}, {% endif %}
                         {{request.perma_street}}{% if request.perma_street %}, {% endif %}
                         {{request.perma_city}}{% if request.perma_city %}, {% endif %}
-                        {{request.perma_state}}{% if request.perma_state %} - {% endif %}{{request.perma_pincode}}
+                        {{request.perma_state}}{% if request.perma_state %}, {% endif %}{{request.perma_pincode}}
                     {% else %}
                         {{employee_address}}
-                    {% endif %}</strong>,
+                    {% endif %}
+                    </strong>,
                     and residing at 
                     <strong>
+                    {% if request.res_care_of_name %}{{request.res_care_of_type}} {{request.res_care_of_name}}, {% endif %}
                     {% if request.res_door_no or request.res_street or request.res_city %}
                         {{request.res_door_no}}{% if request.res_door_no %}, {% endif %}
-                        {% if request.res_care_of_name %}{{request.res_care_of_type}} {{request.res_care_of_name}}, {% endif %}
                         {{request.res_street}}{% if request.res_street %}, {% endif %}
                         {{request.res_city}}{% if request.res_city %}, {% endif %}
-                        {{request.res_state}}{% if request.res_state %} - {% endif %}{{request.res_pincode}}
+                        {{request.res_state}}{% if request.res_state %}, {% endif %}{{request.res_pincode}}
                     {% else %}
                         {{residential_address}}
                     {% endif %}
