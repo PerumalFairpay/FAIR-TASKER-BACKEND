@@ -105,7 +105,7 @@
         
         .content {
             /* padding: 180px 100px 260px 100px; */
-            padding: 120px 100px 260px 100px;
+            padding: 120px 70px 260px 70px;
             flex: 1;
             font-size: 11pt;
             line-height: 1.3;
@@ -283,7 +283,7 @@
                 <p>And</p>
                 
                 <p>
-                    {% if request.perma_door_no or request.perma_street or request.perma_city %}
+                    <strong>{% if request.perma_door_no or request.perma_street or request.perma_city %}
                         {{request.perma_door_no}}{% if request.perma_door_no %}, {% endif %}
                         {% if request.perma_care_of_name %}{{request.perma_care_of_type}} {{request.perma_care_of_name}}, {% endif %}
                         {{request.perma_street}}{% if request.perma_street %}, {% endif %}
@@ -291,8 +291,9 @@
                         {{request.perma_state}}{% if request.perma_state %} - {% endif %}{{request.perma_pincode}}
                     {% else %}
                         {{employee_address}}
-                    {% endif %}
+                    {% endif %}</strong>,
                     and residing at 
+                    <strong>
                     {% if request.res_door_no or request.res_street or request.res_city %}
                         {{request.res_door_no}}{% if request.res_door_no %}, {% endif %}
                         {% if request.res_care_of_name %}{{request.res_care_of_type}} {{request.res_care_of_name}}, {% endif %}
@@ -301,7 +302,8 @@
                         {{request.res_state}}{% if request.res_state %} - {% endif %}{{request.res_pincode}}
                     {% else %}
                         {{residential_address}}
-                    {% endif %}, 
+                    {% endif %}
+                    </strong>,
                     is a full-time employee of company <strong>FairPAY Tech Works India Private Limited</strong> in Chennai – 600 113, India. (Hereinafter referred to as “<strong>SECOND PARTY</strong>”)</p>
             </div>
 
@@ -458,18 +460,37 @@
             
             <p style="margin-bottom: 20px;"><strong>EXECUTED</strong> by the parties as an Agreement:</p>
             
-            <div class="signature-section">
-                <!-- Left Column -->
-                <div class="signature-block">
-                    <div class="sign-header">Signed for and in behalf of</div>
-                    <div class="company-list">
-                        FairPAY Tech Works India Private Limited<br>
-                        FairPY Inc, FairReturn<br>
-                        Fairental
-                    </div>
-                    
-                    <div class="signature-field-group">
+            <table style="width: 100%; border-collapse: collapse; margin-top: 40px; font-size: 11pt;">
+                <tr>
+                    <td style="width: 48%; vertical-align: top;">
+                        <div class="sign-header">Signed for and in behalf of</div>
+                        <div class="company-list">
+                            FairPAY Tech Works India Private Limited<br>
+                            FairPY Inc, FairReturn<br>
+                            Fairental
+                        </div>
+                    </td>
+                    <td style="width: 4%;"></td>
+                    <td style="width: 48%; vertical-align: top;">
+                        <div class="sign-header">Signed for and in behalf of</div>
+                        <div class="company-list">
+                            <strong>{{employee_name}}</strong><br>
+                            &nbsp;<br>
+                            &nbsp;
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="vertical-align: top;">
                         <div class="signature-label">Signature</div>
+                    </td>
+                    <td></td>
+                    <td style="vertical-align: top;">
+                        <div class="signature-label">Signature</div>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="vertical-align: top; padding-bottom: 10px;">
                         {% if status|lower == 'approved' %}
                         <img src="{{ company_signature_base64 }}" alt="Signature" class="signature-img">
                         {% else %}
@@ -477,41 +498,34 @@
                             xxxx
                         </div>
                         {% endif %}
-
-                        
-                        <div class="info-row">Name: T LINGESHWARAN</div>
-                        <div class="info-row">Designation: CEO/CTO/Managing Director</div>
-                        <div class="info-row">Date: {{date}}</div>
-                    </div>
-                </div>
-                
-                <!-- Right Column -->
-                <div class="signature-block">
-                    <div class="sign-header">Signed for and in behalf of</div>
-                    <div class="company-list">
-                        <strong>{{employee_name}}</strong><br>
-                        &nbsp;<br>
-                        &nbsp;
-                    </div>
-                    
-                    <div class="signature-field-group">
-                        <div class="signature-label">Signature</div>
-                        
+                    </td>
+                    <td></td>
+                    <td style="vertical-align: top; padding-bottom: 10px;">
                         {% if signature_data %}
                         <img src="{{signature_data}}" class="signature-img" alt="Signature" />
                         {% else %}
                         <div class="signature-space"></div>
                         {% endif %}
-                        
-                        <div class="info-row">Name: {{employee_name}}</div>
-                        <div class="info-row">Designation: {{designation}}</div>
-                        <div class="info-row">Date: {{date}}</div>
-                    </div>
-                </div>
-            </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><div class="info-row">Name: T LINGESHWARAN</div></td>
+                    <td></td>
+                    <td><div class="info-row">Name: {{employee_name}}</div></td>
+                </tr>
+                <tr>
+                    <td><div class="info-row">Designation: CEO/CTO/Managing Director</div></td>
+                    <td></td>
+                    <td><div class="info-row">Designation: {{designation}}</div></td>
+                </tr>
+                <tr>
+                    <td><div class="info-row">Date: {{date}}</div></td>
+                    <td></td>
+                    <td><div class="info-row">Date: {{date}}</div></td>
+                </tr>
+            </table>
         </div>
 
-        <div class="footer">
         <div class="footer">
             <img src="{{ footer_base64 }}" alt="Footer">
         </div>
