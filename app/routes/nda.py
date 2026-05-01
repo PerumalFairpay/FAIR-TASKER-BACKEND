@@ -28,17 +28,18 @@ def _send_nda_link_email(email: str, name: str, link: str):
     """Send NDA link to the employee."""
     full_link = f"{FRONTEND_URL}{link}"
     body = f"""
-    <div style="font-family: sans-serif; line-height: 1.6; color: #333;">
-        <h2 style="color: #000;">Non-Disclosure Agreement (NDA)</h2>
-        <p>Hi {name},</p>
-        <p>A new Non-Disclosure Agreement (NDA) has been generated for you. Please click the link below to review, upload necessary documents, and sign the agreement:</p>
-        <p style="margin: 30px 0;">
-            <a href="{full_link}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Review and Sign NDA</a>
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px;">
+        <h2 style="color: #000; border-bottom: 2px solid #eee; padding-bottom: 10px;">Non-Disclosure Agreement (NDA)</h2>
+        <p>Dear {name},</p>
+        <p>A Non-Disclosure Agreement (NDA) has been prepared for your review and execution. This document is a standard requirement for your engagement with <strong>FairPAY Tech Works</strong>.</p>
+        <p>Please use the secure link below to review the agreement, upload any necessary documentation, and complete the digital signature process:</p>
+        <p style="margin: 35px 0; text-align: center;">
+            <a href="{full_link}" style="background-color: #000; color: #fff; padding: 14px 28px; text-decoration: none; border-radius: 4px; font-weight: 600; display: inline-block;">Review and Execute NDA</a>
         </p>
-        <p>Alternatively, you can copy and paste this URL into your browser:</p>
-        <p style="word-break: break-all; color: #666;">{full_link}</p>
-        <p><strong>Note:</strong> This link will expire soon. Please complete the process at your earliest convenience.</p>
-        <p>Best regards,<br/><strong>FairPAY Tech Works</strong></p>
+        <p style="background-color: #fff9e6; border-left: 4px solid #ffcc00; padding: 15px; margin-top: 25px; font-size: 14px;">
+            <strong>Important:</strong> This secure link is time-sensitive. We kindly request that you complete the process at your earliest convenience to avoid any delays in your onboarding.
+        </p>
+        <p style="margin-top: 30px;">Best regards,<br/><strong>FairPAY Tech Works India Private Limited</strong></p>
     </div>
     """
     try:
@@ -58,12 +59,14 @@ def _send_nda_status_email(email: str, name: str, status: str, reason: str = Non
     rejection_html = f"<p><strong>Reason for rejection:</strong> {reason}</p><p>Please use the previous link or contact HR to re-submit your details.</p>" if reason else ""
     
     body = f"""
-    <div style="font-family: sans-serif; line-height: 1.6; color: #333;">
-        <h2 style="color: #000;">NDA Status Update</h2>
-        <p>Hi {name},</p>
-        <p>Your NDA submission has been <strong style="color: {color};">{status_text}</strong>.</p>
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px;">
+        <h2 style="color: #000; border-bottom: 2px solid #eee; padding-bottom: 10px;">NDA Status Update</h2>
+        <p>Dear {name},</p>
+        <p>This email is to notify you that your recent NDA submission has been reviewed.</p>
+        <p>The status of your submission is: <strong style="color: {color}; text-transform: uppercase;">{status_text}</strong>.</p>
         {rejection_html}
-        <p>Best regards,<br/><strong>FairPAY Tech Works</strong></p>
+        <p style="margin-top: 25px;">Should you have any questions, please reach out to the HR department.</p>
+        <p style="margin-top: 30px;">Best regards,<br/><strong>FairPAY Tech Works</strong></p>
     </div>
     """
     try:
@@ -79,13 +82,16 @@ def _notify_admin_nda_signed(first_name: str, last_name: str, email: str):
     """Notify admin that an NDA has been signed."""
     employee_name = f"{first_name} {last_name}"
     body = f"""
-    <div style="font-family: sans-serif; line-height: 1.6; color: #333;">
-        <h2 style="color: #000;">NDA Signed Notification</h2>
-        <p>Admin,</p>
-        <p>The employee <strong>{employee_name}</strong> ({email}) has just signed their NDA.</p>
-        <p>You can now review the document in the admin dashboard.</p>
-        <p style="margin-top: 20px;">
-            <a href="{FRONTEND_URL}/admin/nda" style="color: #000; font-weight: bold;">View NDA Dashboard</a>
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px;">
+        <h2 style="color: #000; border-bottom: 2px solid #eee; padding-bottom: 10px;">NDA Signed Notification</h2>
+        <p>Administrative Team,</p>
+        <p>This is to inform you that <strong>{employee_name}</strong> ({email}) has successfully completed and signed their Non-Disclosure Agreement.</p>
+        <p>The document is now available for review within the administrative dashboard.</p>
+        <p style="margin: 30px 0;">
+            <a href="{FRONTEND_URL}/admin/nda" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: 600; display: inline-block;">View Signed Document</a>
+        </p>
+        <p style="font-size: 13px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
+            This is an automated system notification.
         </p>
     </div>
     """
