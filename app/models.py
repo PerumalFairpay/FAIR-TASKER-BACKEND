@@ -939,7 +939,7 @@ class NDARequestBase(BaseModel):
     last_name: str
     email: EmailStr
     mobile: str
-    role: str
+    designation: str
     address: Optional[str] = None
     residential_address: Optional[str] = None
     # Granular Permanent Address
@@ -1048,7 +1048,7 @@ class NDADropdownItem(BaseModel):
     mobile: str
     address: Optional[str] = None
     residential_address: Optional[str] = None
-    role: str
+    designation: str
 
     class Config:
         from_attributes = True

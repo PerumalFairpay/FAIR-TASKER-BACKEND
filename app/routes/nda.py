@@ -139,6 +139,7 @@ def format_nda_response(nda: dict) -> dict:
         "res_pincode": nda.get("res_pincode"),
     }
 
+
     return result
 
 
@@ -338,7 +339,7 @@ async def verify_nda_access(token: str, request_body: dict):
             "first_name": nda_request.get("first_name"),
             "last_name": nda_request.get("last_name"),
             "employee_name": f"{nda_request.get('first_name', '')} {nda_request.get('last_name', '')}".strip(),
-            "role": nda_request.get("role"),
+            "designation": nda_request.get("designation"),
             "employee_address": nda_request.get("address"),
             "residential_address": nda_request.get("residential_address"),
             "mobile": nda_request.get("mobile"),
@@ -431,7 +432,7 @@ async def update_nda_details(token: str, update_data: NDARequestUpdate):
             "first_name": updated_nda.get("first_name"),
             "last_name": updated_nda.get("last_name"),
             "employee_name": f"{updated_nda.get('first_name', '')} {updated_nda.get('last_name', '')}".strip(),
-            "role": updated_nda.get("role"),
+            "designation": updated_nda.get("designation"),
             "employee_address": updated_nda.get("address"),
             "residential_address": updated_nda.get("residential_address"),
             "mobile": updated_nda.get("mobile"),
@@ -622,7 +623,7 @@ def generate_pdf_from_request(nda_request: dict) -> bytes:
         "employee_name": employee_name,
         "employee_address": nda_request.get("address", "_________________"),
         "residential_address": nda_request.get("residential_address", "_________________"),
-        "role": nda_request.get("role", "_________________"),
+        "designation": nda_request.get("designation", "_________________"),
         "date": formatted_date,
         "signature_data": signature_data,
         "token": nda_request.get("token")
