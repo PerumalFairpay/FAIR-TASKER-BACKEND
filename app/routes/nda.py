@@ -38,7 +38,7 @@ def _send_nda_link_email(email: str, name: str, link: str):
         <p>Alternatively, you can copy and paste this URL into your browser:</p>
         <p style="word-break: break-all; color: #666;">{full_link}</p>
         <p><strong>Note:</strong> This link will expire soon. Please complete the process at your earliest convenience.</p>
-        <p>Best regards,<br/><strong>FairPay Team</strong></p>
+        <p>Best regards,<br/><strong>FairPAY Tech Works</strong></p>
     </div>
     """
     try:
@@ -63,7 +63,7 @@ def _send_nda_status_email(email: str, name: str, status: str, reason: str = Non
         <p>Hi {name},</p>
         <p>Your NDA submission has been <strong style="color: {color};">{status_text}</strong>.</p>
         {rejection_html}
-        <p>Best regards,<br/><strong>FairPay Team</strong></p>
+        <p>Best regards,<br/><strong>FairPAY Tech Works</strong></p>
     </div>
     """
     try:
