@@ -938,7 +938,7 @@ class NDARequestBase(BaseModel):
     first_name: str
     last_name: str
     email: EmailStr
-    mobile: str
+    mobile: Optional[str] = None
     designation: str
     address: Optional[str] = None
     residential_address: Optional[str] = None
