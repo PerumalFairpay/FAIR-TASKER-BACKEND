@@ -702,7 +702,8 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                         "name": p.get("name"),
                         "role": role,
                         "status": p.get("status"),
-                        "deadline": p.get("end_date")
+                        "deadline": p.get("end_date"),
+                        "logo": p.get("logo")
                     })
 
 
