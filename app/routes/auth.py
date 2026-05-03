@@ -4,6 +4,7 @@ from app.database import users_collection, employees_collection
 from app.models import UserLogin, UserResponse
 from app.utils import get_password_hash, verify_password
 from app.auth import create_access_token, verify_token, get_current_user
+from app.core.config import ACCESS_TOKEN_EXPIRE_MINUTES
 from bson import ObjectId
 from datetime import datetime
 
@@ -27,7 +28,7 @@ async def login(user: UserLogin, response: Response):
         key="token",
         value=token,
         httponly=True,
-        max_age=1440 * 60,
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         samesite="lax",
         secure=False,  # Set to True in production with HTTPS
     )
