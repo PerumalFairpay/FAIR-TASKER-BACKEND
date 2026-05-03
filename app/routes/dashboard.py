@@ -739,6 +739,47 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             
             birthdays.sort(key=lambda x: x.get("date"))
 
+            # 10. Leave Insights
+            leave_insights = {
+                "total_allotted": 0,
+                "total_used": 0,
+                "total_pending": 0,
+                "total_available": 0,
+                "details": []
+            }
+            
+            leave_used_map = {}
+            leave_pending_map = {}
+            for l in my_leaves:
+                lt_id = str(l.get("leave_type_id"))
+                status = l.get("status")
+                days = float(l.get("total_days", 0))
+                if status == "Approved":
+                    leave_used_map[lt_id] = leave_used_map.get(lt_id, 0) + days
+                    leave_insights["total_used"] += days
+                elif status == "Pending":
+                    leave_pending_map[lt_id] = leave_pending_map.get(lt_id, 0) + days
+                    leave_insights["total_pending"] += days
+
+            for lt in leave_types:
+                lt_id = str(lt.get("_id"))
+                allowance = float(lt.get("number_of_days", 0))
+                used = leave_used_map.get(lt_id, 0)
+                available = allowance - used
+                
+                leave_insights["total_allotted"] += allowance
+                leave_insights["total_available"] += available
+                
+                leave_insights["details"].append({
+                    "id": lt_id,
+                    "type": lt.get("name"),
+                    "code": lt.get("code"),
+                    "total": allowance,
+                    "used": used,
+                    "available": max(0, available),
+                    "pending": leave_pending_map.get(lt_id, 0)
+                })
+
             # 9. Response
             data = {
                 "type": "employee",
@@ -752,7 +793,8 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
 
 
                 "upcoming_holidays": upcoming_holidays,
-                "birthdays": birthdays
+                "birthdays": birthdays,
+                "leave_insights": leave_insights
             }
             
             return JSONResponse(status_code=200, content={"success": True, "data": data})
