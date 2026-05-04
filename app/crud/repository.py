@@ -135,7 +135,7 @@ class Repository:
             # Transfer NDA Documents if personal_email matches
             if employee_data.get("personal_email"):
                 nda_request = await self.nda_requests.find_one(
-                    {"email": employee_data["personal_email"], "status": "Signed"},
+                    {"email": employee_data["personal_email"], "status": "Approved"},
                     sort=[("created_at", -1)] # Get the latest one if multiple
                 )
                 
@@ -451,7 +451,7 @@ class Repository:
             
             if email_key and update_data[email_key]:
                 nda_request = await self.nda_requests.find_one(
-                    {"email": update_data[email_key], "status": "Signed"},
+                    {"email": update_data[email_key], "status": "Approved"},
                     sort=[("created_at", -1)]
                 )
                 
@@ -3547,7 +3547,9 @@ class Repository:
                 "address": 1,
                 "residential_address": 1,
                 "designation": 1,
-                "status": 1
+                "status": 1,
+                "documents": 1,
+                "signed_pdf_path": 1
             }
             
             cursor = self.nda_requests.find(query, projection).sort("created_at", -1)
