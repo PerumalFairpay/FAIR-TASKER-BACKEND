@@ -186,7 +186,7 @@ async def generate_nda_link(nda_request: NDARequestCreate, background_tasks: Bac
         
         return success_response(
             message="NDA link generated successfully and email sent",
-            data={"link": link_url, "nda": nda_data}
+            data={"link": link_url, "nda": format_nda_response(nda_data)}
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
@@ -230,7 +230,7 @@ async def regenerate_nda_link(nda_id: str, request: NDARegenerateRequest, backgr
 
         return success_response(
             message="NDA link regenerated successfully and email sent",
-            data={"link": link_url, "nda": updated_nda}
+            data={"link": link_url, "nda": format_nda_response(updated_nda)}
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
@@ -309,7 +309,7 @@ async def get_approved_ndas():
         approved_ndas = await repository.get_approved_ndas()
         return success_response(
             message="Approved NDAs retrieved successfully",
-            data=approved_ndas
+            data=[format_nda_response(nda) for nda in approved_ndas]
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
@@ -519,7 +519,7 @@ async def upload_documents(
         
         return success_response(
             message="Documents uploaded successfully",
-            data=updated_nda
+            data=format_nda_response(updated_nda)
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
@@ -749,7 +749,7 @@ async def update_nda_status(nda_id: str, status_update: NDAStatusUpdate, backgro
             
         return success_response(
             message=f"NDA status updated to {status_update.status} and email sent",
-            data=updated_nda
+            data=format_nda_response(updated_nda)
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
