@@ -332,6 +332,10 @@ async def verify_nda_access(token: str, request_body: dict):
         if not nda_request:
             raise HTTPException(status_code=404, detail="NDA request not found")
         
+        # Check if rejected
+        if nda_request.get("status") == "Rejected":
+            raise HTTPException(status_code=403, detail="NDA request has been rejected. Please contact HR.")
+
         # Check if expired
         expires_at = nda_request.get("expires_at")
         if isinstance(expires_at, str):
@@ -389,6 +393,10 @@ async def view_nda_form(token: str):
         if not nda_request:
             raise HTTPException(status_code=404, detail="NDA request not found")
         
+        # Check if rejected
+        if nda_request.get("status") == "Rejected":
+             raise HTTPException(status_code=403, detail="NDA request has been rejected")
+
         # Check if expired
         expires_at = nda_request.get("expires_at")
         if isinstance(expires_at, str):
