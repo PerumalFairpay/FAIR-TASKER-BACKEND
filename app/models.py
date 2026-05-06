@@ -151,6 +151,16 @@ class EmployeeDocument(BaseModel):
     file_type: Optional[str] = None
 
 
+class EmployeeDocumentResponse(EmployeeDocument):
+    id: str
+    employee_id: str
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 class ChecklistItem(BaseModel):
     name: str
     status: str = "Pending"  # Pending, Completed
@@ -272,6 +282,7 @@ class EmployeeUpdate(BaseModel):
 class EmployeeResponse(EmployeeBase):
     id: str
     profile_picture: Optional[str] = None
+    documents: List[EmployeeDocumentResponse] = []
 
     class Config:
         from_attributes = True

@@ -86,6 +86,7 @@ class Repository:
         self.payslips = self.db["payslips"]
         self.payslip_components = self.db["payslip_components"]
         self.milestones_roadmaps = self.db["milestones_roadmaps"]
+        self.employee_documents = self.db["employee_documents"]
 
     async def create_employee(
         self, employee: EmployeeCreate, profile_picture_path: str = None
@@ -135,7 +136,7 @@ class Repository:
             # Transfer NDA Documents if personal_email matches
             if employee_data.get("personal_email"):
                 nda_request = await self.nda_requests.find_one(
-                    {"email": employee_data["personal_email"], "status": "Signed"},
+                    {"email": employee_data["personal_email"], "status": "Approved"},
                     sort=[("created_at", -1)] # Get the latest one if multiple
                 )
                 
@@ -163,11 +164,8 @@ class Repository:
             if profile_picture_path:
                 employee_data["profile_picture"] = profile_picture_path
 
-            if "documents" in employee_data and employee_data["documents"]:
-                employee_data["documents"] = [
-                    doc if isinstance(doc, dict) else doc.dict()
-                    for doc in employee_data["documents"]
-                ]
+            # Capture documents and remove from main employee data for separate storage
+            documents_to_save = employee_data.pop("documents", [])
 
             employee_data["created_at"] = datetime.utcnow()
 
@@ -192,12 +190,23 @@ class Repository:
             employee_data["hashed_password"] = hashed_password
 
             emp_result = await self.employees.insert_one(employee_data)
-            employee_data["id"] = str(emp_result.inserted_id)
+            employee_id = str(emp_result.inserted_id)
+            employee_data["id"] = employee_id
+
+            # Save Documents to Separate Collection
+            if documents_to_save:
+                for doc in documents_to_save:
+                    doc_dict = doc if isinstance(doc, dict) else doc.dict()
+                    doc_dict["employee_id"] = employee_id
+                    doc_dict["created_at"] = datetime.utcnow()
+                    doc_dict["updated_at"] = datetime.utcnow()
+                    await self.employee_documents.insert_one(doc_dict)
 
             # Insert User
             await self.users.insert_one(user_data)
 
-            return normalize(employee_data)
+            # Return normalized employee with documents attached
+            return await self.get_employee(employee_id)
         except Exception as e:
             raise e
 
@@ -299,8 +308,16 @@ class Repository:
     async def get_employee(self, employee_id: str) -> dict:
         try:
             employee = await self.employees.find_one({"_id": ObjectId(employee_id)})
-            if employee and "hashed_password" in employee:
+            if not employee:
+                return None
+            
+            if "hashed_password" in employee:
                 del employee["hashed_password"]
+            
+            # Fetch documents from separate collection
+            documents = await self.employee_documents.find({"employee_id": employee_id}).to_list(length=None)
+            employee["documents"] = [normalize(doc) for doc in documents]
+            
             return normalize(employee)
         except Exception as e:
             raise e
@@ -446,20 +463,19 @@ class Repository:
                 ]
 
             # Transfer NDA Documents if personal_email (or email acting as personal) is updated
-            # User specifically asked for this on creation, but updating is also a valid workflow
             email_key = "personal_email" if "personal_email" in update_data else None
             
             if email_key and update_data[email_key]:
                 nda_request = await self.nda_requests.find_one(
-                    {"email": update_data[email_key], "status": "Signed"},
+                    {"email": update_data[email_key], "status": "Approved"},
                     sort=[("created_at", -1)]
                 )
                 
                 if nda_request:
                     # Get existing documents if not already in update_data
                     if "documents" not in update_data:
-                        current_emp = await self.employees.find_one({"_id": ObjectId(employee_id)})
-                        existing_docs = current_emp.get("documents", []) if current_emp else []
+                        current_docs = await self.employee_documents.find({"employee_id": employee_id}).to_list(length=None)
+                        existing_docs = [normalize(d) for d in current_docs]
                     else:
                         existing_docs = update_data["documents"]
 
@@ -488,11 +504,42 @@ class Repository:
                     
                     update_data["documents"] = existing_docs
 
+            # Pop documents for separate storage
+            documents_to_sync = update_data.pop("documents", None)
+
             if update_data:
                 update_data["updated_at"] = datetime.utcnow()
                 await self.employees.update_one(
                     {"_id": ObjectId(employee_id)}, {"$set": update_data}
                 )
+
+            # Sync Documents if provided
+            if documents_to_sync is not None:
+                # For simplicity, we'll ensure these documents exist. 
+                # If we want a strict sync (delete removed ones), we'd need more info.
+                # Here we'll follow the "append/overwrite" logic currently implied by the route.
+                
+                # Fetch existing proofs to avoid duplicates
+                current_docs = await self.employee_documents.find({"employee_id": employee_id}).to_list(length=None)
+                current_proofs = {d.get("document_proof") for d in current_docs}
+
+                for doc in documents_to_sync:
+                    doc_dict = doc if isinstance(doc, dict) else doc.dict()
+                    if doc_dict.get("document_proof") not in current_proofs:
+                        doc_dict["employee_id"] = employee_id
+                        doc_dict["created_at"] = datetime.utcnow()
+                        doc_dict["updated_at"] = datetime.utcnow()
+                        await self.employee_documents.insert_one(doc_dict)
+                    else:
+                        # Optional: Update existing doc metadata if needed
+                        await self.employee_documents.update_one(
+                            {"employee_id": employee_id, "document_proof": doc_dict["document_proof"]},
+                            {"$set": {
+                                "document_name": doc_dict.get("document_name"),
+                                "file_type": doc_dict.get("file_type"),
+                                "updated_at": datetime.utcnow()
+                            }}
+                        )
 
                 # Also update User if critical fields changed (email, name, mobile)
                 user_update = {}
@@ -528,6 +575,9 @@ class Repository:
             result = await self.employees.delete_one({"_id": ObjectId(employee_id)})
 
             if result.deleted_count > 0 and employee:
+                # Delete linked documents
+                await self.employee_documents.delete_many({"employee_id": employee_id})
+
                 # Delete User too? "if i create a employee it will also store in the user table" -> implication is strict 1:1 sync.
                 # I will soft delete or delete user. Let's delete for now to keep it clean CRUD.
                 if "employee_no_id" in employee:
@@ -969,6 +1019,21 @@ class Repository:
                 # Clean up vectors
                 asyncio.create_task(vector_store_service.delete_document(document_id))
                 
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+    # Employee Documents (Separate Collection)
+    async def get_employee_documents(self, employee_id: str) -> List[dict]:
+        try:
+            documents = await self.employee_documents.find({"employee_id": employee_id}).to_list(length=None)
+            return [normalize(doc) for doc in documents]
+        except Exception as e:
+            raise e
+
+    async def delete_employee_document(self, doc_id: str) -> bool:
+        try:
+            result = await self.employee_documents.delete_one({"_id": ObjectId(doc_id)})
             return result.deleted_count > 0
         except Exception as e:
             raise e
@@ -3547,7 +3612,9 @@ class Repository:
                 "address": 1,
                 "residential_address": 1,
                 "designation": 1,
-                "status": 1
+                "status": 1,
+                "documents": 1,
+                "signed_pdf_path": 1
             }
             
             cursor = self.nda_requests.find(query, projection).sort("created_at", -1)

@@ -59,6 +59,13 @@ async def update_profile(
     parent_name: Optional[str] = Form(None),
     marital_status: Optional[str] = Form(None),
     address: Optional[str] = Form(None),
+    account_name: Optional[str] = Form(None),
+    bank_name: Optional[str] = Form(None),
+    account_number: Optional[str] = Form(None),
+    ifsc_code: Optional[str] = Form(None),
+    pan_number: Optional[str] = Form(None),
+    pf_account_number: Optional[str] = Form(None),
+    esic_number: Optional[str] = Form(None),
     profile_picture: Optional[UploadFile] = File(None),
     document_proof: Optional[UploadFile] = File(None)
 ):
@@ -104,6 +111,13 @@ async def update_profile(
             parent_name=parent_name,
             marital_status=marital_status,
             address=address,
+            account_name=account_name,
+            bank_name=bank_name,
+            account_number=account_number,
+            ifsc_code=ifsc_code,
+            pan_number=pan_number,
+            pf_account_number=pf_account_number,
+            esic_number=esic_number,
             documents=documents_list
         )
         

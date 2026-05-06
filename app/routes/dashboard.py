@@ -659,56 +659,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                 "total_working_days": total_working_days_elapsed
             }
             
-            leave_balance = []
-            total_allowed_all = 0
-            total_taken_all = 0
-            
-            for lt in leave_types:
-                total_allowed = lt.get("number_of_days", 0)
-                used = 0
-                for l in my_leaves:
-                    if l.get("leave_type_id") == lt.get("id") and l.get("status") == "Approved":
-                         used += float(l.get("total_days", 0))
-                
-                total_allowed_all += total_allowed
-                total_taken_all += used
-                
-                leave_balance.append({
-                    "type": lt.get("name"),
-                    "balance": total_allowed - used,
-                    "total": total_allowed,
-                    "used": used
-                })
-            
-            pending_leaves_count = len([l for l in my_leaves if l.get("status") == "Pending"])
-            
-            # Recent Leaves
-            sorted_leaves = sorted(my_leaves, key=lambda x: x.get("created_at", ""), reverse=True)
-            recent_requests_status = []
-            for l in sorted_leaves[:3]:
-                lt_name = "Leave"
-                # Find type name
-                for lt in leave_types:
-                    if lt.get("id") == l.get("leave_type_id"):
-                        lt_name = lt.get("name")
-                        break
-                
-                recent_requests_status.append({
-                    "type": lt_name,
-                    "status": l.get("status"),
-                    "date": l.get("start_date")
-                })
 
-            leave_details = {
-                "summary": {
-                    "total_allowed": total_allowed_all,
-                    "total_taken": total_taken_all,
-                    "total_remaining": total_allowed_all - total_taken_all,
-                    "pending_requests": pending_leaves_count
-                },
-                "balance": leave_balance,
-                "recent_requests_status": recent_requests_status
-            }
 
             # 5. Task Metrics & Recent Tasks
             my_tasks = await repo.get_tasks(assigned_to=str(emp_doc["_id"])) 
@@ -730,15 +681,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                 if t.get("end_date") and t.get("end_date") < today_str and status != "Completed":
                     task_metric_counts["overdue"] += 1
 
-            sorted_tasks = sorted(my_tasks, key=lambda x: x.get("created_at") or "", reverse=True)
-            recent_tasks_list = []
-            for t in sorted_tasks[:5]:
-                recent_tasks_list.append({
-                    "task_name": t.get("task_name"),
-                    "priority": t.get("priority"),
-                    "status": t.get("status"),
-                    "due_date": t.get("end_date")
-                })
+
 
             # 6. Projects
             all_projects = await repo.get_projects()
@@ -759,7 +702,8 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                         "name": p.get("name"),
                         "role": role,
                         "status": p.get("status"),
-                        "deadline": p.get("end_date")
+                        "deadline": p.get("end_date"),
+                        "logo": p.get("logo")
                     })
 
 
@@ -795,6 +739,47 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             
             birthdays.sort(key=lambda x: x.get("date"))
 
+            # 10. Leave Insights
+            leave_insights = {
+                "total_allotted": 0,
+                "total_used": 0,
+                "total_pending": 0,
+                "total_available": 0,
+                "details": []
+            }
+            
+            leave_used_map = {}
+            leave_pending_map = {}
+            for l in my_leaves:
+                lt_id = str(l.get("leave_type_id"))
+                status = l.get("status")
+                days = float(l.get("total_days", 0))
+                if status == "Approved":
+                    leave_used_map[lt_id] = leave_used_map.get(lt_id, 0) + days
+                    leave_insights["total_used"] += days
+                elif status == "Pending":
+                    leave_pending_map[lt_id] = leave_pending_map.get(lt_id, 0) + days
+                    leave_insights["total_pending"] += days
+
+            for lt in leave_types:
+                lt_id = str(lt.get("_id"))
+                allowance = float(lt.get("number_of_days", 0))
+                used = leave_used_map.get(lt_id, 0)
+                available = allowance - used
+                
+                leave_insights["total_allotted"] += allowance
+                leave_insights["total_available"] += available
+                
+                leave_insights["details"].append({
+                    "id": lt_id,
+                    "type": lt.get("name"),
+                    "code": lt.get("code"),
+                    "total": allowance,
+                    "used": used,
+                    "available": max(0, available),
+                    "pending": leave_pending_map.get(lt_id, 0)
+                })
+
             # 9. Response
             data = {
                 "type": "employee",
@@ -802,13 +787,14 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                 "profile": emp_profile,
                 "work_hours": work_hours,
                 "attendance_metrics": attendance_metrics,
-                "leave_details": leave_details,
+
                 "projects": my_projects,
                 "task_metrics": task_metric_counts,
-                "recent_tasks": recent_tasks_list,
+
 
                 "upcoming_holidays": upcoming_holidays,
-                "birthdays": birthdays
+                "birthdays": birthdays,
+                "leave_insights": leave_insights
             }
             
             return JSONResponse(status_code=200, content={"success": True, "data": data})

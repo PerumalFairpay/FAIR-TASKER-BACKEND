@@ -408,3 +408,20 @@ async def get_permissions(employee_id: str):
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
+
+
+@router.delete("/documents/{doc_id}", dependencies=[Depends(require_permission("employee:submit"))])
+async def delete_employee_document(doc_id: str):
+    """
+    Delete a specific employee document by its ID.
+    """
+    try:
+        success = await repo.delete_employee_document(doc_id)
+        if not success:
+            return error_response(message="Document not found", status_code=404)
+        return success_response(
+            message="Document deleted successfully",
+            data=[]
+        )
+    except Exception as e:
+        return error_response(message=str(e), status_code=500)
