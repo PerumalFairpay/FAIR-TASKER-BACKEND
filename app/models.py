@@ -644,6 +644,8 @@ class LeaveTypeBase(BaseModel):
     can_encash: bool = False
     probation_period_months: int = 0
     min_service_days: int = 0
+    notice_period_days: int = 0
+
 
 
 class LeaveTypeCreate(LeaveTypeBase):
@@ -663,6 +665,8 @@ class LeaveTypeUpdate(BaseModel):
     can_encash: Optional[bool] = None
     probation_period_months: Optional[int] = None
     min_service_days: Optional[int] = None
+    notice_period_days: Optional[int] = None
+
 
 
 class LeaveTypeResponse(LeaveTypeBase):

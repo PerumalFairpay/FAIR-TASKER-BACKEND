@@ -1728,6 +1728,18 @@ class Repository:
                         "Please compensate your previous permission before applying for a new one."
                     )
             # --- End Rule ---
+            
+            # --- Rule: Notice Period validation ---
+            notice_period = requested_type.get("notice_period_days", 0)
+            if notice_period > 0:
+                today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+                # Check if start date is at least notice_period days from today
+                if (start_dt - today).days < notice_period:
+                    raise ValueError(
+                        f"Prior approval of {notice_period} days is required for {requested_type.get('name')}. "
+                        f"Earliest possible start date is {(today + timedelta(days=notice_period)).strftime('%Y-%m-%d')}."
+                    )
+            # --- End Rule ---
 
             # --- Leave Balance Validation ---
             leave_type = requested_type
