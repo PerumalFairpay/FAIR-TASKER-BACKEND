@@ -203,6 +203,15 @@ async def regenerate_nda_link(nda_id: str, request: NDARegenerateRequest, backgr
         expiry_hours = request.expires_in_hours if request.expires_in_hours else 1
         expires_at = datetime.utcnow() + timedelta(hours=expiry_hours)
          
+        # Update NDA with provided fields if any (Edit functionality)
+        update_data = {k: v for k, v in request.dict().items() if v is not None and k != "expires_in_hours"}
+        if update_data:
+            # We use nda_id to find and update
+            await repository.nda_requests.update_one(
+                {"_id": repository.to_object_id(nda_id)},
+                {"$set": update_data}
+            )
+
         updated_nda = await repository.regenerate_nda_token(nda_id, new_token, expires_at)
         
         if not updated_nda:
