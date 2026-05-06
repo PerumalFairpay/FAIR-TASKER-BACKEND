@@ -13,6 +13,7 @@ from weasyprint import HTML
 from io import BytesIO
 from fastapi.responses import Response
 from app.helper.gmail import gmail_helper
+from bson import ObjectId
 
 router = APIRouter(prefix="/nda", tags=["NDA"])
 
@@ -208,7 +209,7 @@ async def regenerate_nda_link(nda_id: str, request: NDARegenerateRequest, backgr
         if update_data:
             # We use nda_id to find and update
             await repository.nda_requests.update_one(
-                {"_id": repository.to_object_id(nda_id)},
+                {"_id": ObjectId(nda_id)},
                 {"$set": update_data}
             )
 
