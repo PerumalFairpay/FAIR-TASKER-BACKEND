@@ -951,6 +951,7 @@ class NDARequestBase(BaseModel):
     email: EmailStr
     mobile: Optional[str] = None
     designation: str
+    department: Optional[str] = None
     address: Optional[str] = None
     residential_address: Optional[str] = None
     # Granular Permanent Address
@@ -1081,6 +1082,7 @@ class NDARegenerateRequest(BaseModel):
     email: Optional[EmailStr] = None
     mobile: Optional[str] = None
     designation: Optional[str] = None
+    department: Optional[str] = None
     address: Optional[str] = None
     residential_address: Optional[str] = None
     # Granular Permanent Address
