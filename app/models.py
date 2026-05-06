@@ -1061,6 +1061,7 @@ class NDADropdownItem(BaseModel):
     address: Optional[str] = None
     residential_address: Optional[str] = None
     designation: str
+    department: Optional[str] = None
 
     class Config:
         from_attributes = True
