@@ -705,23 +705,8 @@ async def update_nda_status(nda_id: str, status_update: NDAStatusUpdate, backgro
             status_update.rejection_reason if status_update.status == "Rejected" else None
         )
 
-        # If rejected, automatically provide a fresh start URL
-        if status_update.status == "Rejected":
-            new_token = str(uuid.uuid4())
-            # Usually regenerates with 1 hour expiry
-            expires_at = datetime.utcnow() + timedelta(hours=1)
-            updated_nda = await repository.regenerate_nda_token(nda_id, new_token, expires_at)
-            
-            # Send new link email
-            background_tasks.add_task(
-                _send_nda_link_email, 
-                updated_nda.get("email"), 
-                updated_nda.get("first_name"), 
-                f"/employee/nda/{new_token}"
-            )
-        
         # If approved, regenerate and re-upload the PDF to remove watermarks and add signs
-        elif status_update.status == "Approved":
+        if status_update.status == "Approved":
             # Generate new PDF with the updated status
             pdf_bytes = generate_pdf_from_request(updated_nda)
             
