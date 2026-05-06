@@ -13,6 +13,7 @@ from weasyprint import HTML
 from io import BytesIO
 from fastapi.responses import Response
 from app.helper.gmail import gmail_helper
+from bson import ObjectId
 
 router = APIRouter(prefix="/nda", tags=["NDA"])
 
@@ -185,7 +186,7 @@ async def generate_nda_link(nda_request: NDARequestCreate, background_tasks: Bac
         
         return success_response(
             message="NDA link generated successfully and email sent",
-            data={"link": link_url, "nda": nda_data}
+            data={"link": link_url, "nda": format_nda_response(nda_data)}
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
@@ -203,6 +204,15 @@ async def regenerate_nda_link(nda_id: str, request: NDARegenerateRequest, backgr
         expiry_hours = request.expires_in_hours if request.expires_in_hours else 1
         expires_at = datetime.utcnow() + timedelta(hours=expiry_hours)
          
+        # Update NDA with provided fields if any (Edit functionality)
+        update_data = {k: v for k, v in request.dict().items() if v is not None and k != "expires_in_hours"}
+        if update_data:
+            # We use nda_id to find and update
+            await repository.nda_requests.update_one(
+                {"_id": ObjectId(nda_id)},
+                {"$set": update_data}
+            )
+
         updated_nda = await repository.regenerate_nda_token(nda_id, new_token, expires_at)
         
         if not updated_nda:
@@ -220,7 +230,7 @@ async def regenerate_nda_link(nda_id: str, request: NDARegenerateRequest, backgr
 
         return success_response(
             message="NDA link regenerated successfully and email sent",
-            data={"link": link_url, "nda": updated_nda}
+            data={"link": link_url, "nda": format_nda_response(updated_nda)}
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
@@ -299,7 +309,7 @@ async def get_approved_ndas():
         approved_ndas = await repository.get_approved_ndas()
         return success_response(
             message="Approved NDAs retrieved successfully",
-            data=approved_ndas
+            data=[format_nda_response(nda) for nda in approved_ndas]
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
@@ -322,6 +332,10 @@ async def verify_nda_access(token: str, request_body: dict):
         if not nda_request:
             raise HTTPException(status_code=404, detail="NDA request not found")
         
+        # Check if rejected
+        if nda_request.get("status") == "Rejected":
+            raise HTTPException(status_code=403, detail="NDA request has been rejected. Please contact HR.")
+
         # Check if expired
         expires_at = nda_request.get("expires_at")
         if isinstance(expires_at, str):
@@ -379,6 +393,10 @@ async def view_nda_form(token: str):
         if not nda_request:
             raise HTTPException(status_code=404, detail="NDA request not found")
         
+        # Check if rejected
+        if nda_request.get("status") == "Rejected":
+             raise HTTPException(status_code=403, detail="NDA request has been rejected")
+
         # Check if expired
         expires_at = nda_request.get("expires_at")
         if isinstance(expires_at, str):
@@ -509,7 +527,7 @@ async def upload_documents(
         
         return success_response(
             message="Documents uploaded successfully",
-            data=updated_nda
+            data=format_nda_response(updated_nda)
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
@@ -695,23 +713,8 @@ async def update_nda_status(nda_id: str, status_update: NDAStatusUpdate, backgro
             status_update.rejection_reason if status_update.status == "Rejected" else None
         )
 
-        # If rejected, automatically provide a fresh start URL
-        if status_update.status == "Rejected":
-            new_token = str(uuid.uuid4())
-            # Usually regenerates with 1 hour expiry
-            expires_at = datetime.utcnow() + timedelta(hours=1)
-            updated_nda = await repository.regenerate_nda_token(nda_id, new_token, expires_at)
-            
-            # Send new link email
-            background_tasks.add_task(
-                _send_nda_link_email, 
-                updated_nda.get("email"), 
-                updated_nda.get("first_name"), 
-                f"/employee/nda/{new_token}"
-            )
-        
         # If approved, regenerate and re-upload the PDF to remove watermarks and add signs
-        elif status_update.status == "Approved":
+        if status_update.status == "Approved":
             # Generate new PDF with the updated status
             pdf_bytes = generate_pdf_from_request(updated_nda)
             
@@ -739,7 +742,7 @@ async def update_nda_status(nda_id: str, status_update: NDAStatusUpdate, backgro
             
         return success_response(
             message=f"NDA status updated to {status_update.status} and email sent",
-            data=updated_nda
+            data=format_nda_response(updated_nda)
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)

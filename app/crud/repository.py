@@ -3612,6 +3612,7 @@ class Repository:
                 "address": 1,
                 "residential_address": 1,
                 "designation": 1,
+                "department": 1,
                 "status": 1,
                 "documents": 1,
                 "signed_pdf_path": 1
