@@ -635,6 +635,7 @@ class LeaveTypeBase(BaseModel):
     name: str
     type: str
     code: str
+    description: Optional[str] = None
     status: str = "Active"
     number_of_days: int
     monthly_allowed: int
@@ -643,6 +644,8 @@ class LeaveTypeBase(BaseModel):
     can_encash: bool = False
     probation_period_months: int = 0
     min_service_days: int = 0
+    notice_period_days: int = 0
+
 
 
 class LeaveTypeCreate(LeaveTypeBase):
@@ -653,6 +656,7 @@ class LeaveTypeUpdate(BaseModel):
     name: Optional[str] = None
     type: Optional[str] = None
     code: Optional[str] = None
+    description: Optional[str] = None
     status: Optional[str] = None
     number_of_days: Optional[int] = None
     monthly_allowed: Optional[int] = None
@@ -661,6 +665,8 @@ class LeaveTypeUpdate(BaseModel):
     can_encash: Optional[bool] = None
     probation_period_months: Optional[int] = None
     min_service_days: Optional[int] = None
+    notice_period_days: Optional[int] = None
+
 
 
 class LeaveTypeResponse(LeaveTypeBase):
