@@ -1259,3 +1259,32 @@ class MilestoneRoadmapResponse(MilestoneRoadmapBase):
 
     class Config:
         from_attributes = True
+
+
+class AIChatMessageBase(BaseModel):
+    role: str
+    content: str
+
+
+class AIChatMessageResponse(AIChatMessageBase):
+    id: str
+    session_id: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AIChatSessionBase(BaseModel):
+    title: str
+
+
+class AIChatSessionResponse(AIChatSessionBase):
+    id: str
+    user_id: str
+    created_at: datetime
+    updated_at: datetime
+    message_count: int
+
+    class Config:
+        from_attributes = True
