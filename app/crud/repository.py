@@ -50,7 +50,7 @@ from app.models import (
 from app.utils import normalize, get_password_hash, get_employee_basic_details
 from bson import ObjectId
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Tuple
 import asyncio
 from app.services.vector_store import vector_store_service
 
@@ -224,7 +224,7 @@ class Repository:
         designation: Optional[str] = None,
         department: Optional[str] = None,
         employee_type: Optional[str] = None,
-    ) -> (List[dict], int):
+    ) -> Tuple[List[dict], int]:
         try:
             query = {}
 
@@ -3591,7 +3591,7 @@ class Repository:
         limit: int = 10,
         search: Optional[str] = None,
         status: Optional[str] = None,
-    ) -> (List[dict], int):
+    ) -> Tuple[List[dict], int]:
         try:
             query = {}
 
@@ -3752,7 +3752,7 @@ class Repository:
         month: Optional[str] = None,
         year: Optional[str] = None,
         search: Optional[str] = None,
-    ) -> (List[dict], int):
+    ) -> Tuple[List[dict], int]:
         try:
             query = {}
             if employee_id:
