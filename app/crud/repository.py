@@ -50,7 +50,7 @@ from app.models import (
 from app.utils import normalize, get_password_hash, get_employee_basic_details
 from bson import ObjectId
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Tuple
 import asyncio
 from app.services.vector_store import vector_store_service
 
@@ -224,7 +224,7 @@ class Repository:
         designation: Optional[str] = None,
         department: Optional[str] = None,
         employee_type: Optional[str] = None,
-    ) -> (List[dict], int):
+    ) -> Tuple[List[dict], int]:
         try:
             query = {}
 
@@ -3298,10 +3298,25 @@ class Repository:
                     )
 
                     # --- UNIFIED CLOCK IN / OVERRIDE LOGIC ---
-                    # We handle clock-in if:
-                    # 1. No record exists yet.
-                    # 2. A record exists (e.g. "Leave") but has no clock_in time.
-                    if not attendance or not attendance.get("clock_in"):
+                    # Determine if this should be treated as a Clock-In or Clock-Out.
+                    # punch: 0 = Check-In, 1 = Check-Out (standard for our client/most devices).
+                    punch_val = str(log.punch).strip() if log.punch is not None else None
+                    
+                    is_in_event = (punch_val == "0")
+                    is_out_event = (punch_val == "1")
+                    
+                    # Fallback for devices/scripts that don't send punch type: 
+                    # First log of day = IN, subsequent = OUT.
+                    if not is_in_event and not is_out_event:
+                        is_in_event = not attendance or not attendance.get("clock_in")
+                        is_out_event = not is_in_event
+
+                    if is_in_event:
+                        # If we already have a clock-in for today, ignore subsequent IN punches.
+                        # (Since logs are sorted, the first one encountered is the earliest).
+                        if attendance and attendance.get("clock_in"):
+                            continue
+
                         # 1. Get Shift Details
                         shift = None
                         shift_id = employee.get("shift_id")
@@ -3460,8 +3475,12 @@ class Repository:
                         
                         processed_count += 1
 
-                    else: 
+                    elif is_out_event:
                         # --- CLOCK OUT LOGIC ---
+                        # Only process OUT if we have an IN to pair it with.
+                        if not attendance or not attendance.get("clock_in"):
+                            continue
+
                         # Only process if this log is later than the existing clock_in
                         # Note: We use the existing clock_in string from the record
                         clock_in_time_dt = datetime.fromisoformat(attendance["clock_in"])
@@ -3572,7 +3591,7 @@ class Repository:
         limit: int = 10,
         search: Optional[str] = None,
         status: Optional[str] = None,
-    ) -> (List[dict], int):
+    ) -> Tuple[List[dict], int]:
         try:
             query = {}
 
@@ -3733,7 +3752,7 @@ class Repository:
         month: Optional[str] = None,
         year: Optional[str] = None,
         search: Optional[str] = None,
-    ) -> (List[dict], int):
+    ) -> Tuple[List[dict], int]:
         try:
             query = {}
             if employee_id:
