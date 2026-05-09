@@ -169,6 +169,14 @@ async def get_tools_for_user(user: dict):
         'date': filter for requests active on a specific date (YYYY-MM-DD). Use this for 'today' or a specific day.
         """
         try:
+            # Enforce self-only for non-admins
+            if role != "admin":
+                # Find current employee's internal ID based on their linked employee_no_id
+                employee = await repo.employees.find_one({"employee_no_id": emp_no_id})
+                if not employee:
+                    return "Could not identify your employee record to list leaves."
+                employee_id = str(employee["_id"])
+                
             return await repo.get_leave_requests(employee_id=employee_id, status=status, date=date)
         except Exception as e:
             return f"Error listing leave requests: {str(e)}"
@@ -228,7 +236,7 @@ async def get_tools_for_user(user: dict):
         return [list_employees, get_any_employee_details, get_organization_metadata, list_leave_requests, list_documents, search_document_content]
     
     # Default: Only allow getting own details + searching company policies & metadata (Active documents only)
-    return [get_my_details, list_documents, search_document_content, get_organization_metadata]
+    return [get_my_details, list_documents, search_document_content, get_organization_metadata, list_leave_requests]
 
 async def chat_stream(query: str, history: list, user: dict) -> AsyncGenerator[str, None]:
     """Generates a streaming response using LangChain's AgentExecutor, incorporating conversation history."""
