@@ -1704,14 +1704,14 @@ class Repository:
                 adj_type = await self.leave_types.find_one({"_id": ObjectId(adj.get("leave_type_id"))})
                 adj_code = adj_type.get("code") if adj_type else None
                 
-                # Rule applies if one is CL_SL and the other is a different type (except PER)
+                # Rule: CL and SL cannot be combined with any other type (including each other)
                 if adj_code and adj_code != "PER" and requested_code != "PER":
-                    if (requested_code == "CL_SL" and adj_code != "CL_SL") or \
-                       (requested_code != "CL_SL" and adj_code == "CL_SL"):
-                        raise ValueError(
-                            f"Casual Leave (CL) cannot be combined with {adj_type.get('name')}. "
-                            f"Please maintain a working day between these leave types."
-                        )
+                    if (requested_code in ["CL", "SL", "CL_SL"] or adj_code in ["CL", "SL", "CL_SL"]):
+                        if requested_code != adj_code:
+                            raise ValueError(
+                                f"{requested_type.get('name')} cannot be combined with {adj_type.get('name')}. "
+                                f"Please maintain a working day between these leave types."
+                            )
             # --- End Rule ---
 
             # --- Rule: Only one active permission allowed ---

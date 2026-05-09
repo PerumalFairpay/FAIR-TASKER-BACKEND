@@ -28,12 +28,22 @@ leave_types_data = [
         "probation_period_months": 3
     },
     {
-        "name": "Casual & Sick Leave",
+        "name": "Casual Leave",
         "type": "Paid",
-        "code": "CL_SL",
+        "code": "CL",
         "status": "Active",
-        "number_of_days": 12,
-        "monthly_allowed": 2, # Max 2 consecutive without approval
+        "number_of_days": 6,
+        "monthly_allowed": 1,
+        "can_carry_forward": False,
+        "can_encash": False
+    },
+    {
+        "name": "Sick Leave",
+        "type": "Paid",
+        "code": "SL",
+        "status": "Active",
+        "number_of_days": 6,
+        "monthly_allowed": 1,
         "can_carry_forward": False,
         "can_encash": False
     },
