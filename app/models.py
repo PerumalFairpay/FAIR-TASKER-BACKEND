@@ -230,6 +230,7 @@ class EmployeeBase(BaseModel):
     pf_account_number: Optional[str] = None
     esic_number: Optional[str] = None
     pan_number: Optional[str] = None
+    exclude_non_working_days_from_lop: bool = False
 
 
 class EmployeeCreate(EmployeeBase):
@@ -277,6 +278,7 @@ class EmployeeUpdate(BaseModel):
     pf_account_number: Optional[str] = None
     esic_number: Optional[str] = None
     pan_number: Optional[str] = None
+    exclude_non_working_days_from_lop: Optional[bool] = None
 
 
 class EmployeeResponse(EmployeeBase):
