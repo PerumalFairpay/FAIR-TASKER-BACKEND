@@ -85,6 +85,8 @@ async def get_me(current_user: dict = Depends(get_current_user)):
             current_user["profile_picture"] = employee.get("profile_picture")
             current_user["work_mode"] = employee.get("work_mode")
             current_user["gender"] = employee.get("gender")
+            current_user["weekly_off"] = employee.get("weekly_off")
+            current_user["lop_rule_01"] = employee.get("lop_rule_01", False)
             # Swap: employee_id becomes DB ID, employee_no_id becomes business ID
             current_user["employee_id"] = str(employee["_id"])
             current_user["employee_no_id"] = employee.get("employee_no_id")
