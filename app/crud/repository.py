@@ -298,7 +298,7 @@ class Repository:
                 "gender": 1,
                 "work_mode": 1,
                 "date_of_joining": 1,
-                "exclude_non_working_days_from_lop": 1,
+                "lop_rule_01": 1,
             }
             employees = await self.employees.find({}, projection).to_list(length=None)
 

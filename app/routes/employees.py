@@ -59,7 +59,7 @@ async def create_employee(
     biometric_id: Optional[str] = Form(None),
     shift_id: Optional[str] = Form(None),
     weekly_off: Optional[str] = Form(None),  # JSON string, e.g. "[5, 6]" for Sat+Sun
-    exclude_non_working_days_from_lop: Optional[bool] = Form(None),
+    lop_rule_01: Optional[bool] = Form(None),
 ):
     try:
         profile_pic_path = None
@@ -122,7 +122,7 @@ async def create_employee(
             pan_number=pan_number,
             biometric_id=biometric_id,
             weekly_off=json.loads(weekly_off) if weekly_off else [6],
-            exclude_non_working_days_from_lop=exclude_non_working_days_from_lop,
+            lop_rule_01=lop_rule_01,
         )
 
         # Call repository. Note: repo signature change pending. passing profile_pic_path.
@@ -288,7 +288,7 @@ async def update_employee(
     biometric_id: Optional[str] = Form(None),
     shift_id: Optional[str] = Form(None),
     weekly_off: Optional[str] = Form(None),  # JSON string, e.g. "[5, 6]" for Sat+Sun
-    exclude_non_working_days_from_lop: Optional[bool] = Form(None),
+    lop_rule_01: Optional[bool] = Form(None),
 ):
     try:
         profile_pic_path = None
@@ -354,7 +354,7 @@ async def update_employee(
             pan_number=pan_number,
             biometric_id=biometric_id,
             weekly_off=json.loads(weekly_off) if weekly_off else None,
-            exclude_non_working_days_from_lop=exclude_non_working_days_from_lop,
+            lop_rule_01=lop_rule_01,
         )
         
         updated_employee = await repo.update_employee(employee_id, update_data, profile_pic_path)
