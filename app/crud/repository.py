@@ -46,6 +46,9 @@ from app.models import (
     FeedbackUpdate,
     MilestoneRoadmapCreate,
     MilestoneRoadmapUpdate,
+    ChatSessionCreate,
+    ChatSessionUpdate,
+    ChatMessageCreate,
 )
 from app.utils import normalize, get_password_hash, get_employee_basic_details
 from bson import ObjectId
@@ -87,6 +90,8 @@ class Repository:
         self.payslip_components = self.db["payslip_components"]
         self.milestones_roadmaps = self.db["milestones_roadmaps"]
         self.employee_documents = self.db["employee_documents"]
+        self.chat_sessions = self.db["chat_sessions"]
+        self.chat_messages = self.db["chat_messages"]
 
     async def create_employee(
         self, employee: EmployeeCreate, profile_picture_path: str = None
@@ -4095,6 +4100,91 @@ class Repository:
         try:
             result = await self.milestones_roadmaps.delete_one({"_id": ObjectId(item_id)})
             return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+    # --- AI Chat History CRUD ---
+
+    async def create_chat_session(self, user_id: str, title: str = "New Chat") -> dict:
+        try:
+            session_data = {
+                "user_id": user_id,
+                "title": title,
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+            result = await self.chat_sessions.insert_one(session_data)
+            session_data["id"] = str(result.inserted_id)
+            return normalize(session_data)
+        except Exception as e:
+            raise e
+
+    async def get_chat_sessions(self, user_id: str) -> List[dict]:
+        try:
+            sessions = await self.chat_sessions.find({"user_id": user_id}).sort("updated_at", -1).to_list(length=None)
+            
+            # Fetch last message for each session to show in preview
+            result = []
+            for session in sessions:
+                norm_session = normalize(session)
+                last_msg = await self.chat_messages.find_one(
+                    {"session_id": norm_session["id"]},
+                    sort=[("created_at", -1)]
+                )
+                if last_msg:
+                    norm_session["last_message"] = last_msg.get("content", "")
+                result.append(norm_session)
+            
+            return result
+        except Exception as e:
+            raise e
+
+    async def get_chat_messages(self, session_id: str) -> List[dict]:
+        try:
+            messages = await self.chat_messages.find({"session_id": session_id}).sort("created_at", 1).to_list(length=None)
+            return [normalize(msg) for msg in messages]
+        except Exception as e:
+            raise e
+
+    async def create_chat_message(self, session_id: str, role: str, content: str) -> dict:
+        try:
+            message_data = {
+                "session_id": session_id,
+                "role": role,
+                "content": content,
+                "created_at": datetime.utcnow()
+            }
+            result = await self.chat_messages.insert_one(message_data)
+            
+            # Update session's updated_at
+            await self.chat_sessions.update_one(
+                {"_id": ObjectId(session_id)},
+                {"$set": {"updated_at": datetime.utcnow()}}
+            )
+            
+            message_data["id"] = str(result.inserted_id)
+            return normalize(message_data)
+        except Exception as e:
+            raise e
+
+    async def delete_chat_session(self, session_id: str) -> bool:
+        try:
+            # Delete messages first
+            await self.chat_messages.delete_many({"session_id": session_id})
+            # Delete session
+            result = await self.chat_sessions.delete_one({"_id": ObjectId(session_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            raise e
+
+    async def update_chat_session_title(self, session_id: str, title: str) -> dict:
+        try:
+            await self.chat_sessions.update_one(
+                {"_id": ObjectId(session_id)},
+                {"$set": {"title": title, "updated_at": datetime.utcnow()}}
+            )
+            session = await self.chat_sessions.find_one({"_id": ObjectId(session_id)})
+            return normalize(session)
         except Exception as e:
             raise e
 
