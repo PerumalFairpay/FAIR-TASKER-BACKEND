@@ -16,6 +16,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 @router.post("/", response_model=AssetResponse, dependencies=[Depends(require_permission("asset:submit"))])
 async def create_asset(
     asset_name: str = Form(...),
+    asset_unique_id: str = Form(...),
     asset_category_id: str = Form(...),
     asset_subcategory_id: Optional[str] = Form(None),
     manufacturer: Optional[str] = Form(None),
@@ -48,6 +49,7 @@ async def create_asset(
 
         asset_data = AssetCreate(
             asset_name=asset_name,
+            asset_unique_id=asset_unique_id,
             asset_category_id=asset_category_id,
             asset_subcategory_id=asset_subcategory_id,
             manufacturer=manufacturer,
@@ -103,6 +105,7 @@ async def get_asset(asset_id: str):
 async def update_asset(
     asset_id: str,
     asset_name: Optional[str] = Form(None),
+    asset_unique_id: Optional[str] = Form(None),
     asset_category_id: Optional[str] = Form(None),
     asset_subcategory_id: Optional[str] = Form(None),
     manufacturer: Optional[str] = Form(None),
@@ -135,6 +138,7 @@ async def update_asset(
 
         update_data = AssetUpdate(
             asset_name=asset_name,
+            asset_unique_id=asset_unique_id,
             asset_category_id=asset_category_id,
             asset_subcategory_id=asset_subcategory_id,
             manufacturer=manufacturer,
