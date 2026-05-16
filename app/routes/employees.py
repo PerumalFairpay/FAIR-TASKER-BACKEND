@@ -59,7 +59,7 @@ async def create_employee(
     biometric_id: Optional[str] = Form(None),
     shift_id: Optional[str] = Form(None),
     weekly_off: Optional[str] = Form(None),  # JSON string, e.g. "[5, 6]" for Sat+Sun
-    lop_rule_01: Optional[bool] = Form(None),
+    lop_rule_01: bool = Form(False),
 ):
     try:
         profile_pic_path = None

@@ -230,7 +230,7 @@ class EmployeeBase(BaseModel):
     pf_account_number: Optional[str] = None
     esic_number: Optional[str] = None
     pan_number: Optional[str] = None
-    lop_rule_01: bool = False
+    lop_rule_01: Optional[bool] = False
 
 
 class EmployeeCreate(EmployeeBase):
