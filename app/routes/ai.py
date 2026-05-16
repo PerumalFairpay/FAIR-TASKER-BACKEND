@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 from app.auth import get_current_user
 from app.services.ai_service import chat_stream
 from app.crud.repository import repository as repo
+from app.helper.response_helper import success_response, error_response
 from typing import Optional
 import json
 
@@ -45,7 +46,7 @@ async def chat_endpoint(
         
         # If it's a new session, yield the session ID first so the frontend can update its state
         if is_new_session:
-            yield f"__SESSION_ID__:{active_session_id}\n"
+            yield f"__SESSION_ID__: {active_session_id}\n"
 
         # Stream output from the LangChain agent
         async for chunk in chat_stream(query, history, current_user):
@@ -61,14 +62,21 @@ async def chat_endpoint(
 @router.get("/sessions")
 async def get_sessions(current_user: dict = Depends(get_current_user)):
     """Retrieve all chat sessions for the current user."""
-    user_id = str(current_user.get("id"))
-    return await repo.get_chat_sessions(user_id)
+    try:
+        user_id = str(current_user.get("id"))
+        sessions = await repo.get_chat_sessions(user_id)
+        return success_response("Sessions fetched successfully", data=sessions)
+    except Exception as e:
+        return error_response(str(e))
 
 @router.get("/sessions/{session_id}/messages")
 async def get_session_messages(session_id: str, current_user: dict = Depends(get_current_user)):
     """Retrieve all messages for a specific session."""
-    # Note: In a production app, verify session_id belongs to current_user
-    return await repo.get_chat_messages(session_id)
+    try:
+        messages = await repo.get_chat_messages(session_id)
+        return success_response("Messages fetched successfully", data=messages)
+    except Exception as e:
+        return error_response(str(e))
 
 @router.patch("/sessions/{session_id}")
 async def update_session_title(
@@ -77,10 +85,17 @@ async def update_session_title(
     current_user: dict = Depends(get_current_user)
 ):
     """Rename a chat session."""
-    return await repo.update_chat_session_title(session_id, title)
+    try:
+        session = await repo.update_chat_session_title(session_id, title)
+        return success_response("Session renamed successfully", data=session)
+    except Exception as e:
+        return error_response(str(e))
 
 @router.delete("/sessions/{session_id}")
 async def delete_session(session_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a chat session and its history."""
-    success = await repo.delete_chat_session(session_id)
-    return {"success": success}
+    try:
+        success = await repo.delete_chat_session(session_id)
+        return success_response("Session deleted successfully", data={"success": success})
+    except Exception as e:
+        return error_response(str(e))
