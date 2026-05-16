@@ -1348,6 +1348,12 @@ class Repository:
     # Asset CRUD
     async def create_asset(self, asset: AssetCreate, images: List[str] = []) -> dict:
         try:
+            # Check if unique ID already exists
+            if asset.asset_unique_id:
+                existing = await self.assets.find_one({"asset_unique_id": asset.asset_unique_id})
+                if existing:
+                    raise ValueError(f"Asset Unique ID '{asset.asset_unique_id}' is already in use")
+
             asset_data = asset.dict()
             if images:
                 asset_data["images"] = images
@@ -1427,6 +1433,15 @@ class Repository:
                 update_data["images"] = images
 
             if update_data:
+                # Check for uniqueness if asset_unique_id is being updated
+                if "asset_unique_id" in update_data and update_data["asset_unique_id"]:
+                    existing = await self.assets.find_one({
+                        "asset_unique_id": update_data["asset_unique_id"],
+                        "_id": {"$ne": ObjectId(asset_id)}
+                    })
+                    if existing:
+                        raise ValueError(f"Asset Unique ID '{update_data['asset_unique_id']}' is already in use")
+
                 update_data["updated_at"] = datetime.utcnow()
                 await self.assets.update_one(
                     {"_id": ObjectId(asset_id)}, {"$set": update_data}
