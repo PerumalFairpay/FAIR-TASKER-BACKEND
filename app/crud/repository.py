@@ -298,6 +298,7 @@ class Repository:
                 "gender": 1,
                 "work_mode": 1,
                 "date_of_joining": 1,
+                "lop_rule_01": 1,
             }
             employees = await self.employees.find({}, projection).to_list(length=None)
 
@@ -1703,14 +1704,14 @@ class Repository:
                 adj_type = await self.leave_types.find_one({"_id": ObjectId(adj.get("leave_type_id"))})
                 adj_code = adj_type.get("code") if adj_type else None
                 
-                # Rule applies if one is CL_SL and the other is a different type (except PER)
+                # Rule: CL and SL cannot be combined with any other type (including each other)
                 if adj_code and adj_code != "PER" and requested_code != "PER":
-                    if (requested_code == "CL_SL" and adj_code != "CL_SL") or \
-                       (requested_code != "CL_SL" and adj_code == "CL_SL"):
-                        raise ValueError(
-                            f"Casual Leave (CL) cannot be combined with {adj_type.get('name')}. "
-                            f"Please maintain a working day between these leave types."
-                        )
+                    if (requested_code in ["CL", "SL", "CL_SL"] or adj_code in ["CL", "SL", "CL_SL"]):
+                        if requested_code != adj_code:
+                            raise ValueError(
+                                f"{requested_type.get('name')} cannot be combined with {adj_type.get('name')}. "
+                                f"Please maintain a working day between these leave types."
+                            )
             # --- End Rule ---
 
             # --- Rule: Only one active permission allowed ---
@@ -1759,29 +1760,20 @@ class Repository:
                 employee = await self.employees.find_one({"_id": ObjectId(leave_request.employee_id)})
                 weekly_off = employee.get("weekly_off", [6]) if employee else [6]
                 
-                # Get global sandwich rule setting
-                sandwich_setting = await self.system_configurations.find_one({"key": "sandwich_rule"})
-                apply_sandwich_rule = sandwich_setting.get("value", False) if sandwich_setting else False
-                
                 # Get holidays
                 holidays_cursor = await self.holidays.find({"status": "Active"}).to_list(length=None)
                 holiday_dates = [h.get("date") for h in holidays_cursor if h.get("date")]
                 
                 # Iterate day by day
-                import math
                 current_dt = start_dt
                 total = 0.0
                 while current_dt <= end_dt:
                     is_holiday = current_dt.strftime("%Y-%m-%d") in holiday_dates
                     is_weekly_off = current_dt.weekday() in weekly_off
                     
-                    if apply_sandwich_rule:
-                        # With sandwich rule, all days in range are counted
+                    # Skip holidays and off days
+                    if not is_holiday and not is_weekly_off:
                         total += 1.0
-                    else:
-                        # Without sandwich rule, skip holidays and off days
-                        if not is_holiday and not is_weekly_off:
-                            total += 1.0
                     
                     current_dt += timedelta(days=1)
                 
@@ -2047,10 +2039,6 @@ class Repository:
                     employee = await self.employees.find_one({"_id": ObjectId(emp_id)})
                     weekly_off = employee.get("weekly_off", [6]) if employee else [6]
                     
-                    # Get global sandwich rule setting
-                    sandwich_setting = await self.system_configurations.find_one({"key": "sandwich_rule"})
-                    apply_sandwich_rule = sandwich_setting.get("value", False) if sandwich_setting else False
-                    
                     # Get holidays
                     holidays_cursor = await self.holidays.find({"status": "Active"}).to_list(length=None)
                     holiday_dates = [h.get("date") for h in holidays_cursor if h.get("date")]
@@ -2061,11 +2049,8 @@ class Repository:
                         is_holiday = current_dt.strftime("%Y-%m-%d") in holiday_dates
                         is_weekly_off = current_dt.weekday() in weekly_off
                         
-                        if apply_sandwich_rule:
+                        if not is_holiday and not is_weekly_off:
                             total += 1.0
-                        else:
-                            if not is_holiday and not is_weekly_off:
-                                total += 1.0
                         
                         current_dt += timedelta(days=1)
                     

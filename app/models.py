@@ -230,6 +230,7 @@ class EmployeeBase(BaseModel):
     pf_account_number: Optional[str] = None
     esic_number: Optional[str] = None
     pan_number: Optional[str] = None
+    lop_rule_01: bool = False
 
 
 class EmployeeCreate(EmployeeBase):
@@ -277,6 +278,7 @@ class EmployeeUpdate(BaseModel):
     pf_account_number: Optional[str] = None
     esic_number: Optional[str] = None
     pan_number: Optional[str] = None
+    lop_rule_01: Optional[bool] = None
 
 
 class EmployeeResponse(EmployeeBase):

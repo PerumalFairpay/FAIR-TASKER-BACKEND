@@ -226,12 +226,15 @@ class VectorStoreService:
                 must_conditions = []
                 for key, value in filter_dict.items():
                     # We assume these are keyword matches for metadata
-                    # Note: LangChain stores metadata with 'metadata.' prefix in Qdrant payload
-                    # But the LangChain Qdrant integration usually handles the mapping if passed to its filter param
+                    if isinstance(value, list):
+                        match = rest.MatchAny(any=value)
+                    else:
+                        match = rest.MatchValue(value=value)
+                    
                     must_conditions.append(
                         rest.FieldCondition(
                             key=f"metadata.{key}",
-                            match=rest.MatchValue(value=value),
+                            match=match,
                         )
                     )
                 if must_conditions:

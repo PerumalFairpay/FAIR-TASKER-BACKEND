@@ -38,11 +38,13 @@ async def login(user: UserLogin, response: Response):
     db_employee_id = None
     employee_no_id = business_id
     
+    gender = None
     if business_id:
         employee = await employees_collection.find_one({"employee_no_id": business_id})
         if employee:
             db_employee_id = str(employee["_id"])
             employee_no_id = employee.get("employee_no_id")
+            gender = employee.get("gender")
 
     return {
         "message": "Login successful",
@@ -56,6 +58,7 @@ async def login(user: UserLogin, response: Response):
             "email": user_record.get("email"),
             "mobile": user_record.get("mobile"),
             "address": user_record.get("address"),
+            "gender": gender,
             "role": user_record.get("role", "employee"),
         },
     }
@@ -81,6 +84,9 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         if employee:
             current_user["profile_picture"] = employee.get("profile_picture")
             current_user["work_mode"] = employee.get("work_mode")
+            current_user["gender"] = employee.get("gender")
+            current_user["weekly_off"] = employee.get("weekly_off")
+            current_user["lop_rule_01"] = employee.get("lop_rule_01", False)
             # Swap: employee_id becomes DB ID, employee_no_id becomes business ID
             current_user["employee_id"] = str(employee["_id"])
             current_user["employee_no_id"] = employee.get("employee_no_id")
