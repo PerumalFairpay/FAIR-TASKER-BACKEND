@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, BackgroundTasks
 from app.helper.response_helper import success_response, error_response
-from app.services.employee_email_service import send_welcome_email
+from app.services.onboarding_service import handle_new_employee_onboarding
 from app.crud.repository import repository as repo
 from app.models import EmployeeCreate, EmployeeUpdate, EmployeeDocument, UserPermissionsUpdate
 from app.helper.file_handler import file_handler
@@ -131,9 +131,9 @@ async def create_employee(
         # So invoking with 2 args works if I removed the 3rd or if 3rd has default.
         new_employee = await repo.create_employee(employee_data, profile_picture_path=profile_pic_path)
         
-        # Send Welcome Email to the company email with credentials
+        # Call onboarding service in background (Registers WorkBench + Sends Email)
         background_tasks.add_task(
-            send_welcome_email,
+            handle_new_employee_onboarding,
             employee_name=name,
             employee_email=email,
             password=password
