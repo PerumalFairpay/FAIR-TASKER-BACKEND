@@ -544,6 +544,7 @@ class AssetCategoryResponse(AssetCategoryBase):
 
 class AssetBase(BaseModel):
     asset_name: str
+    asset_unique_id: str
     asset_category_id: str
     asset_subcategory_id: Optional[str] = None
     manufacturer: Optional[str] = None
@@ -568,6 +569,7 @@ class AssetCreate(AssetBase):
 
 class AssetUpdate(BaseModel):
     asset_name: Optional[str] = None
+    asset_unique_id: Optional[str] = None
     asset_category_id: Optional[str] = None
     asset_subcategory_id: Optional[str] = None
     manufacturer: Optional[str] = None
