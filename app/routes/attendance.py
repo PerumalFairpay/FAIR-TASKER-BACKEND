@@ -357,6 +357,7 @@ async def import_attendance(file: UploadFile = File(...)):
                         if not pd.isna(row.get("Remarks"))
                         else None,
                         "device_type": "Biometric",  # Typical for this kind of Excel export
+                        "location": "At Office",
                     }
                 )
             except Exception as row_err:

@@ -3437,6 +3437,7 @@ class Repository:
                                         "$set": {
                                             "clock_in":    time_str,
                                             "device_type": "Biometric",
+                                            "location":    "At Office",
                                             "is_late":     is_late,
                                             "notes":       "Employee clocked in while on Full Day Leave – leave balance remains deducted",
                                             "updated_at":  datetime.utcnow(),
@@ -3457,6 +3458,7 @@ class Repository:
                                             "is_half_day":       is_half_day,
                                             "leave_type_code":   leave_type_code,
                                             "device_type":       "Biometric",
+                                            "location":          "At Office",
                                             "updated_at":        datetime.utcnow(),
                                         }
                                     }
@@ -3468,6 +3470,7 @@ class Repository:
                                 "date":              date_str,
                                 "clock_in":          time_str,
                                 "device_type":       "Biometric",
+                                "location":          "At Office",
                                 "status":            "Present",
                                 "attendance_status": attendance_status,
                                 "is_late":           is_late,
@@ -3511,7 +3514,8 @@ class Repository:
                                         "$set": {
                                             "clock_out": time_str,
                                             "total_work_hours": total_hours,
-                                            "device_type": "Biometric",  
+                                            "device_type": "Biometric",
+                                            "location": "At Office",
                                             "updated_at": datetime.utcnow(),
                                         }
                                     },
