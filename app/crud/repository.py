@@ -92,6 +92,7 @@ class Repository:
         self.employee_documents = self.db["employee_documents"]
         self.chat_sessions = self.db["chat_sessions"]
         self.chat_messages = self.db["chat_messages"]
+        self.pending_biometric_logs = self.db["pending_biometric_logs"]
 
     async def create_employee(
         self, employee: EmployeeCreate, profile_picture_path: str = None
@@ -209,6 +210,10 @@ class Repository:
 
             # Insert User
             await self.users.insert_one(user_data)
+
+            # Trigger automatic sync of pending biometric records
+            if employee.biometric_id:
+                await self.process_pending_biometric_logs(employee.biometric_id)
 
             # Return normalized employee with documents attached
             return await self.get_employee(employee_id)
@@ -559,6 +564,8 @@ class Repository:
                     user_update["address"] = update_data["address"]
                 if "role" in update_data:
                     user_update["role"] = update_data["role"]
+                if "biometric_id" in update_data:
+                    user_update["biometric_id"] = update_data["biometric_id"]
 
                 if user_update:
                     # Find user by employee_id link
@@ -568,6 +575,10 @@ class Repository:
                             {"employee_no_id": current_emp["employee_no_id"]},
                             {"$set": user_update},
                         )
+
+            # Trigger automatic sync if biometric_id is updated or newly assigned
+            if update_data and "biometric_id" in update_data and update_data["biometric_id"]:
+                await self.process_pending_biometric_logs(update_data["biometric_id"])
 
             return await self.get_employee(employee_id)
         except Exception as e:
@@ -3256,6 +3267,37 @@ class Repository:
         except Exception as e:
             raise e
 
+    async def process_pending_biometric_logs(self, biometric_id: str) -> None:
+        try:
+            if not biometric_id:
+                return
+            
+            # Find all pending logs for this biometric ID
+            pending_logs_cursor = self.pending_biometric_logs.find({"user_id": str(biometric_id).strip()})
+            pending_logs = await pending_logs_cursor.to_list(length=None)
+            
+            if not pending_logs:
+                return
+                
+            # Convert to BiometricLogItem objects
+            from app.models import BiometricLogItem
+            log_items = []
+            for pl in pending_logs:
+                log_items.append(BiometricLogItem(
+                    user_id=pl["user_id"],
+                    timestamp=pl["timestamp"],
+                    status=pl.get("status"),
+                    punch=pl.get("punch")
+                ))
+                
+            # Call bulk_sync_biometric_logs to process them
+            await self.bulk_sync_biometric_logs(log_items)
+            
+            # Delete processed pending logs
+            await self.pending_biometric_logs.delete_many({"user_id": str(biometric_id).strip()})
+        except Exception as e:
+            print(f"Error processing pending biometric logs for {biometric_id}: {e}")
+
     async def bulk_sync_biometric_logs(self, logs: List[BiometricLogItem]) -> dict:
         try:
             processed_count = 0
@@ -3293,6 +3335,23 @@ class Repository:
                     )
                     
                     if not employee:
+                        # Stage unmatched log in pending_biometric_logs
+                        pending_log = {
+                            "user_id": bio_id_str,
+                            "timestamp": log.timestamp,
+                            "status": log.status,
+                            "punch": log.punch,
+                            "created_at": datetime.utcnow()
+                        }
+                        # Check duplicate
+                        exists = await self.pending_biometric_logs.find_one({
+                            "user_id": bio_id_str,
+                            "timestamp": log.timestamp,
+                            "punch": log.punch
+                        })
+                        if not exists:
+                            await self.pending_biometric_logs.insert_one(pending_log)
+                        processed_count += 1
                         continue
 
                     # Use MongoDB ObjectId as the standard employee_id
