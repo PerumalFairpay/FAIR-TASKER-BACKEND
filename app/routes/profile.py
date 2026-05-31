@@ -36,6 +36,11 @@ async def get_profile(current_user: dict = Depends(get_current_user)):
         full_profile.pop("hashed_password", None)
         full_profile.pop("password", None)
         
+        # Fetch documents from separate collection
+        employee_id_str = str(employee["_id"])
+        documents = await repo.employee_documents.find({"employee_id": employee_id_str}).to_list(length=None)
+        full_profile["documents"] = [normalize(doc) for doc in documents]
+        
         # Add permissions and user ID from the user database record
         full_profile["permissions"] = current_user.get("permissions", [])
         full_profile["user_id"] = current_user.get("id")
