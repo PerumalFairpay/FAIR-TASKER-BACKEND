@@ -33,6 +33,8 @@ def normalize(data):
         return str(data)
     
     if isinstance(data, datetime):
+        if data.tzinfo is None:
+            return data.isoformat() + "Z"
         return data.isoformat()
     
     return data
