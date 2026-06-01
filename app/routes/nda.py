@@ -341,6 +341,9 @@ async def verify_nda_access(token: str, request_body: dict):
         if isinstance(expires_at, str):
             expires_at = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
         
+        if expires_at.tzinfo is not None:
+            expires_at = expires_at.replace(tzinfo=None)
+        
         if datetime.utcnow() > expires_at:
             await repository.update_nda_request(token, {"status": "Expired"})
             raise HTTPException(status_code=410, detail="NDA link has expired")
@@ -401,6 +404,9 @@ async def view_nda_form(token: str):
         expires_at = nda_request.get("expires_at")
         if isinstance(expires_at, str):
             expires_at = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+        
+        if expires_at.tzinfo is not None:
+            expires_at = expires_at.replace(tzinfo=None)
         
         if datetime.utcnow() > expires_at:
             # Update status to Expired
@@ -497,6 +503,9 @@ async def upload_documents(
         if isinstance(expires_at, str):
             expires_at = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
         
+        if expires_at.tzinfo is not None:
+            expires_at = expires_at.replace(tzinfo=None)
+        
         if datetime.utcnow() > expires_at:
             return error_response(message="NDA link has expired", status_code=410)
         
@@ -550,6 +559,9 @@ async def sign_nda(token: str, request_body: NDASignatureRequest, request: Reque
         expires_at = nda_request.get("expires_at")
         if isinstance(expires_at, str):
             expires_at = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+        
+        if expires_at.tzinfo is not None:
+            expires_at = expires_at.replace(tzinfo=None)
         
         if datetime.utcnow() > expires_at:
             return error_response(message="NDA link has expired", status_code=410)
