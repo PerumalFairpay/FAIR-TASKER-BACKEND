@@ -26,6 +26,15 @@ settings_data = [
         "is_public": True,
     },
     {
+        "key": "company_timezone",
+        "label": "Company Timezone",
+        "value": "UTC",
+        "input_type": "select",
+        "options": [],
+        "group": "General",
+        "is_public": True,
+    },
+    {
         "key": "contact_email",
         "label": "Contact Email",
         "value": "",

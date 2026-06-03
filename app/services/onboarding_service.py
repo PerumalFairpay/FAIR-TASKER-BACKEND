@@ -16,12 +16,13 @@ async def handle_new_employee_onboarding(employee_name: str, employee_email: str
     try:
         # 1. Register WorkBench account
         # returns True if newly created, False if already exists or error
-        is_new_registration = await register_chatbox_account(
-            username=employee_name,
-            password=password,
-            full_name=employee_name,
-            email=employee_email
-        )
+        # is_new_registration = await register_chatbox_account(
+        #     username=employee_name,
+        #     password=password,
+        #     full_name=employee_name,
+        #     email=employee_email
+        # )
+        is_new_registration = False
         
         # 2. Send Welcome Email
         # include_workbench is only True if a NEW account was successfully created
