@@ -4,6 +4,7 @@ from app.crud.repository import repository as repo
 from app.models import LeaveRequestCreate, LeaveRequestUpdate, LeaveRequestStatusUpdate
 from typing import List, Optional
 import os
+from datetime import datetime
 from app.helper.file_handler import save_upload_file
 from app.services.leave_email_service import send_leave_application_email, send_leave_status_email
 
@@ -31,6 +32,24 @@ async def create_leave_request(
     attachment: Optional[UploadFile] = File(None)
 ):
     try:
+        # Validation: Past Date Check
+        try:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+        except ValueError:
+            try:
+                start_dt = datetime.fromisoformat(start_date).date()
+            except ValueError:
+                return JSONResponse(
+                    status_code=400,
+                    content={"message": "Invalid start date format. Use YYYY-MM-DD.", "success": False}
+                )
+        
+        if start_dt < datetime.now().date():
+            return JSONResponse(
+                status_code=400,
+                content={"message": "Cannot apply for leave on a past date.", "success": False}
+            )
+
         attachment_path = None
         file_type = None
         if attachment:
@@ -77,6 +96,11 @@ async def create_leave_request(
         return JSONResponse(
             status_code=201,
             content={"message": "Leave request submitted successfully", "success": True, "data": new_request}
+        )
+    except ValueError as e:
+        return JSONResponse(
+            status_code=400,
+            content={"message": str(e), "success": False}
         )
     except Exception as e:
         return JSONResponse(
@@ -205,6 +229,11 @@ async def update_leave_request(
             status_code=200,
             content={"message": "Leave request updated successfully", "success": True, "data": updated_request}
         )
+    except ValueError as e:
+        return JSONResponse(
+            status_code=400,
+            content={"message": str(e), "success": False}
+        )
     except Exception as e:
         return JSONResponse(
             status_code=500,
@@ -244,6 +273,11 @@ async def update_leave_status(leave_request_id: str, status_update: LeaveRequest
         return JSONResponse(
             status_code=200,
             content={"message": f"Leave request {status_update.status} successfully", "success": True, "data": updated_request}
+        )
+    except ValueError as e:
+        return JSONResponse(
+            status_code=400,
+            content={"message": str(e), "success": False}
         )
     except Exception as e:
         return JSONResponse(

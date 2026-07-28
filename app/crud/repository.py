@@ -2051,6 +2051,41 @@ class Repository:
             }
             if attachment_path:
                 update_data["attachment"] = attachment_path
+
+            # Validation checks on date update
+            if old_req:
+                # 1. Past date check (only if start_date is being modified)
+                if "start_date" in update_data:
+                    try:
+                        start_dt = datetime.strptime(update_data["start_date"], "%Y-%m-%d").date()
+                    except ValueError:
+                        start_dt = datetime.fromisoformat(update_data["start_date"]).date()
+                    if start_dt < datetime.now().date():
+                        raise ValueError("Cannot set start date to a past date.")
+
+                # 2. Overlap check (if start_date or end_date is being modified)
+                if "start_date" in update_data or "end_date" in update_data:
+                    new_start = update_data.get("start_date") or old_req.get("start_date")
+                    new_end = update_data.get("end_date") or old_req.get("end_date")
+                    emp_id = update_data.get("employee_id") or old_req.get("employee_id")
+
+                    existing_leave = await self.leave_requests.find_one(
+                        {
+                            "_id": {"$ne": ObjectId(leave_request_id)},
+                            "employee_id": emp_id,
+                            "status": {"$in": ["Approved", "Pending"]},
+                            "$or": [
+                                {
+                                    "start_date": {"$lte": new_end},
+                                    "end_date": {"$gte": new_start},
+                                }
+                            ],
+                        }
+                    )
+                    if existing_leave:
+                        raise ValueError(
+                            f"A leave request already exists for the selected dates (Status: {existing_leave.get('status')})"
+                        )
                 
             # --- Server-Side Day Recalculation (including Sandwich Rule) ---
             if "start_date" in update_data and "end_date" in update_data and "leave_duration_type" in update_data:
