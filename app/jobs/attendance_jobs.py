@@ -6,6 +6,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 from bson import ObjectId
+from zoneinfo import ZoneInfo
+
+async def get_company_now() -> datetime:
+    try:
+        config = await repo.system_configurations.find_one({"key": "company_timezone"})
+        tz_name = config.get("value", "UTC") if config else "UTC"
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz = ZoneInfo("UTC")
+    return datetime.now(tz)
 
 async def generate_attendance_for_date(target_date: str = None, preplanned_only: bool = False, shift_type_filter: str = None) -> dict:
     """
@@ -248,11 +258,10 @@ async def generate_today_preplanned_records():
     Does NOT generate 'Absent' records.
     """
     try:
-        # Calculate current date in IST (UTC + 5:30)
-        ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
-        today_str = ist_now.strftime("%Y-%m-%d")
+        company_now = await get_company_now()
+        today_str = company_now.strftime("%Y-%m-%d")
         
-        logger.info(f"Starting morning pre-planned attendance generation for {today_str} (IST)")
+        logger.info(f"Starting morning pre-planned attendance generation for {today_str} (Local)")
         return await generate_attendance_for_date(today_str, preplanned_only=True)
     except Exception as e:
         logger.error(f"Morning pre-planned generation failed: {str(e)}")
@@ -263,8 +272,8 @@ async def generate_daily_attendance_records():
     Night job (11:57 PM IST) to generate Missing records for DAY SHIFT employees.
     """
     try:
-        ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
-        today_str = ist_now.strftime("%Y-%m-%d")
+        company_now = await get_company_now()
+        today_str = company_now.strftime("%Y-%m-%d")
         
         logger.info(f"Starting Day Shift attendance generation for {today_str}")
         return await generate_attendance_for_date(today_str, preplanned_only=False, shift_type_filter="Day")
@@ -277,10 +286,10 @@ async def generate_night_shift_attendance_records():
     Morning job (08:00 AM IST) to generate Missing records for NIGHT SHIFT employees (for Previous Day).
     """
     try:
-        ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
+        company_now = await get_company_now()
         # For Night Shift, "Absent" is determined the NEXT morning.
         # So we are looking for records from YESTERDAY.
-        yesterday_dt = ist_now - timedelta(days=1)
+        yesterday_dt = company_now - timedelta(days=1)
         yesterday_str = yesterday_dt.strftime("%Y-%m-%d")
         
         logger.info(f"Starting Night Shift attendance generation for {yesterday_str}")
@@ -357,9 +366,9 @@ async def process_unauthorized_absences():
     Daily job to check for 2 consecutive days of unauthorized absence and mark them as LOP.
     """
     try:
-        ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
-        yesterday_dt = ist_now - timedelta(days=1)
-        day_before_dt = ist_now - timedelta(days=2)
+        company_now = await get_company_now()
+        yesterday_dt = company_now - timedelta(days=1)
+        day_before_dt = company_now - timedelta(days=2)
         
         yesterday_str = yesterday_dt.strftime("%Y-%m-%d")
         day_before_str = day_before_dt.strftime("%Y-%m-%d")

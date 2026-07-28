@@ -2768,11 +2768,18 @@ class Repository:
 
             # 4. Parse Times
             from datetime import timedelta as _timedelta
+            from zoneinfo import ZoneInfo
+
+            timezone_config = await self.system_configurations.find_one({"key": "company_timezone"})
+            timezone_name = timezone_config.get("value", "UTC") if timezone_config else "UTC"
+            try:
+                tz = ZoneInfo(timezone_name)
+            except Exception:
+                tz = ZoneInfo("UTC")
 
             clock_in_dt = datetime.fromisoformat(attendance.clock_in.replace("Z", "+00:00"))
-            ist_offset = _timedelta(hours=5, minutes=30)
-            clock_in_ist = clock_in_dt + ist_offset
-            clock_in_time = clock_in_ist.time()
+            clock_in_local = clock_in_dt.astimezone(tz)
+            clock_in_time = clock_in_local.time()
 
             def _parse_time(t_str, fallback="09:00"):
                 for fmt in ("%H:%M", "%H:%M:%S"):
