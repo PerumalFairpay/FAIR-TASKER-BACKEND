@@ -47,7 +47,7 @@ async def get_current_user(token: dict = Depends(verify_token)):
         raise HTTPException(status_code=401, detail="Invalid token payload")
     
     try:
-        user = await users_collection.find_one({"_id": ObjectId(user_id)})
+        user = await users_collection.find_one({"_id": ObjectId(user_id), "is_deleted": {"$ne": True}})
     except:
         raise HTTPException(status_code=401, detail="Invalid user ID format")
         

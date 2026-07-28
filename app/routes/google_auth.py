@@ -54,8 +54,7 @@ async def google_callback(code: str):
         user_info = user_info_response.json()
         email = user_info.get("email")
         
-        # 3. Check if user exists (Strict Enforcement)
-        user_record = await users_collection.find_one({"email": email})
+        user_record = await users_collection.find_one({"email": email, "is_deleted": {"$ne": True}})
         if not user_record:
             # Redirect to frontend with error
             return RedirectResponse(f"{FRONTEND_URL}/?error=Account+not+found.+Please+contact+support.")

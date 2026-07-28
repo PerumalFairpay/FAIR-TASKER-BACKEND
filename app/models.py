@@ -12,6 +12,8 @@ class UserBase(BaseModel):
     role: Optional[str] = "employee"
     address: Optional[str] = None
     permissions: List[str] = []
+    is_deleted: bool = False
+    deleted_at: Optional[datetime] = None
 
 
 class UserCreate(UserBase):
@@ -211,6 +213,8 @@ class EmployeeBase(BaseModel):
     role: Optional[str] = None
     status: Optional[str] = "Active"
     shift_id: Optional[str] = None
+    is_deleted: bool = False
+    deleted_at: Optional[datetime] = None
     date_of_joining: Optional[str] = None
     confirmation_date: Optional[str] = None
     notice_period: Optional[str] = None

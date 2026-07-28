@@ -13,7 +13,7 @@ router = APIRouter()
 
 @router.post("/login")
 async def login(user: UserLogin, response: Response):
-    user_record = await users_collection.find_one({"email": user.email})
+    user_record = await users_collection.find_one({"email": user.email, "is_deleted": {"$ne": True}})
     if not user_record or not verify_password(
         user.password, user_record["hashed_password"]
     ):

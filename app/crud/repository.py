@@ -236,7 +236,7 @@ class Repository:
         employee_type: Optional[str] = None,
     ) -> Tuple[List[dict], int]:
         try:
-            query = {}
+            query = {"is_deleted": {"$ne": True}}
 
             if status:
                 query["status"] = status
@@ -310,7 +310,7 @@ class Repository:
                 "date_of_joining": 1,
                 "lop_rule_01": 1,
             }
-            employees = await self.employees.find({}, projection).to_list(length=None)
+            employees = await self.employees.find({"is_deleted": {"$ne": True}}, projection).to_list(length=None)
 
             return [normalize(emp) for emp in employees]
         except Exception as e:
@@ -318,7 +318,7 @@ class Repository:
 
     async def get_employee(self, employee_id: str) -> dict:
         try:
-            employee = await self.employees.find_one({"_id": ObjectId(employee_id)})
+            employee = await self.employees.find_one({"_id": ObjectId(employee_id), "is_deleted": {"$ne": True}})
             if not employee:
                 return None
             
@@ -336,7 +336,7 @@ class Repository:
     async def get_employee_basic_details(self, employee_id: str) -> dict:
         """Returns a lightweight employee profile for embedding in other resources."""
         try:
-            employee = await self.employees.find_one({"_id": ObjectId(employee_id)})
+            employee = await self.employees.find_one({"_id": ObjectId(employee_id), "is_deleted": {"$ne": True}})
             if not employee:
                 return None
             return {
@@ -587,22 +587,31 @@ class Repository:
     async def delete_employee(self, employee_id: str) -> bool:
         try:
             # Get employee to find associated user
-            employee = await self.employees.find_one({"_id": ObjectId(employee_id)})
+            employee = await self.employees.find_one({"_id": ObjectId(employee_id), "is_deleted": {"$ne": True}})
+            if not employee:
+                return False
 
-            result = await self.employees.delete_one({"_id": ObjectId(employee_id)})
+            deleted_at = datetime.utcnow()
+            result = await self.employees.update_one(
+                {"_id": ObjectId(employee_id)},
+                {"$set": {"is_deleted": True, "deleted_at": deleted_at}}
+            )
 
-            if result.deleted_count > 0 and employee:
-                # Delete linked documents
-                await self.employee_documents.delete_many({"employee_id": employee_id})
+            if result.modified_count > 0:
+                # Soft delete linked documents
+                await self.employee_documents.update_many(
+                    {"employee_id": employee_id},
+                    {"$set": {"is_deleted": True, "deleted_at": deleted_at}}
+                )
 
-                # Delete User too? "if i create a employee it will also store in the user table" -> implication is strict 1:1 sync.
-                # I will soft delete or delete user. Let's delete for now to keep it clean CRUD.
+                # Soft delete User too
                 if "employee_no_id" in employee:
-                    await self.users.delete_one(
-                        {"employee_no_id": employee["employee_no_id"]}
+                    await self.users.update_one(
+                        {"employee_no_id": employee["employee_no_id"]},
+                        {"$set": {"is_deleted": True, "deleted_at": deleted_at}}
                     )
 
-            return result.deleted_count > 0
+            return result.modified_count > 0
         except Exception as e:
             raise e
 
