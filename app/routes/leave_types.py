@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from app.crud.repository import repository as repo
 from app.models import LeaveTypeCreate, LeaveTypeUpdate
-from typing import List
+from typing import List, Optional
 
 from app.auth import verify_token
 
@@ -23,9 +23,9 @@ async def create_leave_type(leave_type: LeaveTypeCreate):
         )
 
 @router.get("/all")
-async def get_leave_types():
+async def get_leave_types(status: Optional[str] = None):
     try:
-        leave_types = await repo.get_leave_types()
+        leave_types = await repo.get_leave_types(status=status)
         return JSONResponse(
             status_code=200,
             content={"message": "Leave types fetched successfully", "success": True, "data": leave_types}

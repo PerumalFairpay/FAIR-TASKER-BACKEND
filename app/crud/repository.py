@@ -1648,9 +1648,12 @@ class Repository:
         except Exception as e:
             raise e
 
-    async def get_leave_types(self) -> List[dict]:
+    async def get_leave_types(self, status: str = None) -> List[dict]:
         try:
-            leave_types = await self.leave_types.find().to_list(length=None)
+            query = {}
+            if status:
+                query["status"] = status
+            leave_types = await self.leave_types.find(query).to_list(length=None)
             return [normalize(lt) for lt in leave_types]
         except Exception as e:
             raise e
