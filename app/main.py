@@ -37,6 +37,7 @@ from app.routes import (
     milestone_roadmap,
     ai,
     google_auth,
+    users,
 )
 
 from app.jobs.scheduler import init_scheduler, shutdown_scheduler
@@ -134,6 +135,7 @@ api_router.include_router(shifts.router)
 api_router.include_router(milestone_roadmap.router)
 api_router.include_router(ai.router)
 api_router.include_router(google_auth.router, prefix="/auth/google", tags=["google-auth"])
+api_router.include_router(users.router)
 
 
 app.include_router(api_router)

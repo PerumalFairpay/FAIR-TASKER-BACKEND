@@ -98,12 +98,14 @@ class Repository:
         self, employee: EmployeeCreate, profile_picture_path: str = None
     ) -> dict:
         try:
-            # Check if user already exists
+            # Check if user already exists (ignoring soft-deleted users)
             existing_user = await self.users.find_one(
                 {
+                    "is_deleted": {"$ne": True},
                     "$or": [
                         {"email": employee.email},
                         {"employee_id": employee.employee_no_id},
+                        {"employee_no_id": employee.employee_no_id},
                     ]
                 }
             )
@@ -111,7 +113,10 @@ class Repository:
                 raise ValueError("User with this email or Employee ID already exists")
 
             if employee.personal_email:
-                existing_personal = await self.employees.find_one({"personal_email": employee.personal_email})
+                existing_personal = await self.employees.find_one({
+                    "is_deleted": {"$ne": True},
+                    "personal_email": employee.personal_email
+                })
                 if existing_personal:
                     raise ValueError(f"User with personal email {employee.personal_email} already exists")
 
@@ -456,13 +461,39 @@ class Repository:
         profile_picture_path: str = None,
     ) -> dict:
         try:
+            current_emp = await self.employees.find_one({"_id": ObjectId(employee_id), "is_deleted": {"$ne": True}})
+            if not current_emp:
+                return None
+
             update_data = {k: v for k, v in employee.dict().items() if v is not None}
             if profile_picture_path:
                 update_data["profile_picture"] = profile_picture_path
 
+            # Check if email is being updated to a new value and if it is already taken by another active user
+            if "email" in update_data and update_data["email"] and update_data["email"] != current_emp.get("email"):
+                existing_email = await self.users.find_one({
+                    "is_deleted": {"$ne": True},
+                    "email": update_data["email"]
+                })
+                if existing_email:
+                    raise ValueError(f"User with email {update_data['email']} already exists")
+
+            # Check if employee_no_id is being updated to a new value and if it is already taken by another active user
+            if "employee_no_id" in update_data and update_data["employee_no_id"] and update_data["employee_no_id"] != current_emp.get("employee_no_id"):
+                existing_id = await self.users.find_one({
+                    "is_deleted": {"$ne": True},
+                    "employee_no_id": update_data["employee_no_id"]
+                })
+                if existing_id:
+                    raise ValueError(f"User with Employee ID {update_data['employee_no_id']} already exists")
+
             if "personal_email" in update_data and update_data["personal_email"]:
                 existing_personal = await self.employees.find_one(
-                    {"personal_email": update_data["personal_email"], "_id": {"$ne": ObjectId(employee_id)}}
+                    {
+                        "is_deleted": {"$ne": True},
+                        "personal_email": update_data["personal_email"],
+                        "_id": {"$ne": ObjectId(employee_id)}
+                    }
                 )
                 if existing_personal:
                     raise ValueError(f"User with personal email {update_data['personal_email']} already exists")
@@ -552,7 +583,7 @@ class Repository:
                             }}
                         )
 
-                # Also update User if critical fields changed (email, name, mobile)
+                # Also update User if critical fields changed (email, name, mobile, employee_no_id)
                 user_update = {}
                 if "email" in update_data:
                     user_update["email"] = update_data["email"]
@@ -566,15 +597,14 @@ class Repository:
                     user_update["role"] = update_data["role"]
                 if "biometric_id" in update_data:
                     user_update["biometric_id"] = update_data["biometric_id"]
+                if "employee_no_id" in update_data:
+                    user_update["employee_no_id"] = update_data["employee_no_id"]
 
-                if user_update:
-                    # Find user by employee_id link
-                    current_emp = await self.get_employee(employee_id)
-                    if current_emp and "employee_no_id" in current_emp:
-                        await self.users.update_one(
-                            {"employee_no_id": current_emp["employee_no_id"]},
-                            {"$set": user_update},
-                        )
+                if user_update and "email" in current_emp:
+                    await self.users.update_one(
+                        {"email": current_emp["email"]},
+                        {"$set": user_update},
+                    )
 
             # Trigger automatic sync if biometric_id is updated or newly assigned
             if update_data and "biometric_id" in update_data and update_data["biometric_id"]:
@@ -608,6 +638,84 @@ class Repository:
                 if "employee_no_id" in employee:
                     await self.users.update_one(
                         {"employee_no_id": employee["employee_no_id"]},
+                        {"$set": {"is_deleted": True, "deleted_at": deleted_at}}
+                    )
+
+            return result.modified_count > 0
+        except Exception as e:
+            raise e
+
+    async def get_users(
+        self,
+        page: int = 1,
+        limit: int = 10,
+        search: Optional[str] = None,
+        role: Optional[str] = None,
+    ) -> Tuple[List[dict], int]:
+        try:
+            query = {"is_deleted": {"$ne": True}}
+
+            if role:
+                query["role"] = role
+
+            if search:
+                regex_pattern = {"$regex": search, "$options": "i"}
+                query["$or"] = [
+                    {"name": regex_pattern},
+                    {"email": regex_pattern},
+                    {"employee_no_id": regex_pattern},
+                    {"mobile": regex_pattern},
+                ]
+
+            skip = (page - 1) * limit
+            total_items = await self.users.count_documents(query)
+
+            users_list = (
+                await self.users.find(query)
+                .skip(skip)
+                .limit(limit)
+                .to_list(length=limit)
+            )
+
+            for u in users_list:
+                if "hashed_password" in u:
+                    del u["hashed_password"]
+                if "password" in u:
+                    del u["password"]
+
+            return [normalize(u) for u in users_list], total_items
+        except Exception as e:
+            raise e
+
+    async def get_user_by_id(self, user_id: str) -> Optional[dict]:
+        try:
+            user = await self.users.find_one({"_id": ObjectId(user_id), "is_deleted": {"$ne": True}})
+            if user:
+                if "hashed_password" in user:
+                    del user["hashed_password"]
+                if "password" in user:
+                    del user["password"]
+                return normalize(user)
+            return None
+        except Exception as e:
+            raise e
+
+    async def delete_user(self, user_id: str) -> bool:
+        try:
+            user = await self.users.find_one({"_id": ObjectId(user_id), "is_deleted": {"$ne": True}})
+            if not user:
+                return False
+
+            deleted_at = datetime.utcnow()
+            result = await self.users.update_one(
+                {"_id": ObjectId(user_id)},
+                {"$set": {"is_deleted": True, "deleted_at": deleted_at}}
+            )
+
+            if result.modified_count > 0:
+                if "employee_no_id" in user:
+                    await self.employees.update_one(
+                        {"employee_no_id": user["employee_no_id"]},
                         {"$set": {"is_deleted": True, "deleted_at": deleted_at}}
                     )
 
