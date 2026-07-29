@@ -232,11 +232,34 @@ async def get_tools_for_user(user: dict):
         except Exception as e:
             return f"Error searching document content: {str(e)}"
 
+    @tool
+    async def list_holidays():
+        """
+        Retrieves a list of all company holidays.
+        Use this for questions like 'what holidays do we have?', 'is next Friday a holiday?', or listing holiday events.
+        """
+        try:
+            return await repo.get_holidays()
+        except Exception as e:
+            return f"Error listing holidays: {str(e)}"
+
+    @tool
+    async def list_blogs(search_query: Optional[str] = None, page: int = 1, limit: int = 10):
+        """
+        Retrieves a list of company blog posts or announcements.
+        Use this for questions like 'are there any new blog posts or announcements?', 'search for blogs about health', or viewing news.
+        'search_query': Optional string to filter blogs by title.
+        """
+        try:
+            return await repo.get_blogs(page=page, limit=limit, search=search_query)
+        except Exception as e:
+            return f"Error listing blogs: {str(e)}"
+
     if role == "admin":
-        return [list_employees, get_any_employee_details, get_organization_metadata, list_leave_requests, list_documents, search_document_content]
+        return [list_employees, get_any_employee_details, get_organization_metadata, list_leave_requests, list_documents, search_document_content, list_holidays, list_blogs]
     
     # Default: Only allow getting own details + searching company policies & metadata (Active documents only)
-    return [get_my_details, list_documents, search_document_content, get_organization_metadata, list_leave_requests]
+    return [get_my_details, list_documents, search_document_content, get_organization_metadata, list_leave_requests, list_holidays, list_blogs]
 
 async def chat_stream(query: str, history: list, user: dict) -> AsyncGenerator[str, None]:
     """Generates a streaming response using LangChain's AgentExecutor, incorporating conversation history."""
@@ -261,8 +284,8 @@ async def chat_stream(query: str, history: list, user: dict) -> AsyncGenerator[s
         "You are the Fyro AI Assistant. Your purpose is to help users manage and query their workplace data. "
         "Maintain a helpful, formal, and objective tone throughout the conversation, utilizing relevant emojis where appropriate to enhance the interaction. "
         f"The current user is {user.get('name', 'User')} and their role is {user.get('role', 'employee')}."
-        "\nYou have access to full employee profile details, leave requests, and company documents metadata/content. "
-        "When users ask for a 'list' or 'details', use `list_employees`, `list_leave_requests`, or `list_documents` with appropriate filters to get the data. "
+        "\nYou have access to full employee profile details, leave requests, company documents metadata/content, holidays, and blog posts."
+        "When users ask for a 'list' or 'details', use `list_employees`, `list_leave_requests`, `list_documents`, `list_holidays`, or `list_blogs` with appropriate filters to get the data. "
         "\nDOCUMENT SEARCH LOGIC:"
         "\n- If a user asks a question about company policies, rules, or anything likely to be in a manual or agreement, use `search_document_content`. "
         "\n- Always try to search inside documents if you cannot find the answer in the database tools directly."
