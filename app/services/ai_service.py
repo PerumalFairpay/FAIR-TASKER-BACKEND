@@ -42,6 +42,8 @@ async def get_tools_for_user(user: dict):
         'role_filter': e.g., 'admin', 'employee', 'manager'.
         'shift_id': the ID of the shift (use get_organization_metadata to find IDs).
         """
+        if role != "admin":
+            return "Access Denied: You do not have permission to view other employees' details. You can only view your own details using get_my_details."
         try:
             # If no specific filters and not asking for full details, return the summary (FAST)
             if not include_all_profile_details and not any([search, status, role_filter, work_mode, shift_id, gender, marital_status, designation, department, employee_type]):
@@ -111,6 +113,8 @@ async def get_tools_for_user(user: dict):
         Returns personal info, tasks, leave balances, attendance stats, projects, and assets.
         'search_query': Any identifying information about the employee.
         """
+        if role != "admin":
+            return "Access Denied: You do not have permission to view other employees' details. You can only view your own details using get_my_details."
         try:
             # Search for the employee using the repository's search capability
             employees, _ = await repo.get_employees(search=search_query, limit=1)
@@ -255,8 +259,41 @@ async def get_tools_for_user(user: dict):
         except Exception as e:
             return f"Error listing blogs: {str(e)}"
 
+    @tool
+    async def list_attendance(
+        date: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        employee_id: Optional[str] = None,
+        status: Optional[str] = None,
+        page: int = 1,
+        limit: int = 50
+    ):
+        """
+        Retrieves a list of attendance records for all employees or filtered by date, employee, or status.
+        Only admins have permission to use this tool.
+        'date': filter by specific date (YYYY-MM-DD).
+        'start_date' / 'end_date': filter by date range (YYYY-MM-DD).
+        'employee_id': filter by employee's unique ID.
+        'status': filter by status (Present, Absent, Leave, Holiday).
+        """
+        if role != "admin":
+            return "Access Denied: You do not have permission to view other employees' attendance records."
+        try:
+            return await repo.get_all_attendance(
+                date=date,
+                start_date=start_date,
+                end_date=end_date,
+                employee_id=employee_id,
+                status=status,
+                page=page,
+                limit=limit
+            )
+        except Exception as e:
+            return f"Error fetching attendance records: {str(e)}"
+
     if role == "admin":
-        return [list_employees, get_any_employee_details, get_organization_metadata, list_leave_requests, list_documents, search_document_content, list_holidays, list_blogs]
+        return [list_employees, get_any_employee_details, get_organization_metadata, list_leave_requests, list_documents, search_document_content, list_holidays, list_blogs, list_attendance]
     
     # Default: Only allow getting own details + searching company policies & metadata (Active documents only)
     return [get_my_details, list_documents, search_document_content, get_organization_metadata, list_leave_requests, list_holidays, list_blogs]
@@ -281,11 +318,12 @@ async def chat_stream(query: str, history: list, user: dict) -> AsyncGenerator[s
     
     today = datetime.now().strftime("%Y-%m-%d, %A")
     system_prompt = (
-        "You are the Fyro AI Assistant. Your purpose is to help users manage and query their workplace data. "
-        "Maintain a helpful, formal, and objective tone throughout the conversation, utilizing relevant emojis where appropriate to enhance the interaction. "
+        "You are the Fyro AI Assistant, the ultimate workplace sidekick and friendly neighborhood office guru! Your purpose is to help users manage and query their workplace data. "
+        "Adopt a warm, witty, and highly friendly tone—think of yourself as that fun, super-organized coworker who always has the best office hacks, knows where the coffee is, and makes data queries feel like a breeze. Keep it helpful, drop in a light joke, clever puns, or playful banter here and there, and use plenty of expressive emojis to match the vibe! "
         f"The current user is {user.get('name', 'User')} and their role is {user.get('role', 'employee')}."
-        "\nYou have access to full employee profile details, leave requests, company documents metadata/content, holidays, and blog posts."
-        "When users ask for a 'list' or 'details', use `list_employees`, `list_leave_requests`, `list_documents`, `list_holidays`, or `list_blogs` with appropriate filters to get the data. "
+        "\nCRITICAL: Do NOT mention any tool names (like list_employees, list_attendance, list_blogs, etc.), function names, or internal details like 'tools' or 'superpowers' in your responses to the user. Talk to them naturally without revealing the underlying technical capabilities or tool configurations."
+        "\nYou have access to full employee profile details, leave requests, company documents metadata/content, holidays, blog posts, and employee attendance logs."
+        "When users ask for a 'list' or 'details', use `list_employees`, `list_leave_requests`, `list_documents`, `list_holidays`, `list_blogs`, or `list_attendance` with appropriate filters to get the data. "
         "\nDOCUMENT SEARCH LOGIC:"
         "\n- If a user asks a question about company policies, rules, or anything likely to be in a manual or agreement, use `search_document_content`. "
         "\n- Always try to search inside documents if you cannot find the answer in the database tools directly."
