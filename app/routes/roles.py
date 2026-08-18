@@ -4,6 +4,7 @@ from app.models import RoleCreate, RoleUpdate, RoleResponse, PermissionShortRef
 from bson import ObjectId
 from typing import List, Dict
 from app.auth import verify_token, require_permission
+from app.helper.response_helper import success_response, error_response
 
 router = APIRouter(dependencies=[Depends(verify_token)])
 
@@ -14,11 +15,11 @@ async def get_permissions_map() -> Dict[str, str]:
         perm_map[str(perm["_id"])] = perm["name"]
     return perm_map
 
-@router.post("/", response_model=RoleResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("role:submit"))])
+@router.post("/", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("role:submit"))])
 async def create_role(role: RoleCreate):
     existing_role = await roles_collection.find_one({"name": role.name})
     if existing_role:
-        raise HTTPException(status_code=400, detail="Role with this name already exists")
+        return error_response(message="Role with this name already exists", status_code=400)
 
     role_dict = role.dict()
     new_role = await roles_collection.insert_one(role_dict)
@@ -33,14 +34,16 @@ async def create_role(role: RoleCreate):
         if pid_str in perm_map:
             enriched_permissions.append(PermissionShortRef(id=pid_str, name=perm_map[pid_str]))
     
-    return RoleResponse(
+    data = RoleResponse(
         id=str(created_role["_id"]),
         name=created_role["name"],
         description=created_role.get("description"),
         permissions=enriched_permissions
-    )
+    ).dict()
+    
+    return success_response(message="Role created successfully", data=data, status_code=201)
 
-@router.get("/", response_model=List[RoleResponse], dependencies=[Depends(require_permission("role:view"))])
+@router.get("/", dependencies=[Depends(require_permission("role:view"))])
 async def get_roles():
     roles = []
     perm_map = await get_permissions_map()
@@ -58,17 +61,18 @@ async def get_roles():
             name=role["name"],
             description=role.get("description"),
             permissions=enriched_permissions
-        ))
-    return roles
+        ).dict())
+        
+    return success_response(message="Roles fetched successfully", data=roles)
 
-@router.get("/{role_id}", response_model=RoleResponse, dependencies=[Depends(require_permission("role:view"))])
+@router.get("/{role_id}", dependencies=[Depends(require_permission("role:view"))])
 async def get_role(role_id: str):
     if not ObjectId.is_valid(role_id):
-        raise HTTPException(status_code=400, detail="Invalid role ID")
+        return error_response(message="Invalid role ID", status_code=400)
     
     role = await roles_collection.find_one({"_id": ObjectId(role_id)})
     if not role:
-        raise HTTPException(status_code=404, detail="Role not found")
+        return error_response(message="Role not found", status_code=404)
     
     perm_map = await get_permissions_map()
     permission_ids = role.get("permissions", [])
@@ -78,32 +82,34 @@ async def get_role(role_id: str):
         if pid_str in perm_map:
             enriched_permissions.append(PermissionShortRef(id=pid_str, name=perm_map[pid_str]))
     
-    return RoleResponse(
+    data = RoleResponse(
         id=str(role["_id"]),
         name=role["name"],
         description=role.get("description"),
         permissions=enriched_permissions
-    )
+    ).dict()
+    
+    return success_response(message="Role fetched successfully", data=data)
 
-@router.put("/{role_id}", response_model=RoleResponse, dependencies=[Depends(require_permission("role:submit"))])
+@router.put("/{role_id}", dependencies=[Depends(require_permission("role:submit"))])
 async def update_role(role_id: str, role_update: RoleUpdate):
     if not ObjectId.is_valid(role_id):
-        raise HTTPException(status_code=400, detail="Invalid role ID")
+        return error_response(message="Invalid role ID", status_code=400)
     
     update_data = {k: v for k, v in role_update.dict().items() if v is not None}
     
     if not update_data:
-        raise HTTPException(status_code=400, detail="No data to update")
+        return error_response(message="No data to update", status_code=400)
 
     if "name" in update_data:
         existing_role = await roles_collection.find_one({"name": update_data["name"], "_id": {"$ne": ObjectId(role_id)}})
         if existing_role:
-            raise HTTPException(status_code=400, detail="Role with this name already exists")
+            return error_response(message="Role with this name already exists", status_code=400)
 
     result = await roles_collection.update_one({"_id": ObjectId(role_id)}, {"$set": update_data})
     
     if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Role not found")
+        return error_response(message="Role not found", status_code=404)
         
     updated_role = await roles_collection.find_one({"_id": ObjectId(role_id)})
     
@@ -115,19 +121,23 @@ async def update_role(role_id: str, role_update: RoleUpdate):
         if pid_str in perm_map:
             enriched_permissions.append(PermissionShortRef(id=pid_str, name=perm_map[pid_str]))
 
-    return RoleResponse(
+    data = RoleResponse(
         id=str(updated_role["_id"]),
         name=updated_role["name"],
         description=updated_role.get("description"),
         permissions=enriched_permissions
-    )
+    ).dict()
 
-@router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission("role:submit"))])
+    return success_response(message="Role updated successfully", data=data)
+
+@router.delete("/{role_id}", dependencies=[Depends(require_permission("role:submit"))])
 async def delete_role(role_id: str):
     if not ObjectId.is_valid(role_id):
-        raise HTTPException(status_code=400, detail="Invalid role ID")
+        return error_response(message="Invalid role ID", status_code=400)
         
     result = await roles_collection.delete_one({"_id": ObjectId(role_id)})
     
     if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Role not found")
+        return error_response(message="Role not found", status_code=404)
+        
+    return success_response(message="Role deleted successfully")
