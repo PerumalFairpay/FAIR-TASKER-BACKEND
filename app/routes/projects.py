@@ -1,14 +1,15 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
-from fastapi.responses import JSONResponse
-from app.crud.repository import repository as repo
+from fastapi import APIRouter, Depends, UploadFile, File, Form
 from app.models import ProjectCreate, ProjectUpdate
 from app.helper.file_handler import file_handler
-from typing import List, Optional
+from app.helper.response_helper import success_response, error_response
+from app.services.api.project import ProjectService
+from typing import Optional
 import json
 
 from app.auth import verify_token, require_permission
 
 router = APIRouter(prefix="/projects", tags=["projects"], dependencies=[Depends(verify_token)])
+
 
 @router.post("/create", dependencies=[Depends(require_permission("project:submit"))])
 async def create_project(
@@ -54,64 +55,38 @@ async def create_project(
             logo=logo_path
         )
 
-        new_project = await repo.create_project(project_data, logo_path)
-        return JSONResponse(
-            status_code=201,
-            content={"message": "Project created successfully", "success": True, "data": new_project}
-        )
+        data, error = await ProjectService.create(project_data, logo_path)
+        if error:
+            return error_response(message=f"Failed to create project: {error}", status_code=500)
+        return success_response(message="Project created successfully", data=data, status_code=201)
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to create project: {str(e)}", "success": False}
-        )
+        return error_response(message=f"Failed to create project: {str(e)}", status_code=500)
 
 
 @router.get("/project_summary", dependencies=[Depends(require_permission("project:view"))])
 async def get_projects_summary():
-    try:
-        projects = await repo.get_projects_summary()
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Projects summary fetched successfully", "success": True, "data": projects}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to fetch projects summary: {str(e)}", "success": False}
-        )
+    data, error = await ProjectService.get_summary()
+    if error:
+        return error_response(message=f"Failed to fetch projects summary: {error}", status_code=500)
+    return success_response(message="Projects summary fetched successfully", data=data)
+
 
 @router.get("/all", dependencies=[Depends(require_permission("project:view"))])
 async def get_projects():
-    try:
-        projects = await repo.get_projects()
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Projects fetched successfully", "success": True, "data": projects}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to fetch projects: {str(e)}", "success": False}
-        )
+    data, error = await ProjectService.list()
+    if error:
+        return error_response(message=f"Failed to fetch projects: {error}", status_code=500)
+    return success_response(message="Projects fetched successfully", data=data)
+
 
 @router.get("/{project_id}", dependencies=[Depends(require_permission("project:view"))])
 async def get_project(project_id: str):
-    try:
-        project = await repo.get_project(project_id)
-        if not project:
-            return JSONResponse(
-                status_code=404,
-                content={"message": "Project not found", "success": False}
-            )
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Project fetched successfully", "success": True, "data": project}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to fetch project: {str(e)}", "success": False}
-        )
+    data, error = await ProjectService.get(project_id)
+    if error:
+        status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
+        return error_response(message=error, status_code=status_code)
+    return success_response(message="Project fetched successfully", data=data)
+
 
 @router.put("/update/{project_id}", dependencies=[Depends(require_permission("project:submit"))])
 async def update_project(
@@ -158,37 +133,20 @@ async def update_project(
             logo=logo_path
         )
 
-        updated_project = await repo.update_project(project_id, update_data, logo_path)
-        if not updated_project:
-            return JSONResponse(
-                status_code=404,
-                content={"message": "Project not found", "success": False}
-            )
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Project updated successfully", "success": True, "data": updated_project}
-        )
+        data, error = await ProjectService.update(project_id, update_data, logo_path)
+        if error:
+            status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
+            return error_response(message=error, status_code=status_code)
+        return success_response(message="Project updated successfully", data=data)
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to update project: {str(e)}", "success": False}
-        )
+        return error_response(message=f"Failed to update project: {str(e)}", status_code=500)
+
 
 @router.delete("/delete/{project_id}", dependencies=[Depends(require_permission("project:submit"))])
 async def delete_project(project_id: str):
-    try:
-        success = await repo.delete_project(project_id)
-        if not success:
-            return JSONResponse(
-                status_code=404,
-                content={"message": "Project not found", "success": False}
-            )
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Project deleted successfully", "success": True}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to delete project: {str(e)}", "success": False}
-        )
+    success, error = await ProjectService.delete(project_id)
+    if error:
+        status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
+        return error_response(message=error, status_code=status_code)
+    return success_response(message="Project deleted successfully", data=[])
+
