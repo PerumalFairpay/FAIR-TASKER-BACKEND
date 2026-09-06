@@ -1,8 +1,11 @@
-from typing import Dict, Any, List, Optional, Tuple
+import json
+from typing import Dict, Any, List, Optional, Tuple, Union
 from datetime import datetime
 from bson import ObjectId
+from fastapi import UploadFile
 from app.database import projects_collection, clients_collection, employees_collection
 from app.models import ProjectCreate, ProjectUpdate
+from app.helper.file_handler import file_handler
 from app.utils import normalize
 import traceback
 
@@ -17,8 +20,73 @@ class ProjectService:
         return emp_norm
 
     @staticmethod
-    async def create(project_data: ProjectCreate, logo_path: Optional[str] = None) -> Tuple[Optional[dict], Optional[str]]:
+    def _parse_json_list(val: Any) -> Optional[List[Any]]:
+        if val is None:
+            return None
+        if isinstance(val, list):
+            return val
+        if isinstance(val, str):
+            val = val.strip()
+            if not val:
+                return None
+            try:
+                parsed = json.loads(val)
+                return parsed if isinstance(parsed, list) else None
+            except Exception:
+                return None
+        return None
+
+    @staticmethod
+    async def create(
+        name: str,
+        client_id: str,
+        description: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        status: Optional[str] = "Planned",
+        priority: Optional[str] = "Medium",
+        project_manager_ids: Optional[Union[str, List[str]]] = "[]",
+        team_leader_ids: Optional[Union[str, List[str]]] = "[]",
+        team_member_ids: Optional[Union[str, List[str]]] = "[]",
+        budget: Optional[float] = 0.0,
+        currency: Optional[str] = "USD",
+        tags: Optional[Union[str, List[str]]] = "[]",
+        technical_stacks: Optional[Union[str, List[str]]] = "[]",
+        third_party_vendors: Optional[Union[str, List[dict]]] = "[]",
+        logo: Optional[UploadFile] = None
+    ) -> Tuple[Optional[dict], Optional[str]]:
         try:
+            logo_path = None
+            if logo and logo.filename:
+                uploaded = await file_handler.upload_file(logo, subfolder="projects")
+                logo_path = uploaded["url"]
+
+            pm_ids = ProjectService._parse_json_list(project_manager_ids) or []
+            tl_ids = ProjectService._parse_json_list(team_leader_ids) or []
+            tm_ids = ProjectService._parse_json_list(team_member_ids) or []
+            tags_list = ProjectService._parse_json_list(tags) or []
+            tech_stacks = ProjectService._parse_json_list(technical_stacks) or []
+            vendors = ProjectService._parse_json_list(third_party_vendors) or []
+
+            project_data = ProjectCreate(
+                name=name,
+                client_id=client_id,
+                description=description,
+                start_date=start_date,
+                end_date=end_date,
+                status=status,
+                priority=priority,
+                project_manager_ids=pm_ids,
+                team_leader_ids=tl_ids,
+                team_member_ids=tm_ids,
+                budget=budget,
+                currency=currency,
+                tags=tags_list,
+                technical_stacks=tech_stacks,
+                third_party_vendors=vendors,
+                logo=logo_path
+            )
+
             data = project_data.dict()
             if logo_path:
                 data["logo"] = logo_path
@@ -147,12 +215,61 @@ class ProjectService:
             return None, str(e)
 
     @staticmethod
-    async def update(project_id: str, project_data: ProjectUpdate, logo_path: Optional[str] = None) -> Tuple[Optional[dict], Optional[str]]:
+    async def update(
+        project_id: str,
+        name: Optional[str] = None,
+        client_id: Optional[str] = None,
+        description: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
+        project_manager_ids: Optional[Union[str, List[str]]] = None,
+        team_leader_ids: Optional[Union[str, List[str]]] = None,
+        team_member_ids: Optional[Union[str, List[str]]] = None,
+        budget: Optional[float] = None,
+        currency: Optional[str] = None,
+        tags: Optional[Union[str, List[str]]] = None,
+        technical_stacks: Optional[Union[str, List[str]]] = None,
+        third_party_vendors: Optional[Union[str, List[dict]]] = None,
+        logo: Optional[UploadFile] = None
+    ) -> Tuple[Optional[dict], Optional[str]]:
         try:
             if not ObjectId.is_valid(project_id):
                 return None, "Invalid project ID"
 
-            update_data = {k: v for k, v in project_data.dict().items() if v is not None}
+            logo_path = None
+            if logo and logo.filename:
+                uploaded = await file_handler.upload_file(logo, subfolder="projects")
+                logo_path = uploaded["url"]
+
+            pm_ids = ProjectService._parse_json_list(project_manager_ids) if project_manager_ids is not None else None
+            tl_ids = ProjectService._parse_json_list(team_leader_ids) if team_leader_ids is not None else None
+            tm_ids = ProjectService._parse_json_list(team_member_ids) if team_member_ids is not None else None
+            tags_list = ProjectService._parse_json_list(tags) if tags is not None else None
+            tech_stacks = ProjectService._parse_json_list(technical_stacks) if technical_stacks is not None else None
+            vendors = ProjectService._parse_json_list(third_party_vendors) if third_party_vendors is not None else None
+
+            project_update = ProjectUpdate(
+                name=name,
+                client_id=client_id,
+                description=description,
+                start_date=start_date,
+                end_date=end_date,
+                status=status,
+                priority=priority,
+                project_manager_ids=pm_ids,
+                team_leader_ids=tl_ids,
+                team_member_ids=tm_ids,
+                budget=budget,
+                currency=currency,
+                tags=tags_list,
+                technical_stacks=tech_stacks,
+                third_party_vendors=vendors,
+                logo=logo_path
+            )
+
+            update_data = {k: v for k, v in project_update.dict().items() if v is not None}
             if logo_path:
                 update_data["logo"] = logo_path
 

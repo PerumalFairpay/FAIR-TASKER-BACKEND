@@ -1,13 +1,15 @@
-from fastapi import APIRouter, HTTPException, Depends, Body, Form, File, UploadFile
-from fastapi.responses import JSONResponse
-from app.crud.repository import repository as repo
-from app.models import MilestoneRoadmapCreate, MilestoneRoadmapUpdate, MilestoneRoadmapResponse, MilestoneRoadmapAttachment
+from fastapi import APIRouter, Depends, Form, File, UploadFile
 from typing import List, Optional
+from app.models import MilestoneRoadmapCreate, MilestoneRoadmapUpdate, MilestoneRoadmapAttachment
 from app.auth import verify_token
 from app.helper.file_handler import file_handler
+from app.helper.response_helper import success_response, error_response
+from app.services.api import MilestoneRoadmapService
 
 router = APIRouter(prefix="/milestones-roadmaps", tags=["milestones-roadmaps"], dependencies=[Depends(verify_token)])
 
+
+@router.post("")
 @router.post("/")
 async def create_milestone_roadmap(
     project_id: str = Form(...),
@@ -44,17 +46,15 @@ async def create_milestone_roadmap(
             status=status,
             attachments=item_attachments
         )
-        new_item = await repo.create_milestone_roadmap(item)
-        return JSONResponse(
-            status_code=201,
-            content={"message": "Created successfully", "success": True, "data": new_item}
-        )
+        new_item, err = await MilestoneRoadmapService.create(item)
+        if err:
+            return error_response(message=err, status_code=500)
+        return success_response(message="Milestone/Roadmap created successfully", data=new_item, status_code=201)
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to create: {str(e)}", "success": False}
-        )
+        return error_response(message=f"Failed to create: {str(e)}", status_code=500)
 
+
+@router.get("")
 @router.get("/")
 async def get_milestones_roadmaps(
     project_id: Optional[str] = None, 
@@ -62,36 +62,25 @@ async def get_milestones_roadmaps(
     status: Optional[str] = None,
     priority: Optional[str] = None
 ):
-    try:
-        items = await repo.get_milestones_roadmaps(project_id, assigned_to, status, priority)
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Fetched successfully", "success": True, "data": items}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to fetch: {str(e)}", "success": False}
-        )
+    items, err = await MilestoneRoadmapService.list(
+        project_id=project_id,
+        assigned_to=assigned_to,
+        status=status,
+        priority=priority
+    )
+    if err:
+        return error_response(message=err, status_code=500)
+    return success_response(message="Milestones/Roadmaps fetched successfully", data=items if items is not None else [])
+
 
 @router.get("/{item_id}")
 async def get_milestone_roadmap(item_id: str):
-    try:
-        item = await repo.get_milestone_roadmap(item_id)
-        if not item:
-            return JSONResponse(
-                status_code=404,
-                content={"message": "Not found", "success": False}
-            )
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Fetched successfully", "success": True, "data": item}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to fetch: {str(e)}", "success": False}
-        )
+    item, err = await MilestoneRoadmapService.get(item_id)
+    if err:
+        status_code = 404 if "not found" in err.lower() or "invalid" in err.lower() else 500
+        return error_response(message=err, status_code=status_code)
+    return success_response(message="Milestone/Roadmap fetched successfully", data=item)
+
 
 @router.put("/{item_id}")
 async def update_milestone_roadmap(
@@ -119,11 +108,10 @@ async def update_milestone_roadmap(
                 ))
 
         final_attachments = []
-        
         if item_attachments:
-            current_item = await repo.get_milestone_roadmap(item_id)
-            if current_item and "attachments" in current_item:
-                 final_attachments.extend(current_item["attachments"])
+            current_item, _ = await MilestoneRoadmapService.get(item_id)
+            if current_item and "attachments" in current_item and current_item["attachments"]:
+                final_attachments.extend(current_item["attachments"])
             final_attachments.extend(item_attachments)
 
         item = MilestoneRoadmapUpdate(
@@ -138,37 +126,19 @@ async def update_milestone_roadmap(
             status=status,
             attachments=final_attachments if final_attachments else None
         )
-        updated_item = await repo.update_milestone_roadmap(item_id, item)
-        if not updated_item:
-            return JSONResponse(
-                status_code=404,
-                content={"message": "Not found", "success": False}
-            )
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Updated successfully", "success": True, "data": updated_item}
-        )
+        updated_item, err = await MilestoneRoadmapService.update(item_id, item)
+        if err:
+            status_code = 404 if "not found" in err.lower() or "invalid" in err.lower() else 500
+            return error_response(message=err, status_code=status_code)
+        return success_response(message="Milestone/Roadmap updated successfully", data=updated_item)
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to update: {str(e)}", "success": False}
-        )
+        return error_response(message=f"Failed to update: {str(e)}", status_code=500)
+
 
 @router.delete("/{item_id}")
 async def delete_milestone_roadmap(item_id: str):
-    try:
-        success = await repo.delete_milestone_roadmap(item_id)
-        if not success:
-            return JSONResponse(
-                status_code=404,
-                content={"message": "Not found", "success": False}
-            )
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Deleted successfully", "success": True}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to delete: {str(e)}", "success": False}
-        )
+    success, err = await MilestoneRoadmapService.delete(item_id)
+    if not success:
+        status_code = 404 if err and ("not found" in err.lower() or "invalid" in err.lower()) else 500
+        return error_response(message=err or "Failed to delete milestone/roadmap", status_code=status_code)
+    return success_response(message="Milestone/Roadmap deleted successfully", data=[])

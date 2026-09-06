@@ -1,14 +1,11 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
-from fastapi.responses import JSONResponse
-from app.crud.repository import repository as repo
-from app.models import ClientCreate, ClientUpdate
-from app.helper.file_handler import file_handler
-from typing import List, Optional
-import json
-
+from fastapi import APIRouter, Depends, UploadFile, File, Form
+from app.services.api.client import ClientService
+from app.helper.response_helper import success_response, error_response
+from typing import Optional
 from app.auth import verify_token
 
 router = APIRouter(prefix="/clients", tags=["clients"], dependencies=[Depends(verify_token)])
+
 
 @router.post("/create")
 async def create_client(
@@ -20,68 +17,40 @@ async def create_client(
     contact_address: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     status: Optional[str] = Form("Active"),
-    logo: UploadFile = File(None)
+    logo: Optional[UploadFile] = File(None)
 ):
-    try:
-        logo_path = None
-        if logo:
-            uploaded = await file_handler.upload_file(logo)
-            logo_path = uploaded["url"]
+    data, error = await ClientService.create(
+        company_name=company_name,
+        contact_name=contact_name,
+        contact_email=contact_email,
+        contact_mobile=contact_mobile,
+        contact_person_designation=contact_person_designation,
+        contact_address=contact_address,
+        description=description,
+        status=status,
+        logo=logo
+    )
+    if error:
+        return error_response(message=f"Failed to create client/vendor: {error}", status_code=500)
+    return success_response(message="Client/Vendor created successfully", data=data, status_code=201)
 
-        client_data = ClientCreate(
-            company_name=company_name,
-            contact_name=contact_name,
-            contact_email=contact_email,
-            contact_mobile=contact_mobile,
-            contact_person_designation=contact_person_designation,
-            contact_address=contact_address,
-            description=description,
-            status=status
-        )
-
-        new_client = await repo.create_client(client_data, logo_path)
-        return JSONResponse(
-            status_code=201,
-            content={"message": "Client/Vendor created successfully", "success": True, "data": new_client}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to create client/vendor: {str(e)}", "success": False}
-        )
 
 @router.get("/all")
 async def get_clients():
-    try:
-        clients = await repo.get_clients()
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Clients/Vendors fetched successfully", "success": True, "data": clients}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to fetch clients/vendors: {str(e)}", "success": False}
-        )
+    data, error = await ClientService.list()
+    if error:
+        return error_response(message=f"Failed to fetch clients/vendors: {error}", status_code=500)
+    return success_response(message="Clients/Vendors fetched successfully", data=data)
+
 
 @router.get("/{client_id}")
 async def get_client(client_id: str):
-    try:
-        client = await repo.get_client(client_id)
-        if not client:
-            return JSONResponse(
-                status_code=404,
-                content={"message": "Client/Vendor not found", "success": False}
-            )
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Client/Vendor fetched successfully", "success": True, "data": client}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to fetch client/vendor: {str(e)}", "success": False}
-        )
+    data, error = await ClientService.get(client_id)
+    if error:
+        status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
+        return error_response(message=error, status_code=status_code)
+    return success_response(message="Client/Vendor fetched successfully", data=data)
+
 
 @router.put("/update/{client_id}")
 async def update_client(
@@ -94,56 +63,30 @@ async def update_client(
     contact_address: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     status: Optional[str] = Form(None),
-    logo: UploadFile = File(None)
+    logo: Optional[UploadFile] = File(None)
 ):
-    try:
-        logo_path = None
-        if logo:
-            uploaded = await file_handler.upload_file(logo)
-            logo_path = uploaded["url"]
+    data, error = await ClientService.update(
+        client_id=client_id,
+        company_name=company_name,
+        contact_name=contact_name,
+        contact_email=contact_email,
+        contact_mobile=contact_mobile,
+        contact_person_designation=contact_person_designation,
+        contact_address=contact_address,
+        description=description,
+        status=status,
+        logo=logo
+    )
+    if error:
+        status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
+        return error_response(message=error, status_code=status_code)
+    return success_response(message="Client/Vendor updated successfully", data=data)
 
-        client_update_data = ClientUpdate(
-            company_name=company_name,
-            contact_name=contact_name,
-            contact_email=contact_email,
-            contact_mobile=contact_mobile,
-            contact_person_designation=contact_person_designation,
-            contact_address=contact_address,
-            description=description,
-            status=status
-        )
-
-        updated_client = await repo.update_client(client_id, client_update_data, logo_path)
-        if not updated_client:
-            return JSONResponse(
-                status_code=404,
-                content={"message": "Client/Vendor not found", "success": False}
-            )
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Client/Vendor updated successfully", "success": True, "data": updated_client}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to update client/vendor: {str(e)}", "success": False}
-        )
 
 @router.delete("/delete/{client_id}")
 async def delete_client(client_id: str):
-    try:
-        success = await repo.delete_client(client_id)
-        if not success:
-            return JSONResponse(
-                status_code=404,
-                content={"message": "Client/Vendor not found", "success": False}
-            )
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Client/Vendor deleted successfully", "success": True}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to delete client/vendor: {str(e)}", "success": False}
-        )
+    success, error = await ClientService.delete(client_id)
+    if error:
+        status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
+        return error_response(message=error, status_code=status_code)
+    return success_response(message="Client/Vendor deleted successfully", data=[])

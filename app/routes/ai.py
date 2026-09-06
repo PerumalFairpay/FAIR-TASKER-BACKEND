@@ -1,13 +1,12 @@
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Body
 from fastapi.responses import StreamingResponse
 from app.auth import get_current_user
-from app.services.ai_service import chat_stream
-from app.crud.repository import repository as repo
 from app.helper.response_helper import success_response, error_response
-from typing import Optional
-import json
+from app.services.api import AIService
 
 router = APIRouter(prefix="/ai", tags=["ai"])
+
 
 @router.post("/chat")
 async def chat_endpoint(
@@ -24,59 +23,35 @@ async def chat_endpoint(
 
     user_id = str(current_user.get("id"))
     
-    # 1. Handle Session Creation
-    active_session_id = session_id
-    is_new_session = False
-    if not active_session_id:
-        # Auto-create session with first 30 chars of query as title
-        title = (query[:30] + '...') if len(query) > 30 else query
-        session = await repo.create_chat_session(user_id, title)
-        active_session_id = session["id"]
-        is_new_session = True
+    return StreamingResponse(
+        AIService.stream_chat(
+            query=query,
+            user_id=user_id,
+            session_id=session_id,
+            current_user=current_user
+        ),
+        media_type="text/event-stream"
+    )
 
-    # 2. Fetch existing history for this session
-    db_messages = await repo.get_chat_messages(active_session_id)
-    history = [{"role": msg["role"], "content": msg["content"]} for msg in db_messages]
-
-    # 3. Save User Message to DB
-    await repo.create_chat_message(active_session_id, "user", query)
-
-    async def event_generator():
-        full_response = ""
-        
-        # If it's a new session, yield the session ID first so the frontend can update its state
-        if is_new_session:
-            yield f"__SESSION_ID__: {active_session_id}\n"
-
-        # Stream output from the LangChain agent
-        async for chunk in chat_stream(query, history, current_user):
-            full_response += chunk
-            yield chunk
-        
-        # 4. Save Assistant Response to DB after streaming finishes
-        if full_response.strip():
-            await repo.create_chat_message(active_session_id, "assistant", full_response)
-
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @router.get("/sessions")
 async def get_sessions(current_user: dict = Depends(get_current_user)):
     """Retrieve all chat sessions for the current user."""
-    try:
-        user_id = str(current_user.get("id"))
-        sessions = await repo.get_chat_sessions(user_id)
-        return success_response("Sessions fetched successfully", data=sessions)
-    except Exception as e:
-        return error_response(str(e))
+    user_id = str(current_user.get("id"))
+    sessions, err = await AIService.get_sessions(user_id)
+    if err:
+        return error_response(message=err, status_code=500)
+    return success_response("Sessions fetched successfully", data=sessions if sessions is not None else [])
+
 
 @router.get("/sessions/{session_id}/messages")
 async def get_session_messages(session_id: str, current_user: dict = Depends(get_current_user)):
     """Retrieve all messages for a specific session."""
-    try:
-        messages = await repo.get_chat_messages(session_id)
-        return success_response("Messages fetched successfully", data=messages)
-    except Exception as e:
-        return error_response(str(e))
+    messages, err = await AIService.get_messages(session_id)
+    if err:
+        return error_response(message=err, status_code=500)
+    return success_response("Messages fetched successfully", data=messages if messages is not None else [])
+
 
 @router.patch("/sessions/{session_id}")
 async def update_session_title(
@@ -85,17 +60,18 @@ async def update_session_title(
     current_user: dict = Depends(get_current_user)
 ):
     """Rename a chat session."""
-    try:
-        session = await repo.update_chat_session_title(session_id, title)
-        return success_response("Session renamed successfully", data=session)
-    except Exception as e:
-        return error_response(str(e))
+    session, err = await AIService.update_session_title(session_id, title)
+    if err:
+        status_code = 404 if "not found" in err.lower() or "invalid" in err.lower() else 500
+        return error_response(message=err, status_code=status_code)
+    return success_response("Session renamed successfully", data=session)
+
 
 @router.delete("/sessions/{session_id}")
 async def delete_session(session_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a chat session and its history."""
-    try:
-        success = await repo.delete_chat_session(session_id)
-        return success_response("Session deleted successfully", data={"success": success})
-    except Exception as e:
-        return error_response(str(e))
+    success, err = await AIService.delete_session(session_id)
+    if not success:
+        status_code = 404 if err and ("not found" in err.lower() or "invalid" in err.lower()) else 500
+        return error_response(message=err or "Failed to delete chat session", status_code=status_code)
+    return success_response("Session deleted successfully", data=[])

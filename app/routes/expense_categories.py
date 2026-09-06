@@ -1,93 +1,50 @@
-from fastapi import APIRouter, HTTPException, Body, Depends
-from fastapi.responses import JSONResponse
-from app.crud.repository import repository as repo
+from fastapi import APIRouter, Depends
 from app.models import ExpenseCategoryCreate, ExpenseCategoryUpdate
-from typing import List
+from app.services.api.expense_category import ExpenseCategoryService
+from app.helper.response_helper import success_response, error_response
 from app.auth import verify_token, require_permission
 
 router = APIRouter(prefix="/expense-categories", tags=["expense-categories"], dependencies=[Depends(verify_token)])
 
+
 @router.post("/create", dependencies=[Depends(require_permission("expense:submit"))])
 async def create_category(category: ExpenseCategoryCreate):
-    try:
-        new_category = await repo.create_expense_category(category)
-        return JSONResponse(
-            status_code=201,
-            content={"message": "Category created successfully", "success": True, "data": new_category}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to create category: {str(e)}", "success": False}
-        )
+    data, error = await ExpenseCategoryService.create(category)
+    if error:
+        return error_response(message=f"Failed to create category: {error}", status_code=500)
+    return success_response(message="Category created successfully", data=data, status_code=201)
+
 
 @router.get("/all", dependencies=[Depends(require_permission("expense:view"))])
 async def get_categories():
-    try:
-        categories = await repo.get_expense_categories()
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Categories fetched successfully", "success": True, "data": categories}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to fetch categories: {str(e)}", "success": False}
-        )
+    data, error = await ExpenseCategoryService.list()
+    if error:
+        return error_response(message=f"Failed to fetch categories: {error}", status_code=500)
+    return success_response(message="Categories fetched successfully", data=data)
+
 
 @router.get("/{category_id}", dependencies=[Depends(require_permission("expense:view"))])
 async def get_category(category_id: str):
-    try:
-        category = await repo.get_expense_category(category_id)
-        if not category:
-            return JSONResponse(
-                status_code=404,
-                content={"message": "Category not found", "success": False}
-            )
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Category fetched successfully", "success": True, "data": category}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to fetch category: {str(e)}", "success": False}
-        )
+    data, error = await ExpenseCategoryService.get(category_id)
+    if error:
+        status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
+        return error_response(message=error, status_code=status_code)
+    return success_response(message="Category fetched successfully", data=data)
+
 
 @router.put("/update/{category_id}", dependencies=[Depends(require_permission("expense:submit"))])
 async def update_category(category_id: str, category: ExpenseCategoryUpdate):
-    try:
-        updated_category = await repo.update_expense_category(category_id, category)
-        if not updated_category:
-            return JSONResponse(
-                status_code=404,
-                content={"message": "Category not found", "success": False}
-            )
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Category updated successfully", "success": True, "data": updated_category}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to update category: {str(e)}", "success": False}
-        )
+    data, error = await ExpenseCategoryService.update(category_id, category)
+    if error:
+        status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
+        return error_response(message=error, status_code=status_code)
+    return success_response(message="Category updated successfully", data=data)
+
 
 @router.delete("/delete/{category_id}", dependencies=[Depends(require_permission("expense:submit"))])
 async def delete_category(category_id: str):
-    try:
-        success = await repo.delete_expense_category(category_id)
-        if not success:
-            return JSONResponse(
-                status_code=404,
-                content={"message": "Category not found", "success": False}
-            )
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Category deleted successfully", "success": True}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to delete category: {str(e)}", "success": False}
-        )
+    success, error = await ExpenseCategoryService.delete(category_id)
+    if error:
+        status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
+        return error_response(message=error, status_code=status_code)
+    return success_response(message="Category deleted successfully", data=[])

@@ -1,12 +1,8 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form
-from app.models import ProjectCreate, ProjectUpdate
-from app.helper.file_handler import file_handler
-from app.helper.response_helper import success_response, error_response
 from app.services.api.project import ProjectService
-from typing import Optional
-import json
-
+from app.helper.response_helper import success_response, error_response
 from app.auth import verify_token, require_permission
+from typing import Optional
 
 router = APIRouter(prefix="/projects", tags=["projects"], dependencies=[Depends(verify_token)])
 
@@ -30,37 +26,27 @@ async def create_project(
     third_party_vendors: Optional[str] = Form("[]"),
     logo: Optional[UploadFile] = File(None)
 ):
-    try:
-        logo_path = None
-        if logo and logo.filename:
-            uploaded = await file_handler.upload_file(logo, subfolder="projects")
-            logo_path = uploaded["url"]
-
-        project_data = ProjectCreate(
-            name=name,
-            client_id=client_id,
-            description=description,
-            start_date=start_date,
-            end_date=end_date,
-            status=status,
-            priority=priority,
-            project_manager_ids=json.loads(project_manager_ids),
-            team_leader_ids=json.loads(team_leader_ids),
-            team_member_ids=json.loads(team_member_ids),
-            budget=budget,
-            currency=currency,
-            tags=json.loads(tags),
-            technical_stacks=json.loads(technical_stacks),
-            third_party_vendors=json.loads(third_party_vendors),
-            logo=logo_path
-        )
-
-        data, error = await ProjectService.create(project_data, logo_path)
-        if error:
-            return error_response(message=f"Failed to create project: {error}", status_code=500)
-        return success_response(message="Project created successfully", data=data, status_code=201)
-    except Exception as e:
-        return error_response(message=f"Failed to create project: {str(e)}", status_code=500)
+    data, error = await ProjectService.create(
+        name=name,
+        client_id=client_id,
+        description=description,
+        start_date=start_date,
+        end_date=end_date,
+        status=status,
+        priority=priority,
+        project_manager_ids=project_manager_ids,
+        team_leader_ids=team_leader_ids,
+        team_member_ids=team_member_ids,
+        budget=budget,
+        currency=currency,
+        tags=tags,
+        technical_stacks=technical_stacks,
+        third_party_vendors=third_party_vendors,
+        logo=logo
+    )
+    if error:
+        return error_response(message=f"Failed to create project: {error}", status_code=500)
+    return success_response(message="Project created successfully", data=data, status_code=201)
 
 
 @router.get("/project_summary", dependencies=[Depends(require_permission("project:view"))])
@@ -108,38 +94,29 @@ async def update_project(
     third_party_vendors: Optional[str] = Form(None),
     logo: Optional[UploadFile] = File(None)
 ):
-    try:
-        logo_path = None
-        if logo and logo.filename:
-            uploaded = await file_handler.upload_file(logo, subfolder="projects")
-            logo_path = uploaded["url"]
-
-        update_data = ProjectUpdate(
-            name=name,
-            client_id=client_id,
-            description=description,
-            start_date=start_date,
-            end_date=end_date,
-            status=status,
-            priority=priority,
-            project_manager_ids=json.loads(project_manager_ids) if project_manager_ids else None,
-            team_leader_ids=json.loads(team_leader_ids) if team_leader_ids else None,
-            team_member_ids=json.loads(team_member_ids) if team_member_ids else None,
-            budget=budget,
-            currency=currency,
-            tags=json.loads(tags) if tags else None,
-            technical_stacks=json.loads(technical_stacks) if technical_stacks else None,
-            third_party_vendors=json.loads(third_party_vendors) if third_party_vendors else None,
-            logo=logo_path
-        )
-
-        data, error = await ProjectService.update(project_id, update_data, logo_path)
-        if error:
-            status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
-            return error_response(message=error, status_code=status_code)
-        return success_response(message="Project updated successfully", data=data)
-    except Exception as e:
-        return error_response(message=f"Failed to update project: {str(e)}", status_code=500)
+    data, error = await ProjectService.update(
+        project_id=project_id,
+        name=name,
+        client_id=client_id,
+        description=description,
+        start_date=start_date,
+        end_date=end_date,
+        status=status,
+        priority=priority,
+        project_manager_ids=project_manager_ids,
+        team_leader_ids=team_leader_ids,
+        team_member_ids=team_member_ids,
+        budget=budget,
+        currency=currency,
+        tags=tags,
+        technical_stacks=technical_stacks,
+        third_party_vendors=third_party_vendors,
+        logo=logo
+    )
+    if error:
+        status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
+        return error_response(message=error, status_code=status_code)
+    return success_response(message="Project updated successfully", data=data)
 
 
 @router.delete("/delete/{project_id}", dependencies=[Depends(require_permission("project:submit"))])
@@ -149,4 +126,3 @@ async def delete_project(project_id: str):
         status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
         return error_response(message=error, status_code=status_code)
     return success_response(message="Project deleted successfully", data=[])
-

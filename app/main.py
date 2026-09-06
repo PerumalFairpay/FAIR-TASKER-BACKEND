@@ -1,47 +1,12 @@
-from fastapi import FastAPI, Request, HTTPException, APIRouter
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, StreamingResponse
-from app.helper.response_helper import error_response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from app.routes import (
-    auth,
-    roles,
-    departments,
-    employees,
-    expense_categories,
-    expenses,
-    document_categories,
-    documents,
-    clients,
-    projects,
-    holidays,
-    asset_categories,
-    assets,
-    blogs,
-    leave_types,
-    leave_requests,
-    tasks,
-    attendance,
-    permissions,
-    dashboard,
-    files,
-    profile,
-    checklist_templates,
-    settings,
-    nda,
-    payslip,
-    payslip_component,
-    feedback,
-    shifts,
-    milestone_roadmap,
-    ai,
-    google_auth,
-    users,
-)
-
-from app.jobs.scheduler import init_scheduler, shutdown_scheduler
 import logging
+
+from app.helper.response_helper import error_response
+from app.routes.router import api_router
+from app.jobs.scheduler import init_scheduler, shutdown_scheduler
 from app.cookies.cookies import get_manager
 
 logger = logging.getLogger(__name__)
@@ -102,43 +67,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-api_router = APIRouter()
-
-api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
-api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
-api_router.include_router(departments.router)
-api_router.include_router(employees.router)
-api_router.include_router(expense_categories.router)
-api_router.include_router(expenses.router)
-api_router.include_router(document_categories.router)
-api_router.include_router(documents.router)
-api_router.include_router(clients.router)
-api_router.include_router(projects.router)
-api_router.include_router(holidays.router)
-api_router.include_router(asset_categories.router)
-api_router.include_router(assets.router)
-api_router.include_router(blogs.router)
-api_router.include_router(leave_types.router)
-api_router.include_router(leave_requests.router)
-api_router.include_router(tasks.router)
-api_router.include_router(attendance.router)
-api_router.include_router(permissions.router)
-api_router.include_router(dashboard.router)
-api_router.include_router(files.router)
-api_router.include_router(profile.router)
-api_router.include_router(checklist_templates.router)
-api_router.include_router(settings.router)
-api_router.include_router(nda.router)
-api_router.include_router(payslip.router)
-api_router.include_router(payslip_component.router)
-api_router.include_router(feedback.router)
-api_router.include_router(shifts.router)
-api_router.include_router(milestone_roadmap.router)
-api_router.include_router(ai.router)
-api_router.include_router(google_auth.router, prefix="/auth/google", tags=["google-auth"])
-api_router.include_router(users.router)
-
-
 app.include_router(api_router)
 
 
@@ -147,7 +75,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     formatted_errors = {}
     for error in exc.errors():
         loc = error.get("loc", [])
-        # Skip the location type (body, query, etc.) if possible for cleaner field names
         if loc and loc[0] in ("body", "query", "path") and len(loc) > 1:
             field = ".".join(str(x) for x in loc[1:])
         else:

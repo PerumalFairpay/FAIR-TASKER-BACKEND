@@ -1,12 +1,9 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
-from fastapi.responses import JSONResponse
-from app.crud.repository import repository as repo
-from app.models import DocumentCreate, DocumentUpdate, DocumentStatusUpdate
-from app.helper.file_handler import file_handler
-from typing import List, Optional
-import json
-
+from fastapi import APIRouter, Depends, UploadFile, File, Form
+from app.models import DocumentStatusUpdate
+from app.services.api.document import DocumentService
+from app.helper.response_helper import success_response, error_response
 from app.auth import verify_token, require_permission
+from typing import Optional
 
 router = APIRouter(prefix="/documents", tags=["documents"], dependencies=[Depends(verify_token)])
 
@@ -18,72 +15,38 @@ async def create_document(
     description: Optional[str] = Form(None),
     expiry_date: Optional[str] = Form(None),
     status: Optional[str] = Form("Active"),
-    file: UploadFile = File(None)
+    file: Optional[UploadFile] = File(None)
 ):
-    try:
-        file_path = None
-        file_type = None
-        if file:
-            uploaded = await file_handler.upload_file(file, subfolder="documents")
-            file_path = uploaded["url"]
-            file_type = file.content_type
-
-        document_data = DocumentCreate(
-            name=name,
-            document_category_id=document_category_id,
-            document_subcategory_id=document_subcategory_id,
-            description=description,
-            expiry_date=expiry_date,
-            status=status,
-            file_type=file_type
-        )
-
-        new_document = await repo.create_document(document_data, file_path)
-        return JSONResponse(
-            status_code=201,
-            content={"message": "Document created successfully", "success": True, "data": new_document}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to create document: {str(e)}", "success": False}
-        )
+    data, error = await DocumentService.create(
+        name=name,
+        document_category_id=document_category_id,
+        document_subcategory_id=document_subcategory_id,
+        description=description,
+        expiry_date=expiry_date,
+        status=status,
+        file=file
+    )
+    if error:
+        return error_response(message=f"Failed to create document: {error}", status_code=500)
+    return success_response(message="Document created successfully", data=data, status_code=201)
 
 @router.get("/all", dependencies=[Depends(require_permission("document:view"))])
 async def get_documents(
     status: Optional[str] = None,
     search: Optional[str] = None
 ):
-    try:
-        documents = await repo.get_documents(status=status, search=search)
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Documents fetched successfully", "success": True, "data": documents}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to fetch documents: {str(e)}", "success": False}
-        )
+    data, error = await DocumentService.list(status=status, search=search)
+    if error:
+        return error_response(message=f"Failed to fetch documents: {error}", status_code=500)
+    return success_response(message="Documents fetched successfully", data=data)
 
 @router.get("/{document_id}", dependencies=[Depends(require_permission("document:view"))])
 async def get_document(document_id: str):
-    try:
-        document = await repo.get_document(document_id)
-        if not document:
-            return JSONResponse(
-                status_code=404,
-                content={"message": "Document not found", "success": False}
-            )
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Document fetched successfully", "success": True, "data": document}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to fetch document: {str(e)}", "success": False}
-        )
+    data, error = await DocumentService.get(document_id)
+    if error:
+        status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
+        return error_response(message=error, status_code=status_code)
+    return success_response(message="Document fetched successfully", data=data)
 
 @router.put("/update/{document_id}", dependencies=[Depends(require_permission("document:submit"))])
 async def update_document(
@@ -94,76 +57,35 @@ async def update_document(
     description: Optional[str] = Form(None),
     expiry_date: Optional[str] = Form(None),
     status: Optional[str] = Form(None),
-    file: UploadFile = File(None)
+    file: Optional[UploadFile] = File(None)
 ):
-    try:
-        file_path = None
-        file_type = None
-        if file:
-            uploaded = await file_handler.upload_file(file, subfolder="documents")
-            file_path = uploaded["url"]
-            file_type = file.content_type
-
-        document_update_data = DocumentUpdate(
-            name=name,
-            document_category_id=document_category_id,
-            document_subcategory_id=document_subcategory_id,
-            description=description,
-            expiry_date=expiry_date,
-            status=status,
-            file_type=file_type
-        )
-
-        updated_document = await repo.update_document(document_id, document_update_data, file_path)
-        if not updated_document:
-            return JSONResponse(
-                status_code=404,
-                content={"message": "Document not found", "success": False}
-            )
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Document updated successfully", "success": True, "data": updated_document}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to update document: {str(e)}", "success": False}
-        )
+    data, error = await DocumentService.update(
+        document_id=document_id,
+        name=name,
+        document_category_id=document_category_id,
+        document_subcategory_id=document_subcategory_id,
+        description=description,
+        expiry_date=expiry_date,
+        status=status,
+        file=file
+    )
+    if error:
+        status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
+        return error_response(message=error, status_code=status_code)
+    return success_response(message="Document updated successfully", data=data)
 
 @router.patch("/update-status/{document_id}", dependencies=[Depends(require_permission("document:submit"))])
 async def update_document_status(document_id: str, status_data: DocumentStatusUpdate):
-    try:
-        updated_document = await repo.update_document_status(document_id, status_data.status)
-        if not updated_document:
-            return JSONResponse(
-                status_code=404,
-                content={"message": "Document not found", "success": False}
-            )
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Document status updated successfully", "success": True, "data": updated_document}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to update document status: {str(e)}", "success": False}
-        )
+    data, error = await DocumentService.update_status(document_id, status_data.status)
+    if error:
+        status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
+        return error_response(message=error, status_code=status_code)
+    return success_response(message="Document status updated successfully", data=data)
 
 @router.delete("/delete/{document_id}", dependencies=[Depends(require_permission("document:submit"))])
 async def delete_document(document_id: str):
-    try:
-        success = await repo.delete_document(document_id)
-        if not success:
-            return JSONResponse(
-                status_code=404,
-                content={"message": "Document not found", "success": False}
-            )
-        return JSONResponse(
-            status_code=200,
-            content={"message": "Document deleted successfully", "success": True}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to delete document: {str(e)}", "success": False}
-        )
+    success, error = await DocumentService.delete(document_id)
+    if error:
+        status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
+        return error_response(message=error, status_code=status_code)
+    return success_response(message="Document deleted successfully", data=[])
