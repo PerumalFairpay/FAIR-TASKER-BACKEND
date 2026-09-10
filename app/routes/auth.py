@@ -24,17 +24,21 @@ async def login(user: UserLogin, response: Response):
         secure=False,
     )
 
-    return success_response(
-        message="Login successful",
-        data=user_data,
-        meta={"token": token}
-    )
+    return {
+        "success": True,
+        "message": "Login successful",
+        "data": user_data,
+        "meta": {"token": token},
+    }
 
 
 @router.post("/logout")
 async def logout(response: Response):
     response.delete_cookie("token")
-    return success_response(message="Logged out successfully")
+    return {
+        "success": True,
+        "message": "Logged out successfully",
+    }
 
 
 @router.get("/me")
