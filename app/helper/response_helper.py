@@ -1,5 +1,6 @@
 from fastapi.responses import JSONResponse
 from typing import Any, Optional
+from app.utils import normalize
 
 def success_response(message: str, data: Any = None, meta: Any = None, status_code: int = 200):
     """
@@ -8,10 +9,10 @@ def success_response(message: str, data: Any = None, meta: Any = None, status_co
     content = {
         "success": True,
         "message": message,
-        "data": data
+        "data": normalize(data) if data is not None else None
     }
     if meta:
-        content["meta"] = meta
+        content["meta"] = normalize(meta)
     return JSONResponse(status_code=status_code, content=content)
 
 def error_response(message: str, errors: Any = None, status_code: int = 400):
@@ -21,6 +22,6 @@ def error_response(message: str, errors: Any = None, status_code: int = 400):
     content = {
         "success": False,
         "message": message,
-        "errors": errors
+        "errors": normalize(errors) if errors is not None else None
     }
     return JSONResponse(status_code=status_code, content=content)
