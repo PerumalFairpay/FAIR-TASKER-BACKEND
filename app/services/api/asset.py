@@ -106,6 +106,7 @@ class AssetService:
             for a in assets:
                 a_norm = normalize(a)
                 a_norm["category"] = cat_map.get(str(a_norm.get("asset_category_id")))
+                a_norm["subcategory"] = cat_map.get(str(a_norm.get("asset_subcategory_id")))
                 a_norm["assigned_to_details"] = emp_map.get(str(a_norm.get("assigned_to")))
                 result.append(a_norm)
 
@@ -136,6 +137,14 @@ class AssetService:
                 a_norm["category"] = normalize(category) if category else None
             else:
                 a_norm["category"] = None
+
+            # Subcategory hydration
+            subcategory_id = a_norm.get("asset_subcategory_id")
+            if subcategory_id and ObjectId.is_valid(str(subcategory_id)):
+                subcategory = await asset_categories_collection.find_one({"_id": ObjectId(subcategory_id)})
+                a_norm["subcategory"] = normalize(subcategory) if subcategory else None
+            else:
+                a_norm["subcategory"] = None
 
             # Employee hydration
             assigned_to = a_norm.get("assigned_to")
@@ -317,6 +326,7 @@ class AssetService:
             for a in assets:
                 a_norm = normalize(a)
                 a_norm["category"] = cat_map.get(str(a_norm.get("asset_category_id")))
+                a_norm["subcategory"] = cat_map.get(str(a_norm.get("asset_subcategory_id")))
                 result.append(a_norm)
 
             return result, None

@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
-from fastapi import HTTPException, Cookie, Depends
+from fastapi import HTTPException, Cookie, Depends, Request
 from app.core.config import JWT_SECRET, JWT_ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 from typing import Optional
 from app.database import users_collection, roles_collection, permissions_collection
@@ -33,7 +33,16 @@ def decode_token(token: str) -> Optional[dict]:
     except JWTError:
         return None
 
-async def verify_token(token: str = Cookie(None)):
+#ORIGINAL LINE
+# async def verify_token(token: str = Cookie(None)):
+#----------------------------------
+#Remove after testing below code
+async def verify_token(request: Request, token: Optional[str] = Cookie(None)):
+    if not token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1]
+#-------------------------------------------------------------------until this
     if not token:
         raise HTTPException(status_code=401, detail="Authentication token required")
     payload = decode_token(token)
