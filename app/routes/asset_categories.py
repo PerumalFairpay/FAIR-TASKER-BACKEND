@@ -23,6 +23,14 @@ async def get_asset_categories():
     return success_response(message="Asset categories fetched successfully", data=data)
 
 
+@router.get("/tree")
+async def get_asset_categories_tree():
+    data, error = await AssetCategoryService.get_tree()
+    if error:
+        return error_response(message=f"Failed to fetch category tree: {error}", status_code=500)
+    return success_response(message="Asset category tree fetched successfully", data=data)
+
+
 @router.get("/{category_id}", dependencies=[Depends(require_permission("asset:view"))])
 async def get_asset_category(category_id: str):
     data, error = await AssetCategoryService.get(category_id)

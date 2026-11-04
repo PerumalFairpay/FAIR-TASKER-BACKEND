@@ -35,6 +35,36 @@ class AssetCategoryService:
             return None, str(e)
 
     @staticmethod
+    async def get_tree() -> Tuple[Optional[List[dict]], Optional[str]]:
+        try:
+            categories = await asset_categories_collection.find(
+                {"is_deleted": {"$ne": True}}
+            ).to_list(length=None)
+
+            normalized_cats = [normalize(c) for c in categories]
+
+            root_categories = []
+            subcategories_map = {}
+
+            for cat in normalized_cats:
+                parent_id = cat.get("parent_id")
+                if parent_id:
+                    subcategories_map.setdefault(parent_id, []).append(cat)
+                else:
+                    root_categories.append(cat)
+
+            result = []
+            for root in root_categories:
+                root_id = root["id"]
+                root["subcategories"] = subcategories_map.get(root_id, [])
+                result.append(root)
+
+            return result, None
+        except Exception as e:
+            traceback.print_exc()
+            return None, str(e)
+
+    @staticmethod
     async def get(category_id: str) -> Tuple[Optional[dict], Optional[str]]:
         try:
             if not ObjectId.is_valid(category_id):
