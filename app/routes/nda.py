@@ -398,26 +398,104 @@ async def view_nda_form(token: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.patch("/update/{token}")
-async def update_nda_details(token: str, update_data: NDARequestUpdate):
+@router.post("/submit/{token}")
+async def submit_nda_details_and_documents(
+    token: str,
+    # Address & Details form fields
+    mobile: Optional[str] = Form(None),
+    address: Optional[str] = Form(None),
+    residential_address: Optional[str] = Form(None),
+    perma_door_no: Optional[str] = Form(None),
+    perma_care_of_type: Optional[str] = Form(None),
+    perma_care_of_name: Optional[str] = Form(None),
+    perma_street: Optional[str] = Form(None),
+    perma_city: Optional[str] = Form(None),
+    perma_state: Optional[str] = Form(None),
+    perma_pincode: Optional[str] = Form(None),
+    res_door_no: Optional[str] = Form(None),
+    res_care_of_type: Optional[str] = Form(None),
+    res_care_of_name: Optional[str] = Form(None),
+    res_street: Optional[str] = Form(None),
+    res_city: Optional[str] = Form(None),
+    res_state: Optional[str] = Form(None),
+    res_pincode: Optional[str] = Form(None),
+    nda_date: Optional[str] = Form(None),
+    # Optional files & names
+    files: Optional[List[UploadFile]] = File(None),
+    names: Optional[List[str]] = Form(None)
+):
     """
-    Update NDA request details (address, residential_address) by token.
-    Allows the employee to fill in their details after link generation.
+    Combined endpoint: Update NDA details (address, contact) and upload documents in a single request.
     """
     try:
         nda_request, err = await NDAService.get_by_token(token)
         if err or not nda_request:
             return error_response(message="NDA request not found", status_code=404)
+
+        # Check if expired
+        expires_at = nda_request.get("expires_at")
+        if isinstance(expires_at, str):
+            expires_at = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
         
-        update_dict = {k: v for k, v in update_data.dict().items() if v is not None}
+        if expires_at and expires_at.tzinfo is not None:
+            expires_at = expires_at.replace(tzinfo=None)
+        
+        if expires_at and datetime.utcnow() > expires_at:
+            return error_response(message="NDA link has expired", status_code=410)
+
+        update_dict = {}
+        for key, val in {
+            "mobile": mobile,
+            "address": address,
+            "residential_address": residential_address,
+            "perma_door_no": perma_door_no,
+            "perma_care_of_type": perma_care_of_type,
+            "perma_care_of_name": perma_care_of_name,
+            "perma_street": perma_street,
+            "perma_city": perma_city,
+            "perma_state": perma_state,
+            "perma_pincode": perma_pincode,
+            "res_door_no": res_door_no,
+            "res_care_of_type": res_care_of_type,
+            "res_care_of_name": res_care_of_name,
+            "res_street": res_street,
+            "res_city": res_city,
+            "res_state": res_state,
+            "res_pincode": res_pincode,
+            "nda_date": nda_date,
+        }.items():
+            if val is not None:
+                update_dict[key] = val
+
+        # Handle file uploads if present
+        valid_files = [f for f in (files or []) if f.filename]
+        if valid_files:
+            file_names = names or []
+            if len(valid_files) != len(file_names):
+                return error_response(message="Number of files and document names must match", status_code=400)
+
+            uploaded_results = await file_handler.upload_files(valid_files)
+            new_documents = []
+            for i, result in enumerate(uploaded_results):
+                new_documents.append({
+                    "document_name": file_names[i],
+                    "document_proof": result["url"],
+                    "file_type": valid_files[i].content_type
+                })
+
+            existing_docs = nda_request.get("documents", []) or []
+            existing_docs.extend(new_documents)
+            update_dict["documents"] = existing_docs
+            update_dict["status"] = "Document Uploaded"
+
         updated_nda, err = await NDAService.update_by_token(token, update_dict)
         if err or not updated_nda:
             return error_response(message=err or "Failed to update NDA details", status_code=500)
-        
+
         # Render updated template content
         current_date = datetime.utcnow()
         formatted_date = updated_nda.get("nda_date") or current_date.strftime("%d/%m/%Y")
-        
+
         html_content = render_nda_template({
             "request": updated_nda,
             "first_name": updated_nda.get("first_name"),
@@ -430,70 +508,13 @@ async def update_nda_details(token: str, update_data: NDARequestUpdate):
             "date": formatted_date,
             "token": token
         })
-        
+
         return success_response(
-            message="NDA details updated successfully",
+            message="NDA details and documents submitted successfully",
             data={
                 "html_content": html_content,
                 "nda": NDAService.format_nda_response(updated_nda)
             }
-        )
-    except Exception as e:
-        return error_response(message=str(e), status_code=500)
-
-
-@router.post("/upload/{token}")
-async def upload_documents(
-    token: str, 
-    files: List[UploadFile] = File(...),
-    names: List[str] = Form(...)
-):
-    """
-    Handle document uploads for an NDA request.
-    Accepts list of files.
-    """
-    try:
-        nda_request, err = await NDAService.get_by_token(token)
-        if err or not nda_request:
-            return error_response(message="NDA request not found", status_code=404)
-        
-        # Check if expired
-        expires_at = nda_request.get("expires_at")
-        if isinstance(expires_at, str):
-            expires_at = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
-        
-        if expires_at and expires_at.tzinfo is not None:
-            expires_at = expires_at.replace(tzinfo=None)
-        
-        if expires_at and datetime.utcnow() > expires_at:
-            return error_response(message="NDA link has expired", status_code=410)
-        
-        if len(files) != len(names):
-            return error_response(message="Number of files and names must match", status_code=400)
-
-        uploaded_results = await file_handler.upload_files(files)
-        
-        new_documents = []
-        for i, result in enumerate(uploaded_results):
-            new_documents.append({
-                "document_name": names[i],
-                "document_proof": result["url"],
-                "file_type": files[i].content_type
-            })
-        
-        existing_docs = nda_request.get("documents", []) or []
-        existing_docs.extend(new_documents)
-        
-        updated_nda, err = await NDAService.update_by_token(token, {
-            "documents": existing_docs,
-            "status": "Document Uploaded"
-        })
-        if err:
-            return error_response(message=err, status_code=500)
-        
-        return success_response(
-            message="Documents uploaded successfully",
-            data=NDAService.format_nda_response(updated_nda)
         )
     except Exception as e:
         return error_response(message=str(e), status_code=500)
