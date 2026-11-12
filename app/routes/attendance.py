@@ -61,12 +61,11 @@ async def clock_out(
 
 @router.get("/my-history", dependencies=[Depends(verify_token)])
 async def get_my_history(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    month: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
 ):
     employee_id = current_user.get("employee_no_id") or current_user.get("id")
-    result, error = await AttendanceService.get_employee_attendance(employee_id, start_date, end_date)
+    result, error = await AttendanceService.get_employee_attendance(employee_id, month=month)
     if error:
         return error_response(message=f"Server Error: {error}", status_code=500)
 
@@ -79,22 +78,14 @@ async def get_my_history(
 
 @router.get("/", dependencies=[Depends(verify_token)])
 async def get_all_attendance(
-    date: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    month: Optional[str] = None,
     employee_id: Optional[str] = None,
     status: Optional[str] = None,
-    page: int = 1,
-    limit: int = 20,
 ):
     result, error = await AttendanceService.list(
-        date=date,
-        start_date=start_date,
-        end_date=end_date,
+        month=month,
         employee_id=employee_id,
         status=status,
-        page=page,
-        limit=limit
     )
     if error:
         return error_response(message=f"Server Error: {error}", status_code=500)
@@ -102,10 +93,7 @@ async def get_all_attendance(
     return success_response(
         message="Attendance records fetched",
         data=(result or {}).get("data", []),
-        meta={
-            "metrics": (result or {}).get("metrics"),
-            "pagination": (result or {}).get("pagination")
-        }
+        meta=(result or {}).get("metrics")
     )
 
 

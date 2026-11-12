@@ -51,8 +51,8 @@ class AttendanceService:
                     {"$group": {"_id": "$attendance_status", "count": {"$sum": 1}}},
                 ]
 
-                status_cursor = await attendance_collection.aggregate(pipeline_status).to_list(length=None)
-                detail_cursor = await attendance_collection.aggregate(pipeline_detail).to_list(length=None)
+                status_cursor = await (await attendance_collection.aggregate(pipeline_status)).to_list(length=None) if hasattr(attendance_collection.aggregate(pipeline_status), "__await__") else await attendance_collection.aggregate(pipeline_status).to_list(length=None)
+                detail_cursor = await (await attendance_collection.aggregate(pipeline_detail)).to_list(length=None) if hasattr(attendance_collection.aggregate(pipeline_detail), "__await__") else await attendance_collection.aggregate(pipeline_detail).to_list(length=None)
 
                 present_total = 0
                 absent = 0
@@ -390,22 +390,41 @@ class AttendanceService:
 
     @staticmethod
     async def list(
-        date: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        month: Optional[str] = None,
         employee_id: Optional[str] = None,
         status: Optional[str] = None,
-        page: int = 1,
-        limit: int = 20,
     ) -> Tuple[Optional[dict], Optional[str]]:
         try:
-            query = {"is_deleted": {"$ne": True}}
-            if date:
-                query["date"] = date
-            elif start_date and end_date:
-                query["date"] = {"$gte": start_date, "$lte": end_date}
-            elif start_date:
-                query["date"] = {"$gte": start_date}
+            # Determine start and end date based on month (format: YYYY-MM) or default to current month
+            now = datetime.utcnow()
+            if month:
+                try:
+                    dt = datetime.strptime(month, "%Y-%m")
+                    start_date = dt.replace(day=1).strftime("%Y-%m-%d")
+                    if dt.month == 12:
+                        last_day = dt.replace(year=dt.year + 1, month=1, day=1) - timedelta(days=1)
+                    else:
+                        last_day = dt.replace(month=dt.month + 1, day=1) - timedelta(days=1)
+                    end_date = last_day.strftime("%Y-%m-%d")
+                except Exception:
+                    start_date = now.replace(day=1).strftime("%Y-%m-%d")
+                    if now.month == 12:
+                        last_day = now.replace(year=now.year + 1, month=1, day=1) - timedelta(days=1)
+                    else:
+                        last_day = now.replace(month=now.month + 1, day=1) - timedelta(days=1)
+                    end_date = last_day.strftime("%Y-%m-%d")
+            else:
+                start_date = now.replace(day=1).strftime("%Y-%m-%d")
+                if now.month == 12:
+                    last_day = now.replace(year=now.year + 1, month=1, day=1) - timedelta(days=1)
+                else:
+                    last_day = now.replace(month=now.month + 1, day=1) - timedelta(days=1)
+                end_date = last_day.strftime("%Y-%m-%d")
+
+            query = {
+                "is_deleted": {"$ne": True},
+                "date": {"$gte": start_date, "$lte": end_date}
+            }
 
             if employee_id:
                 emp = await employees_collection.find_one({
@@ -424,15 +443,10 @@ class AttendanceService:
             if status:
                 query["status"] = status
 
-            skip = (page - 1) * limit
-            total_count = await attendance_collection.count_documents(query)
-
             records = (
                 await attendance_collection.find(query)
                 .sort("date", -1)
-                .skip(skip)
-                .limit(limit)
-                .to_list(length=limit)
+                .to_list(length=None)
             )
 
             employees = await employees_collection.find({"is_deleted": {"$ne": True}}).to_list(length=None)
@@ -451,14 +465,8 @@ class AttendanceService:
                 result.append(r_norm)
 
             metrics = await AttendanceService.get_dashboard_metrics(employee_id=employee_id)
-            pagination = {
-                "total_records": total_count,
-                "current_page": page,
-                "limit": limit,
-                "total_pages": (total_count + limit - 1) // limit if limit > 0 else 0,
-            }
 
-            return {"data": result, "metrics": metrics, "pagination": pagination}, None
+            return {"data": result, "metrics": metrics}, None
         except Exception as e:
             traceback.print_exc()
             return None, str(e)
@@ -466,21 +474,11 @@ class AttendanceService:
     @staticmethod
     async def get_employee_attendance(
         employee_id: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None
+        month: Optional[str] = None
     ) -> Tuple[Optional[dict], Optional[str]]:
         try:
-            if not start_date or not end_date:
-                now = datetime.utcnow()
-                start_date = now.replace(day=1).strftime("%Y-%m-%d")
-                if now.month == 12:
-                    last_day = now.replace(year=now.year + 1, month=1, day=1) - timedelta(days=1)
-                else:
-                    last_day = now.replace(month=now.month + 1, day=1) - timedelta(days=1)
-                end_date = last_day.strftime("%Y-%m-%d")
-
             return await AttendanceService.list(
-                start_date=start_date, end_date=end_date, employee_id=employee_id, limit=1000
+                month=month, employee_id=employee_id
             )
         except Exception as e:
             traceback.print_exc()
