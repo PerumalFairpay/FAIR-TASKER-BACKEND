@@ -236,8 +236,8 @@ class DashboardService:
 
                 # Map details
                 leave_types_raw = await leave_types_collection.find({"is_deleted": {"$ne": True}}).to_list(length=None)
-                lt_map = {str(lt["_id"]): normalize(lt) for lt in leave_types_raw}
-                emp_map = {str(e["_id"]): e for e in employees}
+                lt_map = {str(lt.get("_id", lt.get("id"))): normalize(lt) for lt in leave_types_raw}
+                emp_map = {str(e.get("_id", e.get("id"))): e for e in employees}
 
                 for l in leave_requests:
                     emp_val = emp_map.get(str(l.get("employee_id")))
