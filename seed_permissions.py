@@ -28,6 +28,7 @@ permissions_data = [
      
     # Leave Management -seeder updated
     {"name": "View Leave Requests", "slug": "leave:view", "module": "Leave", "description": "See leave applications"},
+    {"name": "Submit Leave Request", "slug": "leave:submit", "module": "Leave", "description": "Submit and update personal leave applications"},
     {"name": "Approve Leaves", "slug": "leave:approve", "module": "Leave", "description": "Approve or reject team leave requests"},
      
     # Project Management -seeder updated
@@ -104,6 +105,9 @@ async def seed_permissions():
                 # Feedback
                 perm_map.get("feedback:view"),
                 perm_map.get("feedback:submit"),
+                # Leave
+                perm_map.get("leave:view"),
+                perm_map.get("leave:submit"),
                 
                 # Nav Permissions
                 # perm_map.get("nav:milestone"),
