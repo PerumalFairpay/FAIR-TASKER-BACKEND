@@ -6,7 +6,6 @@ from datetime import datetime
 from app.models import (
     AttendanceCreate,
     AttendanceUpdate,
-    AttendanceAdminEdit,
     BiometricSyncRequest,
 )
 from app.auth import verify_token, get_current_user
@@ -94,26 +93,6 @@ async def get_all_attendance(
         message="Attendance records fetched",
         data=(result or {}).get("data", []),
         meta=(result or {}).get("metrics")
-    )
-
-
-@router.put("/edit/{attendance_id}", dependencies=[Depends(verify_token)])
-async def edit_attendance(
-    attendance_id: str,
-    payload: AttendanceAdminEdit,
-    current_user: dict = Depends(get_current_user),
-):
-    if current_user.get("role") not in ["admin", "super_admin"]:
-        return error_response(message="Only admins can edit attendance records", status_code=403)
-
-    data, error = await AttendanceService.edit_attendance_record(attendance_id, payload)
-    if error:
-        status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
-        return error_response(message=error, status_code=status_code)
-
-    return success_response(
-        message="Attendance record updated successfully",
-        data=data
     )
 
 
