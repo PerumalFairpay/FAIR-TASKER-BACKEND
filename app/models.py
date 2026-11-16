@@ -1185,8 +1185,8 @@ class FeedbackAttachment(BaseModel):
 
 
 class FeedbackBase(BaseModel):
-    employee_id: str
-    employee_name: str
+    user_id: Optional[str] = None
+    user_name: Optional[str] = None
     type: str  # Bug, Feedback, Feature Request
     subject: str
     description: str
@@ -1201,8 +1201,8 @@ class FeedbackCreate(FeedbackBase):
 
 class FeedbackUpdate(BaseModel):
     id: Optional[str] = None
-    employee_id: Optional[str] = None
-    employee_name: Optional[str] = None
+    user_id: Optional[str] = None
+    user_name: Optional[str] = None
     type: Optional[str] = None
     subject: Optional[str] = None
     description: Optional[str] = None

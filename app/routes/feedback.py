@@ -3,7 +3,6 @@ from typing import Optional, List
 from app.helper.response_helper import success_response, error_response
 from app.models import FeedbackCreate, FeedbackUpdate, FeedbackStatusUpdate
 from app.services.api.feedback import FeedbackService
-from app.database import employees_collection
 from app.helper.file_handler import file_handler
 from app.auth import get_current_user, require_permission
 
@@ -12,28 +11,48 @@ router = APIRouter(prefix="/feedback", tags=["feedback"])
 
 @router.post("/", dependencies=[Depends(require_permission("feedback:submit"))])
 async def create_feedback(
-    employee_id: str = Form(...),
-    employee_name: str = Form(...),
-    type: str = Form(...),
-    subject: str = Form(...),
-    description: str = Form(...),
-    priority: str = Form("Medium"),
-    attachments: List[UploadFile] = File([]),
+    type: str = Form(
+        ...,
+        description="Category of the feedback. Allowed values: 'Bug', 'Feedback', or 'Feature Request'",
+        examples=["Bug"]
+    ),
+    subject: str = Form(
+        ...,
+        description="Brief title or summary of the issue/feedback",
+        examples=["Leave calendar not rendering properly"]
+    ),
+    description: str = Form(
+        ...,
+        description="Detailed explanation of the issue, steps to reproduce, or enhancement details",
+        examples=["When clicking the calendar tab in Firefox, the view stays blank."]
+    ),
+    priority: str = Form(
+        "Medium",
+        description="Urgency/priority level. Allowed values: 'Low', 'Medium', 'High', 'Critical'",
+        examples=["Medium"]
+    ),
+    attachments: Optional[List[UploadFile]] = File(
+        None,
+        description="Optional image, document, or log files related to the feedback"
+    ),
     current_user: dict = Depends(get_current_user)
 ):
+    # Automatically bind user_id from authenticated session
+    resolved_user_id = str(current_user.get("_id", ""))
+
     attachment_urls = []
     if attachments:
         for file in attachments:
-            uploaded = await file_handler.upload_file(file, subfolder="feedback")
-            attachment_urls.append({
-                "document_name": file.filename,
-                "document_proof": uploaded["url"],
-                "file_type": file.content_type
-            })
+            if isinstance(file, UploadFile) and file.filename:
+                uploaded = await file_handler.upload_file(file, subfolder="feedback")
+                attachment_urls.append({
+                    "document_name": file.filename,
+                    "document_proof": uploaded["url"],
+                    "file_type": file.content_type
+                })
 
     feedback_data = FeedbackCreate(
-        employee_id=employee_id,
-        employee_name=employee_name,
+        user_id=resolved_user_id,
         type=type,
         subject=subject,
         description=description,
@@ -55,11 +74,11 @@ async def create_feedback(
 
 @router.get("/", dependencies=[Depends(require_permission("feedback:view"))])
 async def get_feedbacks(
-    employee_id: Optional[str] = None,
+    user_id: Optional[str] = None,
     status: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    data, metrics, error = await FeedbackService.list(employee_id=employee_id, status=status)
+    data, metrics, error = await FeedbackService.list(user_id=user_id, status=status)
     if error:
         return error_response(message=f"Failed to fetch feedbacks: {error}", status_code=500)
 
@@ -73,25 +92,42 @@ async def get_feedbacks(
 @router.put("/{feedback_id}", dependencies=[Depends(require_permission("feedback:submit"))])
 async def update_feedback(
     feedback_id: str,
-    status: Optional[str] = Form(None),
-    priority: Optional[str] = Form(None),
-    type: Optional[str] = Form(None),
-    subject: Optional[str] = Form(None),
-    description: Optional[str] = Form(None),
-    attachments: List[UploadFile] = File([]),
+    status: Optional[str] = Form(
+        None,
+        description="Optional status update. Allowed values: 'Open', 'In Review', 'Resolved', 'Closed'"
+    ),
+    priority: Optional[str] = Form(
+        None,
+        description="Optional updated priority level: 'Low', 'Medium', 'High', 'Critical'"
+    ),
+    type: Optional[str] = Form(
+        None,
+        description="Optional updated category: 'Bug', 'Feedback', 'Feature Request'"
+    ),
+    subject: Optional[str] = Form(
+        None,
+        description="Optional updated subject title"
+    ),
+    description: Optional[str] = Form(
+        None,
+        description="Optional updated description text"
+    ),
+    attachments: Optional[List[UploadFile]] = File(
+        None,
+        description="Optional additional attachments to upload"
+    ),
     current_user: dict = Depends(get_current_user)
 ):
-    # Ownership check: employees can only edit their own feedback
+    # Ownership check: users can only edit their own feedback unless admin
     if current_user.get("role") not in ["admin", "super_admin"]:
         existing, err = await FeedbackService.get(feedback_id)
         if not existing or err:
             return error_response(message="Feedback not found", status_code=404)
 
-        emp_business_id = current_user.get("employee_no_id")
-        employee_record = await employees_collection.find_one({"employee_no_id": emp_business_id, "is_deleted": {"$ne": True}})
-        employee_mongo_id = str(employee_record["_id"]) if employee_record else None
+        current_uid = str(current_user.get("_id", ""))
+        feedback_uid = str(existing.get("user_id", ""))
 
-        if existing.get("employee_id") != employee_mongo_id:
+        if feedback_uid != current_uid:
             return error_response(
                 message="You are not authorized to edit this feedback",
                 status_code=403
@@ -100,12 +136,13 @@ async def update_feedback(
     attachment_urls = []
     if attachments:
         for file in attachments:
-            uploaded = await file_handler.upload_file(file, subfolder="feedback")
-            attachment_urls.append({
-                "document_name": file.filename,
-                "document_proof": uploaded["url"],
-                "file_type": file.content_type
-            })
+            if isinstance(file, UploadFile) and file.filename:
+                uploaded = await file_handler.upload_file(file, subfolder="feedback")
+                attachment_urls.append({
+                    "document_name": file.filename,
+                    "document_proof": uploaded["url"],
+                    "file_type": file.content_type
+                })
 
     feedback_update = FeedbackUpdate(
         status=status,
@@ -156,11 +193,10 @@ async def delete_feedback(
         if not existing or err:
             return error_response(message="Feedback not found", status_code=404)
 
-        emp_business_id = current_user.get("employee_no_id")
-        employee_record = await employees_collection.find_one({"employee_no_id": emp_business_id, "is_deleted": {"$ne": True}})
-        employee_mongo_id = str(employee_record["_id"]) if employee_record else None
+        current_uid = str(current_user.get("_id", ""))
+        feedback_uid = str(existing.get("user_id", ""))
 
-        if existing.get("employee_id") != employee_mongo_id:
+        if feedback_uid != current_uid:
             return error_response(
                 message="You are not authorized to delete this feedback",
                 status_code=403
