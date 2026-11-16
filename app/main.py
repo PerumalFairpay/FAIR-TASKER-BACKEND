@@ -3,6 +3,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import logging
+import os
 
 from app.helper.response_helper import error_response
 from app.routes.router import api_router
@@ -48,6 +49,7 @@ async def shutdown_event():
         logger.error(f"Error during scheduler shutdown: {str(e)}")
 
 
+os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 origins = [
@@ -58,7 +60,7 @@ origins = [
     "http://192.168.1.41:3000",
     "http://192.168.1.41:3001",
     "http://192.168.1.94:3001",
-    "http://192.168.1.50:3001",
+    "http://192.168.1.30:3001",
     
 ]
 
