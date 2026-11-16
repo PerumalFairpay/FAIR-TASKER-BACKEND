@@ -38,7 +38,7 @@ async def create_feedback(
     current_user: dict = Depends(get_current_user)
 ):
     # Automatically bind user_id from authenticated session
-    resolved_user_id = str(current_user.get("_id", ""))
+    resolved_user_id = str(current_user.get("id") or current_user.get("_id") or "")
 
     attachment_urls = []
     if attachments:
@@ -124,7 +124,7 @@ async def update_feedback(
         if not existing or err:
             return error_response(message="Feedback not found", status_code=404)
 
-        current_uid = str(current_user.get("_id", ""))
+        current_uid = str(current_user.get("id") or current_user.get("_id") or "")
         feedback_uid = str(existing.get("user_id", ""))
 
         if feedback_uid != current_uid:
@@ -193,7 +193,7 @@ async def delete_feedback(
         if not existing or err:
             return error_response(message="Feedback not found", status_code=404)
 
-        current_uid = str(current_user.get("_id", ""))
+        current_uid = str(current_user.get("id") or current_user.get("_id") or "")
         feedback_uid = str(existing.get("user_id", ""))
 
         if feedback_uid != current_uid:
