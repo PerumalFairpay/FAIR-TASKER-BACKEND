@@ -459,6 +459,24 @@ class LeaveRequestService:
                             f"Monthly limit for {requested_type.get('name')} reached. "
                             f"Allowed: {balance_info['monthly_allowed']}, Used: {balance_info['used']}."
                         )
+
+                    allowed_hrs = float(requested_type.get("allowed_hours") or 0.0)
+                    if allowed_hrs > 0 and leave_request.start_time and leave_request.end_time:
+                        try:
+                            # Support formats like "HH:MM", "HH:MM:SS", "hh:mm AM/PM"
+                            time_fmt = "%I:%M %p" if ("AM" in leave_request.start_time.upper() or "PM" in leave_request.start_time.upper()) else "%H:%M"
+                            t1 = datetime.strptime(leave_request.start_time.strip(), time_fmt)
+                            end_time_fmt = "%I:%M %p" if ("AM" in leave_request.end_time.upper() or "PM" in leave_request.end_time.upper()) else "%H:%M"
+                            t2 = datetime.strptime(leave_request.end_time.strip(), end_time_fmt)
+                            diff_seconds = (t2 - t1).total_seconds()
+                            if diff_seconds <= 0:
+                                diff_seconds += 24 * 3600  # Crossed midnight
+                            diff_hours = diff_seconds / 3600.0
+
+                            if diff_hours > allowed_hrs:
+                                return None, f"Permission cannot exceed {allowed_hrs} hours. Requested duration: {diff_hours:.1f} hours."
+                        except Exception as te:
+                            traceback.print_exc()
                 else:
                     if balance_info["available"] < requested_days:
                         return None, (
@@ -603,6 +621,32 @@ class LeaveRequestService:
                 )
                 if existing_leave:
                     return None, f"A leave request already exists for the selected dates (Status: {existing_leave.get('status')})"
+
+            # Check Permission duration in update
+            lt_id = update_data.get("leave_type_id") or old_req.get("leave_type_id")
+            dur_type = update_data.get("leave_duration_type") or old_req.get("leave_duration_type")
+            s_time = update_data.get("start_time") or old_req.get("start_time")
+            e_time = update_data.get("end_time") or old_req.get("end_time")
+
+            if dur_type == "Permission" and lt_id and s_time and e_time:
+                req_type = await leave_types_collection.find_one({"_id": ObjectId(lt_id)})
+                if req_type:
+                    allowed_hrs = float(req_type.get("allowed_hours") or 0.0)
+                    if allowed_hrs > 0:
+                        try:
+                            time_fmt = "%I:%M %p" if ("AM" in s_time.upper() or "PM" in s_time.upper()) else "%H:%M"
+                            t1 = datetime.strptime(s_time.strip(), time_fmt)
+                            end_time_fmt = "%I:%M %p" if ("AM" in e_time.upper() or "PM" in e_time.upper()) else "%H:%M"
+                            t2 = datetime.strptime(e_time.strip(), end_time_fmt)
+                            diff_seconds = (t2 - t1).total_seconds()
+                            if diff_seconds <= 0:
+                                diff_seconds += 24 * 3600
+                            diff_hours = diff_seconds / 3600.0
+
+                            if diff_hours > allowed_hrs:
+                                return None, f"Permission cannot exceed {allowed_hrs} hours. Requested duration: {diff_hours:.1f} hours."
+                        except Exception as te:
+                            traceback.print_exc()
 
             # Recalculate total_days if dates changed
             if "start_date" in update_data and "end_date" in update_data and "leave_duration_type" in update_data:
