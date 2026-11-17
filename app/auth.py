@@ -33,16 +33,7 @@ def decode_token(token: str) -> Optional[dict]:
     except JWTError:
         return None
 
-#ORIGINAL LINE
-# async def verify_token(token: str = Cookie(None)):
-#----------------------------------
-#Remove after testing below code
-async def verify_token(request: Request, token: Optional[str] = Cookie(None)):
-    if not token:
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            token = auth_header.split(" ", 1)[1]
-#-------------------------------------------------------------------until this
+async def verify_token(token: Optional[str] = Cookie(None)) -> dict:
     if not token:
         raise HTTPException(status_code=401, detail="Authentication token required")
     payload = decode_token(token)

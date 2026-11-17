@@ -1,28 +1,20 @@
-from fastapi import APIRouter, Response, Depends
+from fastapi import APIRouter, Response, Request, Depends
 from app.models import UserLogin
 from app.auth import get_current_user
-from app.core.config import ACCESS_TOKEN_EXPIRE_MINUTES
 from app.services.api.auth import AuthService
-from app.helper.response_helper import success_response, error_response
+from app.helper import success_response, error_response, set_auth_cookie, delete_auth_cookie
 
 router = APIRouter()
 
 
 @router.post("/login")
-async def login(user: UserLogin, response: Response):
+async def login(user: UserLogin, response: Response, request: Request):
     user_data, token, error = await AuthService.login(user)
     if error:
         return error_response(message=error, status_code=400)
 
-    # Set cookie
-    response.set_cookie(
-        key="token",
-        value=token,
-        httponly=True,
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="lax",
-        secure=False,
-    )
+    # Set cookie (matches FLEETGLIDE-AI-BACKEND dynamic cookie setting)
+    set_auth_cookie(response=response, request=request, token=token, httponly=False)
 
     return {
         "success": True,
@@ -33,8 +25,8 @@ async def login(user: UserLogin, response: Response):
 
 
 @router.post("/logout")
-async def logout(response: Response):
-    response.delete_cookie("token")
+async def logout(response: Response, request: Request):
+    delete_auth_cookie(response=response, request=request)
     return {
         "success": True,
         "message": "Logged out successfully",
