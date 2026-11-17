@@ -7,12 +7,12 @@ from app.database import employees_collection
 from app.helper.response_helper import success_response, error_response
 from app.helper.file_handler import save_upload_file
 from app.services.leave_email_service import send_leave_application_email, send_leave_status_email
-from app.auth import verify_token, get_current_user, require_permission
+from app.auth import verify_token, get_current_user
 
 router = APIRouter(prefix="/leave-requests", tags=["leave-requests"], dependencies=[Depends(verify_token)])
 
 
-@router.post("/create", dependencies=[Depends(require_permission("leave:submit"))])
+@router.post("/create")
 async def create_leave_request(
     background_tasks: BackgroundTasks,
     employee_id: str = Form(...),
@@ -88,7 +88,7 @@ async def create_leave_request(
     return success_response(message="Leave request submitted successfully", data=data, status_code=201)
 
 
-@router.get("/all", dependencies=[Depends(require_permission("leave:view"))])
+@router.get("/all")
 async def get_leave_requests(
     id: Optional[str] = None,
     status: Optional[str] = None,
@@ -117,7 +117,7 @@ async def get_leave_requests(
     return success_response(message="Leave requests fetched successfully", data=data, meta=meta)
 
 
-@router.get("/{leave_request_id}", dependencies=[Depends(require_permission("leave:view"))])
+@router.get("/{leave_request_id}")
 async def get_leave_request(leave_request_id: str):
     data, error = await LeaveRequestService.get(leave_request_id)
     if error:
@@ -126,7 +126,7 @@ async def get_leave_request(leave_request_id: str):
     return success_response(message="Leave request fetched successfully", data=data)
 
 
-@router.put("/update/{leave_request_id}", dependencies=[Depends(require_permission("leave:submit"))])
+@router.put("/update/{leave_request_id}")
 async def update_leave_request(
     leave_request_id: str,
     employee_id: Optional[str] = Form(None),
@@ -183,12 +183,16 @@ async def update_leave_request(
     return success_response(message="Leave request updated successfully", data=data)
 
 
-@router.patch("/status/{leave_request_id}", dependencies=[Depends(require_permission("leave:manage"))])
+@router.patch("/status/{leave_request_id}")
 async def update_leave_status(
     leave_request_id: str,
     status_update: LeaveRequestStatusUpdate,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user)
 ):
+    if current_user.get("role", "").lower() != "admin":
+        return error_response(message="Only administrators can approve or reject leave requests.", status_code=403)
+
     update_data = LeaveRequestUpdate(
         status=status_update.status,
         rejection_reason=status_update.rejection_reason
@@ -219,7 +223,7 @@ async def update_leave_status(
     )
 
 
-@router.delete("/delete/{leave_request_id}", dependencies=[Depends(require_permission("leave:submit"))])
+@router.delete("/delete/{leave_request_id}")
 async def delete_leave_request(leave_request_id: str):
     success, error = await LeaveRequestService.delete(leave_request_id)
     if error:
