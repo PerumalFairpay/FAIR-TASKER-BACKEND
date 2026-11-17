@@ -384,6 +384,28 @@ class LeaveRequestService:
                         f"Earliest possible start date is {(today + timedelta(days=notice_period)).strftime('%Y-%m-%d')}."
                     )
 
+            # Rule: Adjacent to Holiday / Weekend validation
+            allow_adjacent = requested_type.get("allow_adjacent_to_holiday", True)
+            if allow_adjacent is False and leave_request.leave_duration_type != "Permission":
+                prev_check_day = (start_dt - timedelta(days=1)).strftime("%Y-%m-%d")
+                next_check_day = (end_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+
+                adj_holiday = await holidays_collection.find_one({
+                    "date": {"$in": [prev_check_day, next_check_day]},
+                    "status": "Active",
+                    "is_deleted": {"$ne": True}
+                })
+                if adj_holiday:
+                    holiday_name = adj_holiday.get("name", "Holiday")
+                    return None, f"{requested_type.get('name')} cannot be applied adjacent to a holiday ({holiday_name})."
+
+                emp_for_off = await employees_collection.find_one({"_id": ObjectId(leave_request.employee_id)})
+                emp_weekly_off = emp_for_off.get("weekly_off", [6]) if emp_for_off else [6]
+                prev_is_off = (start_dt - timedelta(days=1)).weekday() in emp_weekly_off
+                next_is_off = (end_dt + timedelta(days=1)).weekday() in emp_weekly_off
+                if prev_is_off or next_is_off:
+                    return None, f"{requested_type.get('name')} cannot be applied adjacent to a weekly off/weekend."
+
             # Server-Side Day Recalculation
             calculated_days = 0.0
             if leave_request.leave_duration_type == "Single":

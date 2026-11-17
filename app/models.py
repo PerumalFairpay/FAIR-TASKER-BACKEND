@@ -653,6 +653,7 @@ class LeaveTypeBase(BaseModel):
     probation_period_months: int = 0
     min_service_days: int = 0
     notice_period_days: int = 0
+    allow_adjacent_to_holiday: bool = True
 
 
 
@@ -674,6 +675,7 @@ class LeaveTypeUpdate(BaseModel):
     probation_period_months: Optional[int] = None
     min_service_days: Optional[int] = None
     notice_period_days: Optional[int] = None
+    allow_adjacent_to_holiday: Optional[bool] = None
 
 
 
