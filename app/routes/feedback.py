@@ -43,12 +43,12 @@ async def create_feedback(
     attachment_urls = []
     if attachments:
         for file in attachments:
-            if isinstance(file, UploadFile) and file.filename:
+            if hasattr(file, "filename") and file.filename:
                 uploaded = await file_handler.upload_file(file, subfolder="feedback")
                 attachment_urls.append({
                     "document_name": file.filename,
                     "document_proof": uploaded["url"],
-                    "file_type": file.content_type
+                    "file_type": getattr(file, "content_type", None)
                 })
 
     feedback_data = FeedbackCreate(
@@ -136,12 +136,12 @@ async def update_feedback(
     attachment_urls = []
     if attachments:
         for file in attachments:
-            if isinstance(file, UploadFile) and file.filename:
+            if hasattr(file, "filename") and file.filename:
                 uploaded = await file_handler.upload_file(file, subfolder="feedback")
                 attachment_urls.append({
                     "document_name": file.filename,
                     "document_proof": uploaded["url"],
-                    "file_type": file.content_type
+                    "file_type": getattr(file, "content_type", None)
                 })
 
     feedback_update = FeedbackUpdate(
