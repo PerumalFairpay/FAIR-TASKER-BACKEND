@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends
 from app.services.api.user import UserService
 from app.helper.response_helper import success_response, error_response
-from app.auth import verify_token, require_permission
+from app.auth import verify_token
 from typing import Optional
 
 router = APIRouter(prefix="/users", tags=["users"], dependencies=[Depends(verify_token)])
 
-@router.get("", dependencies=[Depends(require_permission("employee:view"))])
+@router.get("")
 async def get_users(
     page: int = 1,
     limit: int = 10,
@@ -22,7 +22,7 @@ async def get_users(
         meta=meta
     )
 
-@router.get("/{user_id}", dependencies=[Depends(require_permission("employee:view"))])
+@router.get("/{user_id}")
 async def get_user(user_id: str):
     user, error = await UserService.get(user_id)
     if error:
@@ -33,7 +33,7 @@ async def get_user(user_id: str):
         data=user
     )
 
-@router.delete("/{user_id}", dependencies=[Depends(require_permission("employee:submit"))])
+@router.delete("/{user_id}")
 async def delete_user(user_id: str):
     success, error = await UserService.delete(user_id)
     if error:

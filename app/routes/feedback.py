@@ -4,12 +4,12 @@ from app.helper.response_helper import success_response, error_response
 from app.models import FeedbackCreate, FeedbackUpdate, FeedbackStatusUpdate
 from app.services.api.feedback import FeedbackService
 from app.helper.file_handler import file_handler
-from app.auth import get_current_user, require_permission
+from app.auth import get_current_user
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
 
 
-@router.post("/", dependencies=[Depends(require_permission("feedback:submit"))])
+@router.post("/")
 async def create_feedback(
     type: str = Form(
         ...,
@@ -72,7 +72,7 @@ async def create_feedback(
     )
 
 
-@router.get("/", dependencies=[Depends(require_permission("feedback:view"))])
+@router.get("/")
 async def get_feedbacks(
     user_id: Optional[str] = None,
     status: Optional[str] = None,
@@ -89,7 +89,7 @@ async def get_feedbacks(
     )
 
 
-@router.put("/{feedback_id}", dependencies=[Depends(require_permission("feedback:submit"))])
+@router.put("/{feedback_id}")
 async def update_feedback(
     feedback_id: str,
     status: Optional[str] = Form(
@@ -165,7 +165,7 @@ async def update_feedback(
     )
 
 
-@router.patch("/{feedback_id}/status", dependencies=[Depends(require_permission("feedback:manage"))])
+@router.patch("/{feedback_id}/status")
 async def update_feedback_status(
     feedback_id: str,
     payload: FeedbackStatusUpdate,
@@ -183,7 +183,7 @@ async def update_feedback_status(
     )
 
 
-@router.delete("/{feedback_id}", dependencies=[Depends(require_permission("feedback:submit"))])
+@router.delete("/{feedback_id}")
 async def delete_feedback(
     feedback_id: str,
     current_user: dict = Depends(get_current_user)

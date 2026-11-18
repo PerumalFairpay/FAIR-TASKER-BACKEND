@@ -2,12 +2,12 @@ from fastapi import APIRouter, Depends
 from app.models import DocumentCategoryCreate, DocumentCategoryUpdate
 from app.services.api.document_category import DocumentCategoryService
 from app.helper.response_helper import success_response, error_response
-from app.auth import verify_token, require_permission
+from app.auth import verify_token
 
 router = APIRouter(prefix="/document-categories", tags=["document-categories"], dependencies=[Depends(verify_token)])
 
 
-@router.post("/create", dependencies=[Depends(require_permission("document:submit"))])
+@router.post("/create")
 async def create_document_category(category: DocumentCategoryCreate):
     data, error = await DocumentCategoryService.create(category)
     if error:
@@ -15,7 +15,7 @@ async def create_document_category(category: DocumentCategoryCreate):
     return success_response(message="Document category created successfully", data=data, status_code=201)
 
 
-@router.get("/all", dependencies=[Depends(require_permission("document:view"))])
+@router.get("/all")
 async def get_document_categories():
     data, error = await DocumentCategoryService.list()
     if error:
@@ -23,7 +23,7 @@ async def get_document_categories():
     return success_response(message="Document categories fetched successfully", data=data)
 
 
-@router.get("/{category_id}", dependencies=[Depends(require_permission("document:view"))])
+@router.get("/{category_id}")
 async def get_document_category(category_id: str):
     data, error = await DocumentCategoryService.get(category_id)
     if error:
@@ -32,7 +32,7 @@ async def get_document_category(category_id: str):
     return success_response(message="Document category fetched successfully", data=data)
 
 
-@router.put("/update/{category_id}", dependencies=[Depends(require_permission("document:submit"))])
+@router.put("/update/{category_id}")
 async def update_document_category(category_id: str, category: DocumentCategoryUpdate):
     data, error = await DocumentCategoryService.update(category_id, category)
     if error:
@@ -41,7 +41,7 @@ async def update_document_category(category_id: str, category: DocumentCategoryU
     return success_response(message="Document category updated successfully", data=data)
 
 
-@router.delete("/delete/{category_id}", dependencies=[Depends(require_permission("document:submit"))])
+@router.delete("/delete/{category_id}")
 async def delete_document_category(category_id: str):
     success, error = await DocumentCategoryService.delete(category_id)
     if error:

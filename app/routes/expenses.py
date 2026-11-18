@@ -2,12 +2,12 @@ from fastapi import APIRouter, Depends, UploadFile, File, Form
 from app.services.api.expense import ExpenseService
 from app.helper.response_helper import success_response, error_response
 from typing import Optional
-from app.auth import verify_token, require_permission
+from app.auth import verify_token
 
 router = APIRouter(prefix="/expenses", tags=["expenses"], dependencies=[Depends(verify_token)])
 
 
-@router.post("/create", dependencies=[Depends(require_permission("expense:submit"))])
+@router.post("/create")
 async def create_expense(
     expense_category_id: str = Form(...),
     amount: float = Form(...),
@@ -31,7 +31,7 @@ async def create_expense(
     return success_response(message="Expense created successfully", data=data, status_code=201)
 
 
-@router.get("/all", dependencies=[Depends(require_permission("expense:view"))])
+@router.get("/all")
 async def get_expenses():
     data, error = await ExpenseService.list()
     if error:
@@ -39,7 +39,7 @@ async def get_expenses():
     return success_response(message="Expenses fetched successfully", data=data)
 
 
-@router.get("/{expense_id}", dependencies=[Depends(require_permission("expense:view"))])
+@router.get("/{expense_id}")
 async def get_expense(expense_id: str):
     data, error = await ExpenseService.get(expense_id)
     if error:
@@ -48,7 +48,7 @@ async def get_expense(expense_id: str):
     return success_response(message="Expense fetched successfully", data=data)
 
 
-@router.put("/update/{expense_id}", dependencies=[Depends(require_permission("expense:submit"))])
+@router.put("/update/{expense_id}")
 async def update_expense(
     expense_id: str,
     expense_category_id: Optional[str] = Form(None),
@@ -75,7 +75,7 @@ async def update_expense(
     return success_response(message="Expense updated successfully", data=data)
 
 
-@router.delete("/delete/{expense_id}", dependencies=[Depends(require_permission("expense:submit"))])
+@router.delete("/delete/{expense_id}")
 async def delete_expense(expense_id: str):
     success, error = await ExpenseService.delete(expense_id)
     if error:

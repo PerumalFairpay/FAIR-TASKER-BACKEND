@@ -3,12 +3,12 @@ from app.models import AssetAssignmentRequest
 from app.services.api.asset import AssetService
 from app.helper.response_helper import success_response, error_response
 from typing import List, Optional
-from app.auth import verify_token, require_permission
+from app.auth import verify_token
 
 router = APIRouter(prefix="/assets", tags=["assets"], dependencies=[Depends(verify_token)])
 
 
-@router.post("/", dependencies=[Depends(require_permission("asset:submit"))])
+@router.post("/")
 async def create_asset(
     asset_name: str = Form(...),
     asset_unique_id: str = Form(...),
@@ -53,7 +53,7 @@ async def create_asset(
     return success_response(message="Asset created successfully", data=data, status_code=201)
 
 
-@router.get("/all", dependencies=[Depends(require_permission("asset:view"))])
+@router.get("/all")
 async def get_assets():
     data, error = await AssetService.list()
     if error:
@@ -61,7 +61,7 @@ async def get_assets():
     return success_response(message="Assets fetched successfully", data=data)
 
 
-@router.get("/{asset_id}", dependencies=[Depends(require_permission("asset:view"))])
+@router.get("/{asset_id}")
 async def get_asset(asset_id: str):
     data, error = await AssetService.get(asset_id)
     if error:
@@ -70,7 +70,7 @@ async def get_asset(asset_id: str):
     return success_response(message="Asset fetched successfully", data=data)
 
 
-@router.put("/{asset_id}", dependencies=[Depends(require_permission("asset:submit"))])
+@router.put("/{asset_id}")
 async def update_asset(
     asset_id: str,
     asset_name: Optional[str] = Form(None),
@@ -122,7 +122,7 @@ async def update_asset(
     return success_response(message="Asset updated successfully", data=data)
 
 
-@router.delete("/{asset_id}", dependencies=[Depends(require_permission("asset:submit"))])
+@router.delete("/{asset_id}")
 async def delete_asset(asset_id: str):
     success, error = await AssetService.delete(asset_id)
     if error:
@@ -131,7 +131,7 @@ async def delete_asset(asset_id: str):
     return success_response(message="Asset deleted successfully", data=[])
 
 
-@router.put("/{asset_id}/assignment", dependencies=[Depends(require_permission("asset:submit"))])
+@router.put("/{asset_id}/assignment")
 async def manage_asset_assignment(asset_id: str, request: AssetAssignmentRequest):
     data, error = await AssetService.manage_assignment(asset_id, request.employee_id)
     if error:
@@ -140,7 +140,7 @@ async def manage_asset_assignment(asset_id: str, request: AssetAssignmentRequest
     return success_response(message="Asset assignment updated successfully", data=data)
 
 
-@router.get("/employee/{employee_id}", dependencies=[Depends(require_permission("asset:view"))])
+@router.get("/employee/{employee_id}")
 async def get_assets_by_employee(employee_id: str):
     data, error = await AssetService.get_by_employee(employee_id)
     if error:

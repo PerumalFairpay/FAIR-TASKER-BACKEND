@@ -4,12 +4,12 @@ from app.models import TaskCreate, TaskUpdate, TaskAttachment, EODReportItem
 from app.services.api.task import TaskService
 from app.helper.response_helper import success_response, error_response
 from app.helper.file_handler import file_handler
-from app.auth import verify_token, require_permission
+from app.auth import verify_token
 
 router = APIRouter(prefix="/tasks", tags=["tasks"], dependencies=[Depends(verify_token)])
 
 
-@router.post("/", dependencies=[Depends(require_permission("task:submit"))])
+@router.post("/")
 async def create_task(
     project_id: str = Form(...),
     task_name: str = Form(...),
@@ -56,7 +56,7 @@ async def create_task(
     return success_response(message="Task created successfully", data=data, status_code=201)
 
 
-@router.get("/", dependencies=[Depends(require_permission("task:view"))])
+@router.get("/")
 async def get_tasks(
     project_id: Optional[str] = None, 
     assigned_to: Optional[str] = None, 
@@ -78,7 +78,7 @@ async def get_tasks(
     return success_response(message="Tasks fetched successfully", data=data)
 
 
-@router.post("/eod-report", dependencies=[Depends(require_permission("task:submit"))])
+@router.post("/eod-report")
 async def process_eod_report(
     task_id: str = Form(...),
     status: str = Form(...),
@@ -112,7 +112,7 @@ async def process_eod_report(
     return success_response(message="EOD report processed successfully", data=data)
 
 
-@router.get("/eod-reports", dependencies=[Depends(require_permission("task:view"))])
+@router.get("/eod-reports")
 async def get_eod_reports(
     project_id: Optional[str] = None, 
     assigned_to: Optional[str] = None, 
@@ -132,7 +132,7 @@ async def get_eod_reports(
     return success_response(message="EOD reports fetched successfully", data=data)
 
 
-@router.get("/{task_id}", dependencies=[Depends(require_permission("task:view"))])
+@router.get("/{task_id}")
 async def get_task(task_id: str):
     data, error = await TaskService.get(task_id)
     if error:
@@ -141,7 +141,7 @@ async def get_task(task_id: str):
     return success_response(message="Task fetched successfully", data=data)
 
 
-@router.put("/{task_id}", dependencies=[Depends(require_permission("task:submit"))])
+@router.put("/{task_id}")
 async def update_task(
     task_id: str,
     project_id: Optional[str] = Form(None),
@@ -199,7 +199,7 @@ async def update_task(
     return success_response(message="Task updated successfully", data=data)
 
 
-@router.delete("/{task_id}", dependencies=[Depends(require_permission("task:submit"))])
+@router.delete("/{task_id}")
 async def delete_task(task_id: str):
     success, error = await TaskService.delete(task_id)
     if error:

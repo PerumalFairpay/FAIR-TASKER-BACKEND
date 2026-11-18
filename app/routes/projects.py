@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form
 from app.services.api.project import ProjectService
 from app.helper.response_helper import success_response, error_response
-from app.auth import verify_token, require_permission
+from app.auth import verify_token
 from typing import Optional
 
 router = APIRouter(prefix="/projects", tags=["projects"], dependencies=[Depends(verify_token)])
 
 
-@router.post("/create", dependencies=[Depends(require_permission("project:submit"))])
+@router.post("/create")
 async def create_project(
     name: str = Form(...),
     client_id: str = Form(...),
@@ -49,7 +49,7 @@ async def create_project(
     return success_response(message="Project created successfully", data=data, status_code=201)
 
 
-@router.get("/project_summary", dependencies=[Depends(require_permission("project:view"))])
+@router.get("/project_summary")
 async def get_projects_summary():
     data, error = await ProjectService.get_summary()
     if error:
@@ -57,7 +57,7 @@ async def get_projects_summary():
     return success_response(message="Projects summary fetched successfully", data=data)
 
 
-@router.get("/all", dependencies=[Depends(require_permission("project:view"))])
+@router.get("/all")
 async def get_projects():
     data, error = await ProjectService.list()
     if error:
@@ -65,7 +65,7 @@ async def get_projects():
     return success_response(message="Projects fetched successfully", data=data)
 
 
-@router.get("/{project_id}", dependencies=[Depends(require_permission("project:view"))])
+@router.get("/{project_id}")
 async def get_project(project_id: str):
     data, error = await ProjectService.get(project_id)
     if error:
@@ -74,7 +74,7 @@ async def get_project(project_id: str):
     return success_response(message="Project fetched successfully", data=data)
 
 
-@router.put("/update/{project_id}", dependencies=[Depends(require_permission("project:submit"))])
+@router.put("/update/{project_id}")
 async def update_project(
     project_id: str,
     name: Optional[str] = Form(None),
@@ -119,7 +119,7 @@ async def update_project(
     return success_response(message="Project updated successfully", data=data)
 
 
-@router.delete("/delete/{project_id}", dependencies=[Depends(require_permission("project:submit"))])
+@router.delete("/delete/{project_id}")
 async def delete_project(project_id: str):
     success, error = await ProjectService.delete(project_id)
     if error:

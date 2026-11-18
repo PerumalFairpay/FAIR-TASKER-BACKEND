@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, status
 from app.models import RoleCreate, RoleUpdate
 from app.services.api.role import RoleService
-from app.auth import verify_token, require_permission
+from app.auth import verify_token
 from app.helper.response_helper import success_response, error_response
 
 router = APIRouter(dependencies=[Depends(verify_token)])
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("role:submit"))])
+@router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_role(role: RoleCreate):
     data, error = await RoleService.create(role)
     if error:
@@ -16,7 +16,7 @@ async def create_role(role: RoleCreate):
     return success_response(message="Role created successfully", data=data, status_code=201)
 
 
-@router.get("/", dependencies=[Depends(require_permission("role:view"))])
+@router.get("/")
 async def get_roles():
     data, error = await RoleService.list()
     if error:
@@ -24,7 +24,7 @@ async def get_roles():
     return success_response(message="Roles fetched successfully", data=data)
 
 
-@router.get("/{role_id}", dependencies=[Depends(require_permission("role:view"))])
+@router.get("/{role_id}")
 async def get_role(role_id: str):
     data, error = await RoleService.get(role_id)
     if error:
@@ -33,7 +33,7 @@ async def get_role(role_id: str):
     return success_response(message="Role fetched successfully", data=data)
 
 
-@router.put("/{role_id}", dependencies=[Depends(require_permission("role:submit"))])
+@router.put("/{role_id}")
 async def update_role(role_id: str, role_update: RoleUpdate):
     data, error = await RoleService.update(role_id, role_update)
     if error:
@@ -47,7 +47,7 @@ async def update_role(role_id: str, role_update: RoleUpdate):
     return success_response(message="Role updated successfully", data=data)
 
 
-@router.delete("/{role_id}", dependencies=[Depends(require_permission("role:submit"))])
+@router.delete("/{role_id}")
 async def delete_role(role_id: str):
     success, error = await RoleService.delete(role_id)
     if error:

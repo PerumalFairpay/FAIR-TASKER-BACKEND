@@ -6,12 +6,12 @@ from app.services.api.employee import EmployeeService
 from app.helper.file_handler import file_handler
 from typing import Optional, List
 import json
-from app.auth import verify_token, require_permission
+from app.auth import verify_token
 
 router = APIRouter(prefix="/employees", tags=["employees"], dependencies=[Depends(verify_token)])
 
 
-@router.post("/create", dependencies=[Depends(require_permission("employee:submit"))])
+@router.post("/create")
 async def create_employee(
     background_tasks: BackgroundTasks,
     first_name: str = Form(...),
@@ -143,7 +143,7 @@ async def create_employee(
     )
 
 
-@router.get("/all", dependencies=[Depends(require_permission("employee:view"))])
+@router.get("/all")
 async def get_employees(
     page: int = 1, 
     limit: int = 10,
@@ -189,7 +189,7 @@ async def get_employees_summary():
     )
 
 
-@router.get("/{employee_id}/summary", dependencies=[Depends(require_permission("employee:view"))])
+@router.get("/{employee_id}/summary")
 async def get_employee_summary_details(employee_id: str):
     data, error = await EmployeeService.get_summary_details(employee_id)
     if error:
@@ -201,7 +201,7 @@ async def get_employee_summary_details(employee_id: str):
     )
 
 
-@router.get("/{employee_id}", dependencies=[Depends(require_permission("employee:view"))])
+@router.get("/{employee_id}")
 async def get_employee(employee_id: str):
     data, error = await EmployeeService.get(employee_id)
     if error:
@@ -213,7 +213,7 @@ async def get_employee(employee_id: str):
     )
 
 
-@router.put("/update/{employee_id}", dependencies=[Depends(require_permission("employee:submit"))])
+@router.put("/update/{employee_id}")
 async def update_employee(
     employee_id: str,
     first_name: Optional[str] = Form(None),
@@ -344,7 +344,7 @@ async def update_employee(
     )
 
 
-@router.delete("/delete/{employee_id}", dependencies=[Depends(require_permission("employee:submit"))])
+@router.delete("/delete/{employee_id}")
 async def delete_employee(employee_id: str):
     success, error = await EmployeeService.delete(employee_id)
     if error:
@@ -353,7 +353,7 @@ async def delete_employee(employee_id: str):
     return success_response(message="Employee deleted successfully", data=[])
 
 
-@router.put("/{employee_id}/permissions", dependencies=[Depends(require_permission("permission:submit"))])
+@router.put("/{employee_id}/permissions")
 async def update_permissions(employee_id: str, permissions_data: UserPermissionsUpdate):
     success, error = await EmployeeService.update_user_permissions(employee_id, permissions_data.permissions)
     if error:
@@ -366,7 +366,7 @@ async def update_permissions(employee_id: str, permissions_data: UserPermissions
     )
 
 
-@router.get("/{employee_id}/permissions", dependencies=[Depends(require_permission("permission:view"))])
+@router.get("/{employee_id}/permissions")
 async def get_permissions(employee_id: str):
     data, error = await EmployeeService.get_user_permissions(employee_id)
     if error:
@@ -379,7 +379,7 @@ async def get_permissions(employee_id: str):
     )
 
 
-@router.delete("/documents/{doc_id}", dependencies=[Depends(require_permission("employee:submit"))])
+@router.delete("/documents/{doc_id}")
 async def delete_employee_document(doc_id: str):
     success, error = await EmployeeService.delete_employee_document(doc_id)
     if error:

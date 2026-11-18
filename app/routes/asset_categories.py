@@ -2,12 +2,12 @@ from fastapi import APIRouter, Depends
 from app.models import AssetCategoryCreate, AssetCategoryUpdate
 from app.services.api.asset_category import AssetCategoryService
 from app.helper.response_helper import success_response, error_response
-from app.auth import verify_token, require_permission
+from app.auth import verify_token
 
 router = APIRouter(prefix="/asset-categories", tags=["asset-categories"], dependencies=[Depends(verify_token)])
 
 
-@router.post("/", dependencies=[Depends(require_permission("asset:submit"))])
+@router.post("/")
 async def create_asset_category(category: AssetCategoryCreate):
     data, error = await AssetCategoryService.create(category)
     if error:
@@ -15,7 +15,7 @@ async def create_asset_category(category: AssetCategoryCreate):
     return success_response(message="Asset category created successfully", data=data, status_code=201)
 
 
-@router.get("/all", dependencies=[Depends(require_permission("asset:view"))])
+@router.get("/all")
 async def get_asset_categories():
     data, error = await AssetCategoryService.list()
     if error:
@@ -31,7 +31,7 @@ async def get_asset_categories_tree():
     return success_response(message="Asset category tree fetched successfully", data=data)
 
 
-@router.get("/{category_id}", dependencies=[Depends(require_permission("asset:view"))])
+@router.get("/{category_id}")
 async def get_asset_category(category_id: str):
     data, error = await AssetCategoryService.get(category_id)
     if error:
@@ -40,7 +40,7 @@ async def get_asset_category(category_id: str):
     return success_response(message="Asset category fetched successfully", data=data)
 
 
-@router.put("/{category_id}", dependencies=[Depends(require_permission("asset:submit"))])
+@router.put("/{category_id}")
 async def update_asset_category(category_id: str, category: AssetCategoryUpdate):
     data, error = await AssetCategoryService.update(category_id, category)
     if error:
@@ -49,7 +49,7 @@ async def update_asset_category(category_id: str, category: AssetCategoryUpdate)
     return success_response(message="Asset category updated successfully", data=data)
 
 
-@router.delete("/{category_id}", dependencies=[Depends(require_permission("asset:submit"))])
+@router.delete("/{category_id}")
 async def delete_asset_category(category_id: str):
     success, error = await AssetCategoryService.delete(category_id)
     if error:
