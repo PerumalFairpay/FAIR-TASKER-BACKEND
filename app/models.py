@@ -43,7 +43,6 @@ class UserPermissionsUpdate(BaseModel):
 class RoleBase(BaseModel):
     name: str
     description: Optional[str] = None
-    permissions: List[str] = []  # List of Permission IDs
 
 
 class RoleCreate(RoleBase):
@@ -53,17 +52,10 @@ class RoleCreate(RoleBase):
 class RoleUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    permissions: Optional[List[str]] = None
-
-
-class PermissionShortRef(BaseModel):
-    id: str
-    name: str
 
 
 class RoleResponse(RoleBase):
     id: str
-    permissions: List[PermissionShortRef]
 
     class Config:
         from_attributes = True

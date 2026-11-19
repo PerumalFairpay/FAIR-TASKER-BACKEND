@@ -18,7 +18,6 @@ from app.routes import (
     leave_requests,
     tasks,
     attendance,
-    permissions,
     dashboard,
     files,
     profile,
@@ -56,7 +55,6 @@ api_router.include_router(leave_types.router)
 api_router.include_router(leave_requests.router)
 api_router.include_router(tasks.router)
 api_router.include_router(attendance.router)
-api_router.include_router(permissions.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(files.router)
 api_router.include_router(profile.router)

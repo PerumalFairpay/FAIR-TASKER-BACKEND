@@ -5,7 +5,6 @@ from app.services.api.user import UserService
 from app.services.api.document import DocumentService
 from app.services.api.role import RoleService
 from app.services.api.shift import ShiftService
-from app.services.api.permission import PermissionService
 from app.services.api.asset_category import AssetCategoryService
 from app.services.api.asset import AssetService
 from app.services.api.blog import BlogService

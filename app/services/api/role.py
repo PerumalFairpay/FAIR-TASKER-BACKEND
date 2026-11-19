@@ -1,35 +1,19 @@
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 from bson import ObjectId
-from app.database import roles_collection, permissions_collection
-from app.models import RoleCreate, RoleUpdate, RoleResponse, PermissionShortRef
+from app.database import roles_collection
+from app.models import RoleCreate, RoleUpdate, RoleResponse
 import traceback
 
 
 class RoleService:
 
     @staticmethod
-    async def _get_permissions_map() -> Dict[str, str]:
-        """Returns a dictionary mapping permission ID (str) to permission Name."""
-        perm_map = {}
-        async for perm in permissions_collection.find({"is_deleted": {"$ne": True}}):
-            perm_map[str(perm["_id"])] = perm["name"]
-        return perm_map
-
-    @staticmethod
-    def _enrich_role(role_doc: dict, perm_map: Dict[str, str]) -> dict:
-        permission_ids = role_doc.get("permissions", [])
-        enriched_permissions = []
-        for pid in permission_ids:
-            pid_str = str(pid)
-            if pid_str in perm_map:
-                enriched_permissions.append(PermissionShortRef(id=pid_str, name=perm_map[pid_str]))
-
+    def _format_role(role_doc: dict) -> dict:
         return RoleResponse(
             id=str(role_doc["_id"]),
             name=role_doc["name"],
-            description=role_doc.get("description"),
-            permissions=enriched_permissions
+            description=role_doc.get("description")
         ).dict()
 
     @staticmethod
@@ -52,8 +36,7 @@ class RoleService:
             if not created_role:
                 return None, "Failed to retrieve created role"
 
-            perm_map = await RoleService._get_permissions_map()
-            return RoleService._enrich_role(created_role, perm_map), None
+            return RoleService._format_role(created_role), None
         except Exception as e:
             traceback.print_exc()
             return None, str(e)
@@ -61,10 +44,9 @@ class RoleService:
     @staticmethod
     async def list() -> Tuple[Optional[List[dict]], Optional[str]]:
         try:
-            perm_map = await RoleService._get_permissions_map()
             roles = []
             async for role in roles_collection.find({"is_deleted": {"$ne": True}}):
-                roles.append(RoleService._enrich_role(role, perm_map))
+                roles.append(RoleService._format_role(role))
             return roles, None
         except Exception as e:
             traceback.print_exc()
@@ -83,8 +65,7 @@ class RoleService:
             if not role:
                 return None, "Role not found"
 
-            perm_map = await RoleService._get_permissions_map()
-            return RoleService._enrich_role(role, perm_map), None
+            return RoleService._format_role(role), None
         except Exception as e:
             traceback.print_exc()
             return None, str(e)
@@ -120,8 +101,7 @@ class RoleService:
             if not updated_role:
                 return None, "Role not found"
 
-            perm_map = await RoleService._get_permissions_map()
-            return RoleService._enrich_role(updated_role, perm_map), None
+            return RoleService._format_role(updated_role), None
         except Exception as e:
             traceback.print_exc()
             return None, str(e)

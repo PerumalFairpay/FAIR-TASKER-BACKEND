@@ -3,7 +3,7 @@ from jose import jwt, JWTError
 from fastapi import HTTPException, Cookie, Depends, Request
 from app.core.config import JWT_SECRET, JWT_ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 from typing import Optional
-from app.database import users_collection, roles_collection, permissions_collection
+from app.database import users_collection, roles_collection
 from bson import ObjectId
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -88,49 +88,17 @@ async def get_current_user(token: dict = Depends(verify_token)):
     user["role_id"] = role_obj["id"]
     user["role"] = resolved_role_name
     user["role_details"] = role_obj
-    
-    # Merge Role IDs and User IDs
-    all_perm_ids = set()
-    
-    # 1. Add Role IDs
-    if role_data and "permissions" in role_data:
-        all_perm_ids.update(role_data["permissions"])
-        
-    # 2. Add User Direct IDs
-    if "permissions" in user and isinstance(user["permissions"], list):
-        all_perm_ids.update(user["permissions"])
-        
-    # Convert all valid ObjectIds
-    valid_ids = []
-    for pid in all_perm_ids:
-        if isinstance(pid, ObjectId):
-            valid_ids.append(pid)
-        elif ObjectId.is_valid(str(pid)):
-            valid_ids.append(ObjectId(str(pid)))
-            
-    # Resolve to Slugs
-    permissions = []
-    if valid_ids:
-        async for p in permissions_collection.find({"_id": {"$in": valid_ids}}):
-            permissions.append(p.get("slug"))
-            
-    user["permissions"] = list(set(permissions))
+    user["permissions"] = []
     
     user["id"] = str(user.pop("_id"))
     return user
 
 def require_permission(permission: str):
     async def _has_permission(current_user: dict = Depends(get_current_user)):
-        # Admin has all permissions
+        # Admin has all access
         role_val = current_user.get("role")
         user_role_str = role_val.get("name", "").lower() if isinstance(role_val, dict) else str(role_val or "").lower()
         if user_role_str == "admin":
             return current_user
-            
-        if permission not in current_user.get("permissions", []):
-            raise HTTPException(
-                status_code=403, 
-                detail=f"Missing required permission: {permission}"
-            )
         return current_user
     return _has_permission
