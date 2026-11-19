@@ -1,134 +1,178 @@
 import asyncio
-from pymongo import AsyncMongoClient
 import os
+import sys
+from datetime import datetime
+
+# Add the parent directory to sys.path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
-# Database Config
-DATABASE_URL = os.getenv("DATABASE_URL", "mongodb://localhost:27017")
+from app.database import (
+    permissions_collection,
+    roles_collection,
+    role_permissions_collection,
+)
+from bson import ObjectId
 
-# Only replace 'db' with 'localhost' if we are NOT running inside a docker container
-if not os.path.exists('/.dockerenv') and "mongodb://db:" in DATABASE_URL:
-    DATABASE_URL = DATABASE_URL.replace("mongodb://db:", "mongodb://localhost:")
-    
-DATABASE_NAME = os.getenv("DATABASE_NAME", "fairpay_hrm_db")
 
-permissions_data = [ 
-    # Employee Management -seeder updated
-    {"name": "View Employees", "slug": "employee:view", "module": "Employee", "description": "Can see the list of all staff members"},
-    {"name": "Submit Employee", "slug": "employee:submit", "module": "Employee", "description": "Create, edit, and delete employee records"},
-    
-    # Roles & Permissions -seeder updated
-    {"name": "View Roles", "slug": "role:view", "module": "Access Control", "description": "View system roles"},
-    {"name": "Submit Roles", "slug": "role:submit", "module": "Access Control", "description": "Create, Edit, and Delete system roles"},
-    {"name": "View Permissions", "slug": "permission:view", "module": "Access Control", "description": "View available permissions"},
-    {"name": "Submit Permissions", "slug": "permission:submit", "module": "Access Control", "description": "Manage permissions list"},
-     
-    # Leave Management -seeder updated
-    {"name": "View Leave Requests", "slug": "leave:view", "module": "Leave", "description": "See leave applications"},
-    {"name": "Submit Leave Request", "slug": "leave:submit", "module": "Leave", "description": "Submit and update personal leave applications"},
-    {"name": "Approve Leaves", "slug": "leave:approve", "module": "Leave", "description": "Approve or reject team leave requests"},
-     
-    # Project Management -seeder updated
-    {"name": "View Projects", "slug": "project:view", "module": "Projects", "description": "Access project details and status"},
-    {"name": "Submit Project", "slug": "project:submit", "module": "Projects", "description": "Create and manage project lifecycles"},
-    
-    # expense -seeder updated
-    {"name": "View Expenses", "slug": "expense:view", "module": "Finance", "description": "View expense records"},
-    {"name": "Submit Expense", "slug": "expense:submit", "module": "Finance", "description": "Submit personal expense claims"},
-    {"name": "Approve Expenses", "slug": "expense:approve", "module": "Finance", "description": "Financial approval of expense claims"},
-    
-    # Assets -seeder updated
-    {"name": "View Assets", "slug": "asset:view", "module": "Assets", "description": "View list of assigned or available assets"},
-    {"name": "Submit Asset Request", "slug": "asset:submit", "module": "Assets", "description": "Request new assets or return existing ones"},
-    
-    # Document Management -seeder updated
-    {"name": "View Documents", "slug": "document:view", "module": "Documents", "description": "View company documents"},
-    {"name": "Submit Document", "slug": "document:submit", "module": "Documents", "description": "Upload and manage documents"},
-     
-    # Navigation (Sidebar) Permissions
-    {"name": "Nav Milestone", "slug": "nav:milestone", "module": "Navigation", "description": "View Milestone Roadmap menu in sidebar"},
-
-    # Feedback -seeder updated
-    {"name": "View Feedback", "slug": "feedback:view", "module": "Feedback", "description": "View own submitted feedback"},
-    {"name": "Submit Feedback", "slug": "feedback:submit", "module": "Feedback", "description": "Create and edit own feedback entries"},
-    {"name": "Manage Feedback", "slug": "feedback:manage", "module": "Feedback", "description": "Admin: view all feedback, update status, and delete any entry"},
+PERMISSIONS_DATA = [
+    {"code": "dashboard:view", "name": "View Dashboard", "module": "Dashboard", "description": "Can access dashboard and analytics summary"},
+    {"code": "employee:view", "name": "View Employees", "module": "Employee", "description": "Can view employee directories and profiles"},
+    {"code": "attendance:view", "name": "View Attendance", "module": "Attendance", "description": "Can view attendance logs and history"},
+    {"code": "leave:view", "name": "View Leaves", "module": "Leave", "description": "Can view leave history and leave balances"},
+    {"code": "payslip:view", "name": "View Payslips", "module": "Payroll", "description": "Can view and download payslips"},
+    {"code": "expense:view", "name": "View Expenses", "module": "Expense", "description": "Can view expense claims and reports"},
+    {"code": "asset:view", "name": "View Assets", "module": "Asset", "description": "Can view company assets and inventory"},
+    {"code": "project:view", "name": "View Projects", "module": "Project", "description": "Can view projects"},
+    {"code": "task:view", "name": "View Tasks", "module": "Task", "description": "Can view project tasks"},
+    {"code": "document:view", "name": "View Documents", "module": "Document", "description": "Can view company documents and policies"},
+    {"code": "feedback:view", "name": "View Feedback", "module": "Feedback", "description": "Can view feedback entries"},
+    {"code": "shift:view", "name": "View Shifts", "module": "Shift", "description": "Can view shifts"},
+    {"code": "settings:view", "name": "View Settings", "module": "Settings", "description": "Can view general organization settings"},
+    {"code": "role:view", "name": "View Roles", "module": "Role", "description": "Can view roles and permissions configuration"},
 ]
 
-async def seed_permissions():
-    client = AsyncMongoClient(DATABASE_URL)
-    db = client[DATABASE_NAME]
-    collection = db["permissions"]
-    
-    print(f"Connecting to {DATABASE_URL}...")
 
-    for perm in permissions_data:
-        # Update if exists (by slug), insert if not
-        result = await collection.update_one(
-            {"slug": perm["slug"]},
-            {"$setOnInsert": perm},
-            upsert=True
-        )
-        if result.upserted_id:
-            print(f"Inserted: {perm['slug']}")
+async def seed():
+    print("=" * 60)
+    print("Seeding View-Only Permissions (FLEETGLIDE Architecture)")
+    print("=" * 60)
+
+    now = datetime.utcnow()
+    valid_codes = [p["code"] for p in PERMISSIONS_DATA]
+
+    # 1. Soft-delete any permission that is not in the view-only list
+    deactivated = await permissions_collection.update_many(
+        {"code": {"$nin": valid_codes}, "is_deleted": {"$ne": True}},
+        {"$set": {"is_deleted": True, "deleted_at": now}}
+    )
+    print(f"Deactivated {deactivated.modified_count} non-view permissions.")
+
+    all_perm_ids = []
+    inserted_count = 0
+    updated_count = 0
+
+    # 2. Upsert view permissions
+    for item in PERMISSIONS_DATA:
+        existing = await permissions_collection.find_one({"code": item["code"]})
+        if existing:
+            await permissions_collection.update_one(
+                {"_id": existing["_id"]},
+                {"$set": {
+                    "name": item["name"],
+                    "module": item["module"],
+                    "description": item["description"],
+                    "is_deleted": False,
+                    "deleted_at": None,
+                    "updated_at": now
+                }}
+            )
+            all_perm_ids.append(str(existing["_id"]))
+            updated_count += 1
         else:
-            print(f"Skipped (Exists): {perm['slug']}")
-            
-    print("\nPermissions seeding completed.")
+            doc = {
+                "code": item["code"],
+                "name": item["name"],
+                "module": item["module"],
+                "description": item["description"],
+                "is_deleted": False,
+                "deleted_at": None,
+                "created_at": now,
+                "updated_at": now
+            }
+            res = await permissions_collection.insert_one(doc)
+            all_perm_ids.append(str(res.inserted_id))
+            inserted_count += 1
 
-    # Seed Roles
-    roles_collection = db["roles"]
-    
-    # Get all permission slugs to IDs mapping
-    cursor = collection.find({})
-    perm_map = {}
-    async for p in cursor:
-        perm_map[p["slug"]] = str(p["_id"])
+    print(f"View Permissions: {inserted_count} created, {updated_count} active/updated.")
 
-    roles_data = [
-        {
-            "name": "admin",
-            "description": "Full system access",
-            "permissions": list(perm_map.values()) # Admin gets everything
-        },
-        {
-            "name": "employee",
-            "description": "Standard employee access",
-            "permissions": [  
-                perm_map.get("project:view"),
-                perm_map.get("expense:submit"),
-                perm_map.get("asset:view"),
-                perm_map.get("employee:view"), 
-                perm_map.get("document:view"),
-                # Feedback
-                perm_map.get("feedback:view"),
-                perm_map.get("feedback:submit"),
-                # Leave
-                perm_map.get("leave:view"),
-                perm_map.get("leave:submit"),
-                
-                # Nav Permissions
-                # perm_map.get("nav:milestone"),
-            ]
-        }
-    ]
+    # 3. Clean up role_permissions linking to deactivated permissions
+    await role_permissions_collection.update_many(
+        {"permission_id": {"$nin": all_perm_ids}, "is_deleted": {"$ne": True}},
+        {"$set": {"is_deleted": True, "deleted_at": now}}
+    )
 
-    # Filter out None values from permissions
-    for role in roles_data:
-        role["permissions"] = [p for p in role["permissions"] if p]
+    # 4. Link all view permissions to 'admin' role
+    admin_role = await roles_collection.find_one({
+        "name": {"$regex": "^admin$", "$options": "i"},
+        "is_deleted": {"$ne": True}
+    })
 
-    for role in roles_data:
-        await roles_collection.update_one(
-            {"name": role["name"]},
-            {"$set": {"permissions": role["permissions"], "description": role["description"]}},
-            upsert=True
+    if admin_role:
+        admin_role_id = str(admin_role["_id"])
+        print(f"\nLinking all {len(all_perm_ids)} view permissions to Admin role ({admin_role_id})...")
+
+        await role_permissions_collection.update_many(
+            {"role_id": admin_role_id, "is_deleted": {"$ne": True}},
+            {"$set": {"is_deleted": True, "deleted_at": now}}
         )
-        print(f"Role updated/seeded: {role['name']}")
-            
-    print("\nAll seeding completed successfully!")
-    await client.close()
+
+        admin_links = [{
+            "role_id": admin_role_id,
+            "permission_id": pid,
+            "is_deleted": False,
+            "deleted_at": None,
+            "created_at": now,
+            "updated_at": now
+        } for pid in all_perm_ids]
+
+        if admin_links:
+            await role_permissions_collection.insert_many(admin_links)
+        print("Admin role permissions successfully linked!")
+
+    # 5. Link view permissions for employee role
+    employee_role = await roles_collection.find_one({
+        "name": {"$regex": "^employee$", "$options": "i"},
+        "is_deleted": {"$ne": True}
+    })
+
+    if employee_role:
+        emp_role_id = str(employee_role["_id"])
+        employee_codes = {
+            "dashboard:view",
+            "attendance:view",
+            "leave:view",
+            "payslip:view",
+            "expense:view",
+            "asset:view",
+            "project:view",
+            "task:view",
+            "document:view",
+            "shift:view",
+        }
+
+        emp_perm_docs = await permissions_collection.find({
+            "code": {"$in": list(employee_codes)},
+            "is_deleted": {"$ne": True}
+        }).to_list(length=None)
+
+        emp_perm_ids = [str(p["_id"]) for p in emp_perm_docs]
+
+        await role_permissions_collection.update_many(
+            {"role_id": emp_role_id, "is_deleted": {"$ne": True}},
+            {"$set": {"is_deleted": True, "deleted_at": now}}
+        )
+
+        emp_links = [{
+            "role_id": emp_role_id,
+            "permission_id": pid,
+            "is_deleted": False,
+            "deleted_at": None,
+            "created_at": now,
+            "updated_at": now
+        } for pid in emp_perm_ids]
+
+        if emp_links:
+            await role_permissions_collection.insert_many(emp_links)
+        print(f"Employee role linked with {len(emp_links)} view permissions!")
+
+    print("\n" + "=" * 60)
+    print("Seed process completed successfully!")
+    print("=" * 60)
+
 
 if __name__ == "__main__":
-    asyncio.run(seed_permissions())
+    asyncio.run(seed())

@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends
 from app.services.api.user import UserService
+from app.services.api.permission import PermissionService
+from app.models import UserPermissionUpdate
 from app.helper.response_helper import success_response, error_response
-from app.auth import verify_token
+from app.auth import verify_token, get_current_user
 from typing import Optional
 
 router = APIRouter(prefix="/users", tags=["users"], dependencies=[Depends(verify_token)])
@@ -20,6 +22,52 @@ async def get_users(
         message="Users fetched successfully",
         data=users_list,
         meta=meta
+    )
+
+@router.get("/{user_id}/permissions")
+async def get_user_permissions(
+    user_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Fetch user permissions breakdown (role_permissions, direct_permissions, effective_permissions).
+    Matches FLEETGLIDE-AI GET /api/users/{user_id}/permissions
+    """
+    detail, error = await PermissionService.get_user_permissions_detail(user_id)
+    if error:
+        return error_response(message=error, status_code=404)
+
+    return success_response(
+        message="User permissions fetched successfully",
+        data=detail,
+    )
+
+@router.put("/{user_id}/permissions")
+async def update_user_permissions(
+    user_id: str,
+    payload: UserPermissionUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Update direct permissions for a user.
+    Matches FLEETGLIDE-AI PUT /api/users/{user_id}/permissions
+    """
+    role_val = current_user.get("role")
+    user_role_str = role_val.get("name", "").lower() if isinstance(role_val, dict) else str(role_val or "").lower()
+    if user_role_str != "admin":
+        return error_response(
+            message="Only administrators can manage user permissions", status_code=403
+        )
+
+    detail, error = await PermissionService.update_user_permissions(
+        user_id, payload.permission_ids
+    )
+    if error:
+        return error_response(message=error, status_code=400)
+
+    return success_response(
+        message="User permissions updated successfully",
+        data=detail,
     )
 
 @router.get("/{user_id}")

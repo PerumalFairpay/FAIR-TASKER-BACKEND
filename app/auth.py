@@ -88,7 +88,12 @@ async def get_current_user(token: dict = Depends(verify_token)):
     user["role_id"] = role_obj["id"]
     user["role"] = resolved_role_name
     user["role_details"] = role_obj
-    user["permissions"] = []
+
+    # Calculate effective permissions (Role permissions UNION Direct user permissions)
+    user_mongo_id = str(user.get("_id", ""))
+    from app.services.api.role import RoleService
+    effective_permissions = await RoleService.get_user_permissions(user_mongo_id)
+    user["permissions"] = effective_permissions
     
     user["id"] = str(user.pop("_id"))
     return user
@@ -100,5 +105,11 @@ def require_permission(permission: str):
         user_role_str = role_val.get("name", "").lower() if isinstance(role_val, dict) else str(role_val or "").lower()
         if user_role_str == "admin":
             return current_user
+
+        if permission not in current_user.get("permissions", []):
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Missing required permission: {permission}"
+            )
         return current_user
     return _has_permission

@@ -40,32 +40,11 @@ class UserPermissionsUpdate(BaseModel):
     permissions: List[str]
 
 
-class RoleBase(BaseModel):
-    name: str
-    description: Optional[str] = None
-
-
-class RoleCreate(RoleBase):
-    pass
-
-
-class RoleUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-
-
-class RoleResponse(RoleBase):
-    id: str
-
-    class Config:
-        from_attributes = True
-
-
 class PermissionBase(BaseModel):
+    code: str
     name: str
-    slug: str
+    module: str
     description: Optional[str] = None
-    module: Optional[str] = None
 
 
 class PermissionCreate(PermissionBase):
@@ -73,10 +52,67 @@ class PermissionCreate(PermissionBase):
 
 
 class PermissionUpdate(BaseModel):
+    code: Optional[str] = None
     name: Optional[str] = None
-    slug: Optional[str] = None
-    description: Optional[str] = None
     module: Optional[str] = None
+    description: Optional[str] = None
+
+
+class PermissionResponse(PermissionBase):
+    id: str
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class RoleBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+class RoleCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    permission_ids: Optional[List[str]] = None
+
+
+class RoleUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    permission_ids: Optional[List[str]] = None
+
+
+class RoleResponse(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    permissions: List[PermissionResponse] = []
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class RolePermissionUpdate(BaseModel):
+    permission_ids: List[str]
+
+
+class UserPermissionUpdate(BaseModel):
+    permission_ids: List[str]
+
+
+class UserPermissionsDetailResponse(BaseModel):
+    user_id: str
+    name: Optional[str] = None
+    email: Optional[str] = None
+    role_id: Optional[str] = None
+    role_name: Optional[str] = None
+    role_permissions: List[PermissionResponse] = []
+    direct_permissions: List[PermissionResponse] = []
+    effective_permissions: List[str] = []
 
 
 class PermissionResponse(PermissionBase):
