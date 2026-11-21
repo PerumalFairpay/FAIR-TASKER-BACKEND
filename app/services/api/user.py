@@ -42,10 +42,14 @@ class UserService:
 
             # Batch fetch roles for efficiency
             role_ids = set()
+            emp_no_ids = set()
             for u in users_list:
                 r_id = u.get("role_id")
                 if r_id and ObjectId.is_valid(str(r_id)):
                     role_ids.add(ObjectId(str(r_id)))
+                emp_code = u.get("employee_no_id")
+                if emp_code:
+                    emp_no_ids.add(emp_code)
 
             roles_map = {}
             if role_ids:
@@ -57,11 +61,24 @@ class UserService:
                         "description": r.get("description", "")
                     }
 
+            employees_map = {}
+            if emp_no_ids:
+                emp_docs = await employees_collection.find(
+                    {"employee_no_id": {"$in": list(emp_no_ids)}, "is_deleted": {"$ne": True}},
+                    {"_id": 1, "employee_no_id": 1}
+                ).to_list(length=len(emp_no_ids))
+                for emp in emp_docs:
+                    employees_map[str(emp["employee_no_id"])] = str(emp["_id"])
+
             sanitized = []
             for u in users_list:
                 u_norm = normalize(u)
                 u_norm.pop("hashed_password", None)
                 u_norm.pop("password", None)
+
+                # Attach employee table primary id
+                emp_code = u_norm.get("employee_no_id")
+                u_norm["employee_id"] = employees_map.get(str(emp_code)) if emp_code else None
 
                 r_id = str(u_norm.get("role_id") or "")
                 role_obj = roles_map.get(r_id)
@@ -105,6 +122,17 @@ class UserService:
             user_norm = normalize(user)
             user_norm.pop("hashed_password", None)
             user_norm.pop("password", None)
+
+            # Attach employee table primary id
+            emp_code = user_norm.get("employee_no_id")
+            if emp_code:
+                emp_doc = await employees_collection.find_one(
+                    {"employee_no_id": emp_code, "is_deleted": {"$ne": True}},
+                    {"_id": 1}
+                )
+                user_norm["employee_id"] = str(emp_doc["_id"]) if emp_doc else None
+            else:
+                user_norm["employee_id"] = None
 
             r_id = user_norm.get("role_id")
             role_data = None
