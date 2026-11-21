@@ -86,8 +86,7 @@ async def get_current_user(token: dict = Depends(verify_token)):
         }
 
     user["role_id"] = role_obj["id"]
-    user["role"] = resolved_role_name
-    user["role_details"] = role_obj
+    user["role"] = role_obj
 
     # Calculate effective permissions (Role permissions UNION Direct user permissions)
     user_mongo_id = str(user.get("_id", ""))
