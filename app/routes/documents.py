@@ -40,13 +40,6 @@ async def get_documents(
         return error_response(message=f"Failed to fetch documents: {error}", status_code=500)
     return success_response(message="Documents fetched successfully", data=data)
 
-@router.get("/{document_id}")
-async def get_document(document_id: str):
-    data, error = await DocumentService.get(document_id)
-    if error:
-        status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
-        return error_response(message=error, status_code=status_code)
-    return success_response(message="Document fetched successfully", data=data)
 
 @router.put("/update/{document_id}")
 async def update_document(
