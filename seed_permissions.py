@@ -33,6 +33,7 @@ PERMISSIONS_DATA = [
     {"code": "shift:view", "name": "View Shifts", "module": "Shift", "description": "Can view shifts"},
     {"code": "settings:view", "name": "View Settings", "module": "Settings", "description": "Can view general organization settings"},
     {"code": "role:view", "name": "View Roles", "module": "Role", "description": "Can view roles and permissions configuration"},
+    {"code": "user:view", "name": "View Users", "module": "User", "description": "Can view and manage user accounts"},
 ]
 
 
