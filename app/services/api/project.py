@@ -45,7 +45,7 @@ class ProjectService:
         end_date: Optional[str] = None,
         status: Optional[str] = "Planned",
         priority: Optional[str] = "Medium",
-        project_manager_ids: Optional[Union[str, List[str]]] = "[]",
+        project_manager_id: Optional[str] = None,
         team_leader_ids: Optional[Union[str, List[str]]] = "[]",
         team_member_ids: Optional[Union[str, List[str]]] = "[]",
         budget: Optional[float] = 0.0,
@@ -61,7 +61,6 @@ class ProjectService:
                 uploaded = await file_handler.upload_file(logo, subfolder="projects")
                 logo_path = uploaded["url"]
 
-            pm_ids = ProjectService._parse_json_list(project_manager_ids) or []
             tl_ids = ProjectService._parse_json_list(team_leader_ids) or []
             tm_ids = ProjectService._parse_json_list(team_member_ids) or []
             tags_list = ProjectService._parse_json_list(tags) or []
@@ -76,7 +75,7 @@ class ProjectService:
                 end_date=end_date,
                 status=status,
                 priority=priority,
-                project_manager_ids=pm_ids,
+                project_manager_id=project_manager_id,
                 team_leader_ids=tl_ids,
                 team_member_ids=tm_ids,
                 budget=budget,
@@ -137,11 +136,9 @@ class ProjectService:
                 p_norm["client"] = client_map.get(str(p_norm.get("client_id")))
 
                 # Populate project manager, team leader, and member details
-                p_norm["project_managers"] = [
-                    employee_map[eid]
-                    for eid in p_norm.get("project_manager_ids", [])
-                    if eid in employee_map
-                ]
+                pm_id = p_norm.get("project_manager_id")
+                p_norm["project_manager"] = employee_map.get(pm_id) if pm_id else None
+
                 p_norm["team_leaders"] = [
                     employee_map[eid]
                     for eid in p_norm.get("team_leader_ids", [])
@@ -185,7 +182,8 @@ class ProjectService:
 
             # Collect employee IDs
             all_emp_ids = set()
-            all_emp_ids.update(p_norm.get("project_manager_ids", []))
+            if p_norm.get("project_manager_id"):
+                all_emp_ids.add(p_norm.get("project_manager_id"))
             all_emp_ids.update(p_norm.get("team_leader_ids", []))
             all_emp_ids.update(p_norm.get("team_member_ids", []))
 
@@ -193,11 +191,9 @@ class ProjectService:
             employees = await employees_collection.find({"_id": {"$in": obj_ids}}).to_list(length=None)
             employee_map = {str(e["_id"]): ProjectService._sanitize_employee(e) for e in employees}
 
-            p_norm["project_managers"] = [
-                employee_map[eid]
-                for eid in p_norm.get("project_manager_ids", [])
-                if eid in employee_map
-            ]
+            pm_id = p_norm.get("project_manager_id")
+            p_norm["project_manager"] = employee_map.get(pm_id) if pm_id else None
+
             p_norm["team_leaders"] = [
                 employee_map[eid]
                 for eid in p_norm.get("team_leader_ids", [])
@@ -224,7 +220,7 @@ class ProjectService:
         end_date: Optional[str] = None,
         status: Optional[str] = None,
         priority: Optional[str] = None,
-        project_manager_ids: Optional[Union[str, List[str]]] = None,
+        project_manager_id: Optional[str] = None,
         team_leader_ids: Optional[Union[str, List[str]]] = None,
         team_member_ids: Optional[Union[str, List[str]]] = None,
         budget: Optional[float] = None,
@@ -243,7 +239,6 @@ class ProjectService:
                 uploaded = await file_handler.upload_file(logo, subfolder="projects")
                 logo_path = uploaded["url"]
 
-            pm_ids = ProjectService._parse_json_list(project_manager_ids) if project_manager_ids is not None else None
             tl_ids = ProjectService._parse_json_list(team_leader_ids) if team_leader_ids is not None else None
             tm_ids = ProjectService._parse_json_list(team_member_ids) if team_member_ids is not None else None
             tags_list = ProjectService._parse_json_list(tags) if tags is not None else None
@@ -258,7 +253,7 @@ class ProjectService:
                 end_date=end_date,
                 status=status,
                 priority=priority,
-                project_manager_ids=pm_ids,
+                project_manager_id=project_manager_id,
                 team_leader_ids=tl_ids,
                 team_member_ids=tm_ids,
                 budget=budget,

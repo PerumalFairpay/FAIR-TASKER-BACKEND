@@ -483,7 +483,7 @@ class ProjectBase(BaseModel):
     end_date: Optional[str] = None
     status: Optional[str] = "Planned"
     priority: Optional[str] = "Medium"
-    project_manager_ids: List[str] = []
+    project_manager_id: Optional[str] = None
     team_leader_ids: List[str] = []
     team_member_ids: List[str] = []
     budget: Optional[float] = 0.0
@@ -506,7 +506,7 @@ class ProjectUpdate(BaseModel):
     end_date: Optional[str] = None
     status: Optional[str] = None
     priority: Optional[str] = None
-    project_manager_ids: Optional[List[str]] = None
+    project_manager_id: Optional[str] = None
     team_leader_ids: Optional[List[str]] = None
     team_member_ids: Optional[List[str]] = None
     budget: Optional[float] = None
