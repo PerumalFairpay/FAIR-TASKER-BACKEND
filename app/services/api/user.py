@@ -1,7 +1,7 @@
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 from bson import ObjectId
-from app.database import users_collection, employees_collection
+from app.database import users_collection, employees_collection, roles_collection
 from app.utils import normalize
 import traceback
 
@@ -40,11 +40,40 @@ class UserService:
                 .to_list(length=limit)
             )
 
+            # Batch fetch roles for efficiency
+            role_ids = set()
+            for u in users_list:
+                r_id = u.get("role_id")
+                if r_id and ObjectId.is_valid(str(r_id)):
+                    role_ids.add(ObjectId(str(r_id)))
+
+            roles_map = {}
+            if role_ids:
+                roles_docs = await roles_collection.find({"_id": {"$in": list(role_ids)}}).to_list(length=len(role_ids))
+                for r in roles_docs:
+                    roles_map[str(r["_id"])] = {
+                        "id": str(r["_id"]),
+                        "name": r.get("name", ""),
+                        "description": r.get("description", "")
+                    }
+
             sanitized = []
             for u in users_list:
                 u_norm = normalize(u)
                 u_norm.pop("hashed_password", None)
                 u_norm.pop("password", None)
+
+                r_id = str(u_norm.get("role_id") or "")
+                role_obj = roles_map.get(r_id)
+                if not role_obj:
+                    r_name = u_norm.get("role")
+                    role_obj = {
+                        "id": r_id,
+                        "name": r_name if isinstance(r_name, str) else (r_name.get("name", "") if isinstance(r_name, dict) else "employee"),
+                        "description": ""
+                    }
+
+                u_norm["role"] = role_obj
                 sanitized.append(u_norm)
 
             total_pages = (total_items + limit - 1) // limit if limit > 0 else 0
@@ -76,6 +105,18 @@ class UserService:
             user_norm = normalize(user)
             user_norm.pop("hashed_password", None)
             user_norm.pop("password", None)
+
+            r_id = user_norm.get("role_id")
+            role_data = None
+            if r_id and ObjectId.is_valid(str(r_id)):
+                role_data = await roles_collection.find_one({"_id": ObjectId(str(r_id))})
+
+            role_obj = {
+                "id": str(role_data["_id"]) if role_data else str(r_id or ""),
+                "name": role_data.get("name", user_norm.get("role") or "employee") if role_data else (user_norm.get("role") or "employee"),
+                "description": role_data.get("description", "") if role_data else ""
+            }
+            user_norm["role"] = role_obj
             return user_norm, None
         except Exception as e:
             traceback.print_exc()
