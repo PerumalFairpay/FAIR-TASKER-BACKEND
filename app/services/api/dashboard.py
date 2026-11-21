@@ -20,7 +20,8 @@ class DashboardService:
     @staticmethod
     async def get_dashboard_data(current_user: dict) -> Tuple[Optional[dict], Optional[str]]:
         try:
-            user_role = current_user.get("role", "employee")
+            role_val = current_user.get("role", "employee")
+            user_role = role_val.get("name", "").lower() if isinstance(role_val, dict) else str(role_val or "employee").lower()
             today_str = datetime.utcnow().strftime("%Y-%m-%d")
 
             # Common Data: Upcoming Holidays
