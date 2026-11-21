@@ -627,10 +627,6 @@ class AssetResponse(AssetBase):
         from_attributes = True
 
 
-class AssetAssignmentRequest(BaseModel):
-    employee_id: Optional[str] = None
-
-
 class BlogBase(BaseModel):
     title: str
     slug: str

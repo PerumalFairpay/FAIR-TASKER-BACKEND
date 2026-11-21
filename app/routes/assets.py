@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form
-from app.models import AssetAssignmentRequest
 from app.services.api.asset import AssetService
 from app.helper.response_helper import success_response, error_response
 from typing import List, Optional
@@ -61,15 +60,6 @@ async def get_assets():
     return success_response(message="Assets fetched successfully", data=data)
 
 
-@router.get("/{asset_id}")
-async def get_asset(asset_id: str):
-    data, error = await AssetService.get(asset_id)
-    if error:
-        status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
-        return error_response(message=error, status_code=status_code)
-    return success_response(message="Asset fetched successfully", data=data)
-
-
 @router.put("/{asset_id}")
 async def update_asset(
     asset_id: str,
@@ -129,15 +119,6 @@ async def delete_asset(asset_id: str):
         status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
         return error_response(message=error, status_code=status_code)
     return success_response(message="Asset deleted successfully", data=[])
-
-
-@router.put("/{asset_id}/assignment")
-async def manage_asset_assignment(asset_id: str, request: AssetAssignmentRequest):
-    data, error = await AssetService.manage_assignment(asset_id, request.employee_id)
-    if error:
-        status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
-        return error_response(message=error, status_code=status_code)
-    return success_response(message="Asset assignment updated successfully", data=data)
 
 
 @router.get("/employee/{employee_id}")

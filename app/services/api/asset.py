@@ -261,47 +261,6 @@ class AssetService:
             return False, str(e)
 
     @staticmethod
-    async def manage_assignment(asset_id: str, employee_id: Optional[str] = None) -> Tuple[Optional[dict], Optional[str]]:
-        try:
-            if not ObjectId.is_valid(asset_id):
-                return None, "Invalid asset ID"
-
-            asset = await assets_collection.find_one({
-                "_id": ObjectId(asset_id),
-                "is_deleted": {"$ne": True}
-            })
-            if not asset:
-                return None, "Asset not found"
-
-            update_data = {}
-            if employee_id:
-                if not ObjectId.is_valid(employee_id):
-                    return None, "Invalid employee ID"
-                employee = await employees_collection.find_one({
-                    "_id": ObjectId(employee_id),
-                    "is_deleted": {"$ne": True}
-                })
-                if not employee:
-                    return None, "Employee not found"
-
-                update_data["assigned_to"] = employee_id
-                update_data["status"] = "Assigned"
-            else:
-                update_data["assigned_to"] = None
-                update_data["status"] = "Available"
-
-            update_data["updated_at"] = datetime.utcnow()
-            await assets_collection.update_one(
-                {"_id": ObjectId(asset_id), "is_deleted": {"$ne": True}},
-                {"$set": update_data}
-            )
-
-            return await AssetService.get(asset_id)
-        except Exception as e:
-            traceback.print_exc()
-            return None, str(e)
-
-    @staticmethod
     async def get_by_employee(employee_id: str) -> Tuple[Optional[List[dict]], Optional[str]]:
         try:
             if not ObjectId.is_valid(employee_id):
