@@ -170,9 +170,19 @@ class UserService:
             )
 
             if result.modified_count > 0:
-                if "employee_no_id" in user:
-                    await employees_collection.update_one(
-                        {"employee_no_id": user["employee_no_id"]},
+                # Soft delete corresponding employee strictly by employee_id (fallback to employee_no_id)
+                emp_id = user.get("employee_id")
+                emp_no_id = user.get("employee_no_id")
+                
+                emp_query = []
+                if emp_id and ObjectId.is_valid(str(emp_id)):
+                    emp_query.append({"_id": ObjectId(str(emp_id))})
+                if emp_no_id:
+                    emp_query.append({"employee_no_id": emp_no_id})
+
+                if emp_query:
+                    await employees_collection.update_many(
+                        {"$or": emp_query},
                         {"$set": {"is_deleted": True, "deleted_at": deleted_at}}
                     )
 

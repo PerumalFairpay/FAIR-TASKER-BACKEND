@@ -580,11 +580,14 @@ class EmployeeService:
                     {"$set": {"is_deleted": True, "deleted_at": deleted_at}}
                 )
 
-                if "employee_no_id" in employee:
-                    await users_collection.update_one(
-                        {"employee_no_id": employee["employee_no_id"]},
-                        {"$set": {"is_deleted": True, "deleted_at": deleted_at}}
-                    )
+                # Soft delete corresponding user by employee_id (fallback to employee_no_id)
+                await users_collection.update_many(
+                    {"$or": [
+                        {"employee_id": employee_id},
+                        {"employee_no_id": employee.get("employee_no_id")}
+                    ]},
+                    {"$set": {"is_deleted": True, "deleted_at": deleted_at}}
+                )
 
             return True, None
         except Exception as e:
@@ -602,8 +605,11 @@ class EmployeeService:
                 return False, "Employee not found"
 
             emp_no_id = employee.get("employee_no_id")
-            result = await users_collection.update_one(
-                {"employee_no_id": emp_no_id, "is_deleted": {"$ne": True}},
+            result = await users_collection.update_many(
+                {"$or": [
+                    {"employee_id": employee_id},
+                    {"employee_no_id": emp_no_id}
+                ], "is_deleted": {"$ne": True}},
                 {"$set": {"permissions": permissions, "updated_at": datetime.utcnow()}},
             )
             if result.matched_count == 0:
@@ -625,7 +631,13 @@ class EmployeeService:
                 return None, "Employee not found"
 
             emp_no_id = employee.get("employee_no_id")
-            user = await users_collection.find_one({"employee_no_id": emp_no_id, "is_deleted": {"$ne": True}})
+            user = await users_collection.find_one({
+                "$or": [
+                    {"employee_id": employee_id},
+                    {"employee_no_id": emp_no_id}
+                ],
+                "is_deleted": {"$ne": True}
+            })
             if not user:
                 return None, "User not found for this employee"
 
