@@ -1,7 +1,7 @@
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 from bson import ObjectId
-from app.database import tickets_collection, ticket_messages_collection, users_collection
+from app.database import tickets_collection, ticket_messages_collection, users_collection, employees_collection
 from app.models import TicketCreate, TicketUpdate
 from app.utils import normalize
 import traceback
@@ -20,7 +20,7 @@ class TicketService:
 
     @staticmethod
     async def _attach_user_info(data: dict, user_fields: List[str] = ["requester_id", "assigned_to"]) -> dict:
-        """Helper to attach user details for given ID fields"""
+        """Helper to attach user details for given ID fields (checks users and employees collections)"""
         for field in user_fields:
             uid = data.get(field)
             target_key = "requester" if field == "requester_id" else "assignee"
@@ -35,7 +35,17 @@ class TicketService:
                         "profile_picture": u.get("profile_picture")
                     }
                 else:
-                    data[target_key] = None
+                    emp = await employees_collection.find_one({"_id": ObjectId(uid), "is_deleted": {"$ne": True}})
+                    if emp:
+                        data[target_key] = {
+                            "id": str(emp["_id"]),
+                            "name": emp.get("name") or f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip() or "Employee",
+                            "email": emp.get("email"),
+                            "role": emp.get("role") or "employee",
+                            "profile_picture": emp.get("profile_picture")
+                        }
+                    else:
+                        data[target_key] = None
             else:
                 data[target_key] = None
         return data
