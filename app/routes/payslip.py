@@ -79,7 +79,9 @@ async def download_payslip(payslip_id: str, current_user: dict = Depends(get_cur
         status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
         return error_response(message=error, status_code=status_code)
 
-    if current_user.get("role") == "admin":
+    role_val = current_user.get("role")
+    user_role = (role_val.get("name", "") if isinstance(role_val, dict) else str(role_val or "")).lower()
+    if user_role == "admin":
         return success_response(
             message="Download link",
             data={"url": f"{API_URL}/api/payslip/admin/view/{payslip_id}"}
@@ -97,7 +99,9 @@ async def view_payslip_admin(payslip_id: str, current_user: dict = Depends(get_c
     """
     Admin only: Decrypt the payslip on-the-fly and stream it to the browser.
     """
-    if current_user.get("role") != "admin":
+    role_val = current_user.get("role")
+    user_role = (role_val.get("name", "") if isinstance(role_val, dict) else str(role_val or "")).lower()
+    if user_role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
     decrypted_pdf, filename, error = await PayslipService.get_decrypted_pdf(payslip_id)

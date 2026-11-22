@@ -94,7 +94,8 @@ async def get_leave_requests(
     status: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    user_role = current_user.get("role", "").lower()
+    role_val = current_user.get("role")
+    user_role = (role_val.get("name", "") if isinstance(role_val, dict) else str(role_val or "")).lower()
 
     if user_role == "employee":
         emp_no_id = current_user.get("employee_no_id")
@@ -190,8 +191,12 @@ async def update_leave_status(
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user)
 ):
-    if current_user.get("role", "").lower() != "admin":
-        return error_response(message="Only administrators can approve or reject leave requests.", status_code=403)
+    role_val = current_user.get("role")
+    user_role = (role_val.get("name", "") if isinstance(role_val, dict) else str(role_val or "")).lower()
+    user_perms = current_user.get("permissions", [])
+    has_leave_access = "leave:access" in user_perms
+    if user_role != "admin" and not has_leave_access:
+        return error_response(message="Only administrators or authorized managers can approve or reject leave requests.", status_code=403)
 
     update_data = LeaveRequestUpdate(
         status=status_update.status,
