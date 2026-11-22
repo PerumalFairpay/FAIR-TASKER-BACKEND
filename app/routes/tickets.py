@@ -122,22 +122,53 @@ async def get_my_tickets(
     status: Optional[str] = Query(None, description="Filter by status: Open, In Progress, Resolved, Closed"),
     priority: Optional[str] = Query(None, description="Filter by priority: Low, Medium, High, Critical"),
     category: Optional[str] = Query(None, description="Filter by category"),
+    assigned_to: Optional[str] = Query(None, description="Filter by assigned employee/user ID (or 'me')"),
+    scope: Optional[str] = Query("created", description="Scope: 'created' (raised by me) or 'assigned' (assigned to me)"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(50, ge=1, le=100, description="Items per page"),
     current_user: dict = Depends(get_current_user)
 ):
-    """Retrieve only the tickets created by the currently logged-in employee."""
+    """Retrieve tickets created by or assigned to the currently logged-in user."""
     user_id = str(current_user.get("id") or current_user.get("_id") or "")
+    
+    # Resolve all possible IDs for this user (user._id and employee._id if linked)
+    user_ids = [user_id]
+    emp_no_id = current_user.get("employee_no_id")
+    from app.database import employees_collection
+    if emp_no_id:
+        emp = await employees_collection.find_one({"employee_no_id": emp_no_id, "is_deleted": {"$ne": True}})
+        if emp and str(emp["_id"]) not in user_ids:
+            user_ids.append(str(emp["_id"]))
+    email = current_user.get("email")
+    if email:
+        emp_by_email = await employees_collection.find_one({"email": email, "is_deleted": {"$ne": True}})
+        if emp_by_email and str(emp_by_email["_id"]) not in user_ids:
+            user_ids.append(str(emp_by_email["_id"]))
 
-    data, meta, error = await TicketService.list(
-        search=search,
-        status=status,
-        priority=priority,
-        category=category,
-        requester_id=user_id,
-        page=page,
-        limit=limit
-    )
+    if scope == "assigned":
+        # Filter where assigned_to is any of the user's IDs
+        target_assigned_to = user_ids[0] if len(user_ids) == 1 else {"$in": user_ids}
+        data, meta, error = await TicketService.list(
+            search=search,
+            status=status,
+            priority=priority,
+            category=category,
+            assigned_to=target_assigned_to,
+            page=page,
+            limit=limit
+        )
+    else:
+        # Default: tickets created by me
+        data, meta, error = await TicketService.list(
+            search=search,
+            status=status,
+            priority=priority,
+            category=category,
+            requester_id=user_id,
+            page=page,
+            limit=limit
+        )
+
     if error:
         return error_response(message=f"Failed to fetch your tickets: {error}", status_code=500)
 

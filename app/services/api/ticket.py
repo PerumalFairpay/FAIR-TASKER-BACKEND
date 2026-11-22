@@ -79,7 +79,7 @@ class TicketService:
         priority: Optional[str] = None,
         category: Optional[str] = None,
         requester_id: Optional[str] = None,
-        assigned_to: Optional[str] = None,
+        assigned_to: Optional[Any] = None,
         page: int = 1,
         limit: int = 50
     ) -> Tuple[Optional[List[dict]], Optional[dict], Optional[str]]:
