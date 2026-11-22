@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, List, Any, Dict
+from typing import Optional, List, Any, Dict, Union
 from datetime import datetime
+from .employee import EmployeeDocument
 
 class NDARequestBase(BaseModel):
     first_name: str
