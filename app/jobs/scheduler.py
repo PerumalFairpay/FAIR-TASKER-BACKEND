@@ -6,6 +6,7 @@ from app.jobs.attendance_jobs import (
     generate_night_shift_attendance_records,
     process_uncompensated_permissions
 )
+from app.services.api.wfh_request import WFHRequestService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,16 @@ def init_scheduler():
         trigger=CronTrigger(day=1, hour=1, minute=0),
         id="process_uncompensated_permissions",
         name="Convert Uncompensated Permissions to LOP",
+        replace_existing=True
+    )
+
+    # 5. Daily Job: Revert Expired Temporary Work From Home (WFH)
+    # Runs daily at 18:31 UTC (00:01 AM IST, midnight)
+    scheduler.add_job(
+        WFHRequestService.revert_expired_wfh_requests,
+        trigger=CronTrigger(hour=18, minute=31),
+        id="revert_expired_wfh_requests",
+        name="Revert Expired Temporary WFH Work Mode",
         replace_existing=True
     )
     

@@ -229,6 +229,7 @@ class WFHRequestService:
                     if emp:
                         current_mode = emp.get("work_mode", "Office")
                         update_fields["previous_work_mode"] = current_mode
+                        update_fields["reverted"] = False
                         await employees_collection.update_one(
                             {"_id": ObjectId(employee_id)},
                             {"$set": {"work_mode": "Remote", "updated_at": now_iso}}
@@ -248,6 +249,63 @@ class WFHRequestService:
         except Exception as e:
             traceback.print_exc()
             return None, str(e)
+
+    @staticmethod
+    async def revert_expired_wfh_requests() -> int:
+        """
+        Scheduled job: Reverts temporary WFH employees whose end_date has passed
+        back to their previous work_mode (default: Office).
+        """
+        try:
+            today_str = datetime.now().date().isoformat()
+            now_iso = datetime.utcnow().isoformat()
+
+            # Find all Approved, Temporary requests where end_date < today and not yet reverted
+            expired_requests = await wfh_requests_collection.find({
+                "status": "Approved",
+                "request_type": "Temporary",
+                "end_date": {"$lt": today_str},
+                "reverted": {"$ne": True},
+                "is_deleted": {"$ne": True}
+            }).to_list(length=None)
+
+            reverted_count = 0
+            for req in expired_requests:
+                req_id = req["_id"]
+                emp_id = req.get("employee_id")
+                prev_mode = req.get("previous_work_mode") or "Office"
+
+                if emp_id and ObjectId.is_valid(emp_id):
+                    # Check if employee has an active/upcoming approved WFH request
+                    active_wfh = await wfh_requests_collection.find_one({
+                        "_id": {"$ne": req_id},
+                        "employee_id": emp_id,
+                        "status": "Approved",
+                        "is_deleted": {"$ne": True},
+                        "$or": [
+                            {"request_type": "Permanent"},
+                            {"start_date": {"$lte": today_str}, "end_date": {"$gte": today_str}}
+                        ]
+                    })
+
+                    # If no other active WFH request, revert employee's work mode
+                    if not active_wfh:
+                        await employees_collection.update_one(
+                            {"_id": ObjectId(emp_id)},
+                            {"$set": {"work_mode": prev_mode, "updated_at": now_iso}}
+                        )
+
+                # Mark this request as reverted
+                await wfh_requests_collection.update_one(
+                    {"_id": req_id},
+                    {"$set": {"reverted": True, "reverted_at": now_iso, "updated_at": now_iso}}
+                )
+                reverted_count += 1
+
+            return reverted_count
+        except Exception as e:
+            traceback.print_exc()
+            return 0
 
     @staticmethod
     async def delete(wfh_id: str, user_role: str = "", user_id: str = "") -> Tuple[bool, Optional[str]]:
