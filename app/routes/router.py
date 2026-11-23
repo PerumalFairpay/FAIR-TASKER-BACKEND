@@ -33,6 +33,7 @@ from app.routes import (
     google_auth,
     users,
     tickets,
+    wfh_requests,
 )
 
 api_router = APIRouter()
@@ -70,4 +71,6 @@ api_router.include_router(ai.router)
 api_router.include_router(google_auth.router, prefix="/auth/google", tags=["google-auth"])
 api_router.include_router(users.router)
 api_router.include_router(tickets.router)
+api_router.include_router(wfh_requests.router)
+
 

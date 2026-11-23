@@ -21,3 +21,5 @@ from .feedback import FeedbackAttachment, FeedbackBase, FeedbackCreate, Feedback
 from .milestone import MilestoneRoadmapAttachment, MilestoneRoadmapBase, MilestoneRoadmapCreate, MilestoneRoadmapUpdate, MilestoneRoadmapResponse
 from .chat import ChatMessageBase, ChatMessageCreate, ChatMessageResponse, ChatSessionBase, ChatSessionCreate, ChatSessionUpdate, ChatSessionResponse
 from .ticket import TicketAttachment, TicketMessageBase, TicketMessageCreate, TicketMessageResponse, TicketBase, TicketCreate, TicketUpdate, TicketStatusUpdate, TicketAssignUpdate
+from .wfh import WFHRequestBase, WFHRequestCreate, WFHRequestUpdate, WFHRequestStatusUpdate, WFHRequestResponse
+
