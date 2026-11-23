@@ -1,14 +1,23 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Path
 from typing import Optional
 from app.models import WFHRequestCreate, WFHRequestStatusUpdate
 from app.services.api.wfh_request import WFHRequestService
 from app.helper.response_helper import success_response, error_response
 from app.auth import verify_token, get_current_user
 
-router = APIRouter(prefix="/wfh-requests", tags=["wfh-requests"], dependencies=[Depends(verify_token)])
+router = APIRouter(
+    prefix="/wfh-requests",
+    tags=["wfh-requests"],
+    dependencies=[Depends(verify_token)]
+)
 
 
-@router.post("/create")
+@router.post(
+    "/create",
+    summary="Submit Work From Home Request",
+    description="Allows an authenticated employee to apply for Work From Home (WFH). The employee ID is automatically extracted from their active login token. Prevents past dates and overlapping requests.",
+    status_code=201
+)
 async def create_wfh_request(
     request: WFHRequestCreate,
     current_user: dict = Depends(get_current_user)
@@ -24,10 +33,14 @@ async def create_wfh_request(
     return success_response(message="Work From Home request submitted successfully", data=data, status_code=201)
 
 
-@router.get("/all")
+@router.get(
+    "/all",
+    summary="List WFH Requests with Metrics",
+    description="Retrieves a list of WFH requests along with summary metrics (total, pending, approved, rejected). If called by an Employee, it automatically restricts results to their own requests. Admins and HR can see all or filter by employee.",
+)
 async def get_wfh_requests(
-    id: Optional[str] = None,
-    status: Optional[str] = None,
+    id: Optional[str] = Query(None, description="Optional employee MongoDB ObjectId to filter requests (Admin/HR only)"),
+    status: Optional[str] = Query(None, description="Filter by status: 'All', 'Pending', 'Approved', 'Rejected'"),
     current_user: dict = Depends(get_current_user)
 ):
     role_val = current_user.get("role")
@@ -37,7 +50,6 @@ async def get_wfh_requests(
         id = current_user.get("employee_id") or current_user.get("id")
 
     result, error = await WFHRequestService.get_all(employee_id=id, status=status)
-
     if error:
         return error_response(message=error, status_code=500)
 
@@ -48,11 +60,13 @@ async def get_wfh_requests(
     )
 
 
-
-
-@router.get("/{wfh_id}")
+@router.get(
+    "/{wfh_id}",
+    summary="Get WFH Request Details",
+    description="Fetches full details of a single Work From Home request by its ID, including employee details and review history."
+)
 async def get_wfh_request_by_id(
-    wfh_id: str,
+    wfh_id: str = Path(..., description="The MongoDB ObjectId of the WFH request", example="6741b61c8a149b25d0123456"),
     current_user: dict = Depends(get_current_user)
 ):
     data, error = await WFHRequestService.get_by_id(wfh_id)
@@ -63,10 +77,14 @@ async def get_wfh_request_by_id(
     return success_response(message="WFH request details retrieved successfully", data=data)
 
 
-@router.patch("/status/{wfh_id}")
+@router.patch(
+    "/status/{wfh_id}",
+    summary="Review & Approve/Reject WFH Request",
+    description="Admin/HR action to Approve or Reject a WFH request. **CRITICAL SIDE-EFFECT**: When approved, the employee's `work_mode` in `employees_collection` is automatically changed to `'Remote'`."
+)
 async def update_wfh_status(
-    wfh_id: str,
-    status_update: WFHRequestStatusUpdate,
+    wfh_id: str = Path(..., description="The MongoDB ObjectId of the WFH request", example="6741b61c8a149b25d0123456"),
+    status_update: WFHRequestStatusUpdate = ...,
     current_user: dict = Depends(get_current_user)
 ):
     role_val = current_user.get("role")
@@ -96,9 +114,13 @@ async def update_wfh_status(
     return success_response(message=msg, data=data)
 
 
-@router.delete("/delete/{wfh_id}")
+@router.delete(
+    "/delete/{wfh_id}",
+    summary="Delete / Cancel WFH Request",
+    description="Allows employees to cancel/withdraw their own pending WFH request, or enables Admins to remove any WFH request record."
+)
 async def delete_wfh_request(
-    wfh_id: str,
+    wfh_id: str = Path(..., description="The MongoDB ObjectId of the WFH request to delete", example="6741b61c8a149b25d0123456"),
     current_user: dict = Depends(get_current_user)
 ):
     role_val = current_user.get("role")

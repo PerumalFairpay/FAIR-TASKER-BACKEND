@@ -1,44 +1,42 @@
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
-from datetime import datetime
 
 class WFHRequestBase(BaseModel):
-    employee_id: str
-    start_date: str
-    end_date: str
-    total_days: float = 1.0
-    request_type: str = "Temporary"  # "Temporary" or "Permanent"
-    reason: str
-    status: str = "Pending"  # "Pending", "Approved", "Rejected", "Cancelled"
-    rejection_reason: Optional[str] = None
-    reviewed_by: Optional[str] = None
-    reviewed_at: Optional[str] = None
+    employee_id: str = Field(..., description="MongoDB ObjectId of the employee", example="")
+    start_date: str = Field(..., description="Start date of WFH in YYYY-MM-DD format", example="2026-11-25")
+    end_date: str = Field(..., description="End date of WFH in YYYY-MM-DD format", example="2026-11-27")
+    total_days: float = Field(1.0, description="Total days requested for Work From Home", example=3.0)
+    request_type: str = Field("Temporary", description="Type of WFH request: 'Temporary' or 'Permanent'", example="Temporary")
+    reason: str = Field(..., description="Reason for requesting Work From Home", example="Home renovation and attending personal deliveries")
+    status: str = Field("Pending", description="Current request status: 'Pending', 'Approved', or 'Rejected'", example="Pending")
+    rejection_reason: Optional[str] = Field(None, description="Reason provided by admin if request is rejected", example=None)
+    reviewed_by: Optional[str] = Field(None, description="Name or identifier of the reviewer/admin", example="Admin User")
+    reviewed_at: Optional[str] = Field(None, description="UTC ISO timestamp of review", example="2026-11-23T07:15:00.000000")
 
 class WFHRequestCreate(BaseModel):
-    employee_id: Optional[str] = None
-    start_date: str
-    end_date: str
-    total_days: Optional[float] = None
-    request_type: Optional[str] = "Temporary"
-    reason: str
-
+    employee_id: Optional[str] = Field(None, description="Optional. If omitted, automatically derived from the authenticated token", example="")
+    start_date: str = Field(..., description="Start date of WFH in YYYY-MM-DD format", example="2026-11-25")
+    end_date: str = Field(..., description="End date of WFH in YYYY-MM-DD format", example="2026-11-27")
+    total_days: Optional[float] = Field(None, description="Total number of days. If omitted, calculated automatically from date range", example=3.0)
+    request_type: Optional[str] = Field("Temporary", description="Type of request: 'Temporary' or 'Permanent'", example="Temporary")
+    reason: str = Field(..., description="Detailed explanation for WFH request", example="Home renovation and attending personal deliveries")
 
 class WFHRequestUpdate(BaseModel):
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-    total_days: Optional[float] = None
-    request_type: Optional[str] = None
-    reason: Optional[str] = None
+    start_date: Optional[str] = Field(None, description="Start date in YYYY-MM-DD format", example="2026-11-25")
+    end_date: Optional[str] = Field(None, description="End date in YYYY-MM-DD format", example="2026-11-27")
+    total_days: Optional[float] = Field(None, description="Total days count", example=3.0)
+    request_type: Optional[str] = Field(None, description="'Temporary' or 'Permanent'", example="Temporary")
+    reason: Optional[str] = Field(None, description="Updated reason", example="Updated reason for WFH")
 
 class WFHRequestStatusUpdate(BaseModel):
-    status: str  # "Approved" or "Rejected"
-    rejection_reason: Optional[str] = None
+    status: str = Field(..., description="Review decision: 'Approved' or 'Rejected'", example="Approved")
+    rejection_reason: Optional[str] = Field(None, description="Mandatory/optional reason if status is 'Rejected'", example="Team is required to work from office on selected days")
 
 class WFHRequestResponse(WFHRequestBase):
-    id: str
-    employee_details: Optional[Dict[str, Any]] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    id: str = Field(..., description="MongoDB ObjectId of the WFH request", example="6741b61c8a149b25d0123456")
+    employee_details: Optional[Dict[str, Any]] = Field(None, description="Basic employee details including name, email, department, profile image")
+    created_at: Optional[str] = Field(None, description="UTC ISO creation timestamp", example="2026-11-23T06:30:15.123456")
+    updated_at: Optional[str] = Field(None, description="UTC ISO update timestamp", example="2026-11-23T06:30:15.123456")
 
     class Config:
         from_attributes = True
