@@ -36,6 +36,8 @@ PERMISSIONS_DATA = [
     {"code": "settings:view", "name": "View Settings", "module": "Settings", "description": "Can view general organization settings"},
     {"code": "role:view", "name": "View Roles", "module": "Role", "description": "Can view roles and permissions configuration"},
     {"code": "user:view", "name": "View Users", "module": "User", "description": "Can view and manage user accounts"},
+    {"code": "wfh:view", "name": "View WFH", "module": "WFH", "description": "Can view Work From Home requests and logs"},
+    {"code": "wfh:access", "name": "WFH Access (Manage)", "module": "WFH", "description": "Can review, approve, and reject Work From Home requests"},
 ]
 
 
@@ -126,7 +128,7 @@ async def seed():
             await role_permissions_collection.insert_many(admin_links)
         print("Admin role permissions successfully linked!")
 
-    # 5. Link view permissions for employee role
+    # 5. Link baseline permissions for employee role (Additive only - does NOT overwrite custom assigned permissions)
     employee_role = await roles_collection.find_one({
         "name": {"$regex": "^employee$", "$options": "i"},
         "is_deleted": {"$ne": True}
@@ -145,6 +147,7 @@ async def seed():
             "task:view",
             "document:view",
             "shift:view",
+            "wfh:view",
         }
 
         emp_perm_docs = await permissions_collection.find({
@@ -152,25 +155,33 @@ async def seed():
             "is_deleted": {"$ne": True}
         }).to_list(length=None)
 
-        emp_perm_ids = [str(p["_id"]) for p in emp_perm_docs]
-
-        await role_permissions_collection.update_many(
-            {"role_id": emp_role_id, "is_deleted": {"$ne": True}},
-            {"$set": {"is_deleted": True, "deleted_at": now}}
-        )
-
-        emp_links = [{
+        # Find existing active permissions for employee role so we never overwrite/delete
+        existing_emp_links = await role_permissions_collection.find({
             "role_id": emp_role_id,
-            "permission_id": pid,
-            "is_deleted": False,
-            "deleted_at": None,
-            "created_at": now,
-            "updated_at": now
-        } for pid in emp_perm_ids]
+            "is_deleted": {"$ne": True}
+        }).to_list(length=None)
+        existing_pid_set = {str(link.get("permission_id")) for link in existing_emp_links}
 
-        if emp_links:
-            await role_permissions_collection.insert_many(emp_links)
-        print(f"Employee role linked with {len(emp_links)} view permissions!")
+        # Only insert permissions that the employee role doesn't already have
+        new_emp_links = []
+        for p in emp_perm_docs:
+            pid = str(p["_id"])
+            if pid not in existing_pid_set:
+                new_emp_links.append({
+                    "role_id": emp_role_id,
+                    "permission_id": pid,
+                    "is_deleted": False,
+                    "deleted_at": None,
+                    "created_at": now,
+                    "updated_at": now
+                })
+
+        if new_emp_links:
+            await role_permissions_collection.insert_many(new_emp_links)
+            print(f"Employee role: Added {len(new_emp_links)} new permissions without resetting existing assignments.")
+        else:
+            print("Employee role: All baseline permissions already present; existing assignments kept intact.")
+
 
     print("\n" + "=" * 60)
     print("Seed process completed successfully!")

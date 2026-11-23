@@ -92,7 +92,7 @@ async def update_wfh_status(
     user_perms = current_user.get("permissions", [])
 
     is_admin_or_hr = user_role in ["admin", "super_admin", "hr"]
-    has_approval_perm = "leave:access" in user_perms or "attendance:access" in user_perms
+    has_approval_perm = "wfh:access" in user_perms or "leave:access" in user_perms or "attendance:access" in user_perms
 
     if not is_admin_or_hr and not has_approval_perm:
         return error_response(message="Only administrators or authorized managers can approve or reject WFH requests.", status_code=403)
