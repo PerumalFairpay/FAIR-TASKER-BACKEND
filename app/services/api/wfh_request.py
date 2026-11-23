@@ -38,40 +38,63 @@ class WFHRequestService:
             emp_mongo_id = str(employee["_id"])
 
 
-            start_dt = WFHRequestService._parse_date(request_data.start_date)
-            end_dt = WFHRequestService._parse_date(request_data.end_date)
-            if not start_dt or not end_dt:
-                return None, "Invalid date format. Use YYYY-MM-DD."
+            is_permanent = (request_data.request_type or "").strip().lower() == "permanent"
 
-            if end_dt.date() < start_dt.date():
-                return None, "End date cannot be earlier than start date."
+            start_dt = WFHRequestService._parse_date(request_data.start_date)
+            if not start_dt:
+                return None, "Invalid start date format. Use YYYY-MM-DD."
 
             if start_dt.date() < datetime.now().date():
                 return None, "Cannot request Work From Home for past dates."
 
-            # Calculate total days if not provided
-            calc_days = float((end_dt.date() - start_dt.date()).days + 1)
-            total_days = request_data.total_days or calc_days
+            end_date_val = None
+            total_days = None
+
+            if not is_permanent:
+                if not request_data.end_date:
+                    return None, "End date is required for Temporary WFH requests."
+                end_dt = WFHRequestService._parse_date(request_data.end_date)
+                if not end_dt:
+                    return None, "Invalid end date format. Use YYYY-MM-DD."
+                if end_dt.date() < start_dt.date():
+                    return None, "End date cannot be earlier than start date."
+                calc_days = float((end_dt.date() - start_dt.date()).days + 1)
+                total_days = request_data.total_days or calc_days
+                end_date_val = request_data.end_date
+            else:
+                end_date_val = None
+                total_days = None
 
             # Overlap check for pending or approved requests
-            overlap = await wfh_requests_collection.find_one({
+            overlap_query: Dict[str, Any] = {
                 "employee_id": emp_mongo_id,
                 "status": {"$in": ["Pending", "Approved"]},
-                "is_deleted": {"$ne": True},
-                "$or": [
-                    {"start_date": {"$lte": request_data.end_date}, "end_date": {"$gte": request_data.start_date}}
+                "is_deleted": {"$ne": True}
+            }
+            if is_permanent:
+                # Permanent requests overlap with any future or active request on/after start_date
+                overlap_query["$or"] = [
+                    {"request_type": "Permanent"},
+                    {"end_date": {"$gte": request_data.start_date}}
                 ]
-            })
+            else:
+                overlap_query["$or"] = [
+                    {"request_type": "Permanent", "start_date": {"$lte": end_date_val}},
+                    {"start_date": {"$lte": end_date_val}, "end_date": {"$gte": request_data.start_date}}
+                ]
+
+            overlap = await wfh_requests_collection.find_one(overlap_query)
             if overlap:
-                return None, f"A WFH request already exists between {overlap.get('start_date')} and {overlap.get('end_date')} with status '{overlap.get('status')}'."
+                overlap_range = f"starting {overlap.get('start_date')}" if overlap.get('request_type') == "Permanent" else f"between {overlap.get('start_date')} and {overlap.get('end_date')}"
+                return None, f"An active or pending WFH request already exists ({overlap_range}) with status '{overlap.get('status')}'."
 
             now_iso = datetime.utcnow().isoformat()
             doc = {
                 "employee_id": emp_mongo_id,
                 "start_date": request_data.start_date,
-                "end_date": request_data.end_date,
+                "end_date": end_date_val,
                 "total_days": total_days,
-                "request_type": request_data.request_type or "Temporary",
+                "request_type": "Permanent" if is_permanent else "Temporary",
                 "reason": request_data.reason,
                 "status": "Pending",
                 "rejection_reason": None,

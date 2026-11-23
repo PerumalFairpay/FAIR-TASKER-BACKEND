@@ -4,8 +4,8 @@ from typing import Optional, Dict, Any
 class WFHRequestBase(BaseModel):
     employee_id: str = Field(..., description="MongoDB ObjectId of the employee", example="")
     start_date: str = Field(..., description="Start date of WFH in YYYY-MM-DD format", example="2026-11-25")
-    end_date: str = Field(..., description="End date of WFH in YYYY-MM-DD format", example="2026-11-27")
-    total_days: float = Field(1.0, description="Total days requested for Work From Home", example=3.0)
+    end_date: Optional[str] = Field(None, description="End date in YYYY-MM-DD format. Null for Permanent requests", example="2026-11-27")
+    total_days: Optional[float] = Field(None, description="Total days requested for Work From Home. Null for Permanent", example=3.0)
     request_type: str = Field("Temporary", description="Type of WFH request: 'Temporary' or 'Permanent'", example="Temporary")
     reason: str = Field(..., description="Reason for requesting Work From Home", example="Home renovation and attending personal deliveries")
     status: str = Field("Pending", description="Current request status: 'Pending', 'Approved', or 'Rejected'", example="Pending")
@@ -16,8 +16,8 @@ class WFHRequestBase(BaseModel):
 class WFHRequestCreate(BaseModel):
     employee_id: Optional[str] = Field(None, description="Optional. If omitted, automatically derived from the authenticated token", example="")
     start_date: str = Field(..., description="Start date of WFH in YYYY-MM-DD format", example="2026-11-25")
-    end_date: str = Field(..., description="End date of WFH in YYYY-MM-DD format", example="2026-11-27")
-    total_days: Optional[float] = Field(None, description="Total number of days. If omitted, calculated automatically from date range", example=3.0)
+    end_date: Optional[str] = Field(None, description="End date in YYYY-MM-DD format. Required for 'Temporary', omitted/null for 'Permanent'", example="2026-11-27")
+    total_days: Optional[float] = Field(None, description="Total number of days. If omitted for temporary, calculated automatically", example=3.0)
     request_type: Optional[str] = Field("Temporary", description="Type of request: 'Temporary' or 'Permanent'", example="Temporary")
     reason: str = Field(..., description="Detailed explanation for WFH request", example="Home renovation and attending personal deliveries")
 
