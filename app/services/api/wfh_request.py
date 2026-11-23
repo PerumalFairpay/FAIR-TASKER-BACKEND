@@ -35,6 +35,9 @@ class WFHRequestService:
             if not employee:
                 return None, "Employee not found"
 
+            emp_mongo_id = str(employee["_id"])
+
+
             start_dt = WFHRequestService._parse_date(request_data.start_date)
             end_dt = WFHRequestService._parse_date(request_data.end_date)
             if not start_dt or not end_dt:
@@ -52,7 +55,7 @@ class WFHRequestService:
 
             # Overlap check for pending or approved requests
             overlap = await wfh_requests_collection.find_one({
-                "employee_id": request_data.employee_id,
+                "employee_id": emp_mongo_id,
                 "status": {"$in": ["Pending", "Approved"]},
                 "is_deleted": {"$ne": True},
                 "$or": [
@@ -64,7 +67,7 @@ class WFHRequestService:
 
             now_iso = datetime.utcnow().isoformat()
             doc = {
-                "employee_id": request_data.employee_id,
+                "employee_id": emp_mongo_id,
                 "start_date": request_data.start_date,
                 "end_date": request_data.end_date,
                 "total_days": total_days,

@@ -15,12 +15,13 @@ class WFHRequestBase(BaseModel):
     reviewed_at: Optional[str] = None
 
 class WFHRequestCreate(BaseModel):
-    employee_id: str
+    employee_id: Optional[str] = None
     start_date: str
     end_date: str
     total_days: Optional[float] = None
     request_type: Optional[str] = "Temporary"
     reason: str
+
 
 class WFHRequestUpdate(BaseModel):
     start_date: Optional[str] = None

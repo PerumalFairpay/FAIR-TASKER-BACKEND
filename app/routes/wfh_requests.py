@@ -13,13 +13,8 @@ async def create_wfh_request(
     request: WFHRequestCreate,
     current_user: dict = Depends(get_current_user)
 ):
-    role_val = current_user.get("role")
-    user_role = (role_val.get("name", "") if isinstance(role_val, dict) else str(role_val or "")).lower()
-
-    # If employee, enforce employee_id is their own
-    current_emp_id = current_user.get("employee_id") or str(current_user.get("_id", ""))
-    if user_role == "employee" and current_emp_id:
-        request.employee_id = current_emp_id
+    employee_id = current_user.get("employee_id") or current_user.get("id")
+    request.employee_id = employee_id
 
     data, error = await WFHRequestService.create(request)
     if error:
@@ -38,15 +33,11 @@ async def get_wfh_requests(
     role_val = current_user.get("role")
     user_role = (role_val.get("name", "") if isinstance(role_val, dict) else str(role_val or "")).lower()
 
-    current_emp_id = current_user.get("employee_id") or str(current_user.get("_id", ""))
-
-    # If employee, they can only view their own requests
     if user_role == "employee":
-        target_employee_id = current_emp_id
-    else:
-        target_employee_id = id
+        id = current_user.get("employee_id") or current_user.get("id")
 
-    result, error = await WFHRequestService.get_all(employee_id=target_employee_id, status=status)
+    result, error = await WFHRequestService.get_all(employee_id=id, status=status)
+
     if error:
         return error_response(message=error, status_code=500)
 
@@ -55,6 +46,8 @@ async def get_wfh_requests(
         data=result.get("data", []),
         meta=result.get("metrics", {})
     )
+
+
 
 
 @router.get("/{wfh_id}")
