@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, Query, Path
+from fastapi.responses import JSONResponse
 from typing import Optional
 from app.models import WFHRequestCreate, WFHRequestStatusUpdate
 from app.services.api.wfh_request import WFHRequestService
 from app.helper.response_helper import success_response, error_response
 from app.auth import verify_token, get_current_user
+from app.utils import normalize
 
 router = APIRouter(
     prefix="/wfh-requests",
@@ -41,6 +43,8 @@ async def create_wfh_request(
 async def get_wfh_requests(
     id: Optional[str] = Query(None, description="Optional employee MongoDB ObjectId to filter requests (Admin/HR only)"),
     status: Optional[str] = Query(None, description="Filter by status: 'All', 'Pending', 'Approved', 'Rejected'"),
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(10, ge=1, le=100, description="Items per page"),
     current_user: dict = Depends(get_current_user)
 ):
     role_val = current_user.get("role")
@@ -49,14 +53,24 @@ async def get_wfh_requests(
     if user_role == "employee":
         id = current_user.get("employee_id") or current_user.get("id")
 
-    result, error = await WFHRequestService.get_all(employee_id=id, status=status)
+    result, error = await WFHRequestService.get_all(
+        employee_id=id,
+        status=status,
+        page=page,
+        limit=limit
+    )
     if error:
         return error_response(message=error, status_code=500)
 
-    return success_response(
-        message="WFH requests retrieved successfully",
-        data=result.get("data", []),
-        meta=result.get("metrics", {})
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "message": "WFH requests retrieved successfully",
+            "data": normalize(result.get("data", [])),
+            "meta": normalize(result.get("meta", {})),
+            "metrics": normalize(result.get("metrics", {}))
+        }
     )
 
 

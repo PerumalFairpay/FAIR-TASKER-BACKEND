@@ -117,7 +117,9 @@ class WFHRequestService:
     @staticmethod
     async def get_all(
         employee_id: Optional[str] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        page: int = 1,
+        limit: int = 10
     ) -> Tuple[Dict[str, Any], Optional[str]]:
         try:
             query: Dict[str, Any] = {"is_deleted": {"$ne": True}}
@@ -130,7 +132,7 @@ class WFHRequestService:
             if "status" in total_query:
                 del total_query["status"]
 
-            total_count = await wfh_requests_collection.count_documents(total_query)
+            total_metrics_count = await wfh_requests_collection.count_documents(total_query)
             pending_count = await wfh_requests_collection.count_documents({**total_query, "status": "Pending"})
             approved_count = await wfh_requests_collection.count_documents({**total_query, "status": "Approved"})
             rejected_count = await wfh_requests_collection.count_documents({**total_query, "status": "Rejected"})
@@ -138,8 +140,11 @@ class WFHRequestService:
             if status and status.lower() != "all":
                 query["status"] = {"$regex": f"^{status}$", "$options": "i"}
 
-            cursor = wfh_requests_collection.find(query).sort("created_at", -1)
-            raw_docs = await cursor.to_list(length=None)
+            total_items = await wfh_requests_collection.count_documents(query)
+            skip = (page - 1) * limit if page > 0 else 0
+
+            cursor = wfh_requests_collection.find(query).sort("created_at", -1).skip(skip).limit(limit)
+            raw_docs = await cursor.to_list(length=limit)
 
             # Bulk load employee details
             emp_ids = list({doc.get("employee_id") for doc in raw_docs if doc.get("employee_id") and ObjectId.is_valid(doc.get("employee_id"))})
@@ -157,14 +162,22 @@ class WFHRequestService:
                 norm["employee_details"] = employees_map.get(norm.get("employee_id"))
                 results.append(norm)
 
+            total_pages = (total_items + limit - 1) // limit if limit > 0 else 0
+            pagination = {
+                "page": page,
+                "limit": limit,
+                "total_items": total_items,
+                "total_pages": total_pages
+            }
+
             metrics = {
-                "total": total_count,
+                "total": total_metrics_count,
                 "pending": pending_count,
                 "approved": approved_count,
                 "rejected": rejected_count
             }
 
-            return {"data": results, "metrics": metrics}, None
+            return {"data": results, "meta": pagination, "metrics": metrics}, None
         except Exception as e:
             traceback.print_exc()
             return {"data": [], "metrics": {}}, str(e)
