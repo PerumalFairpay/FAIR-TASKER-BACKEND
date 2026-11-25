@@ -18,7 +18,6 @@ from .system_configuration import SystemConfigurationBase, SystemConfigurationCr
 from .nda import NDARequestBase, NDARequestCreate, NDARequestUpdate, NDAStatusUpdate, NDARequestResponse, NDADropdownItem, NDASignatureRequest, NDARegenerateRequest
 from .payslip import PayslipBase, PayslipCreate, PayslipUpdate, PayslipResponse, PayslipComponentBase, PayslipComponentCreate, PayslipComponentUpdate, PayslipComponentResponse
 from .feedback import FeedbackAttachment, FeedbackBase, FeedbackCreate, FeedbackUpdate, FeedbackStatusUpdate, FeedbackResponse
-from .milestone import MilestoneRoadmapAttachment, MilestoneRoadmapBase, MilestoneRoadmapCreate, MilestoneRoadmapUpdate, MilestoneRoadmapResponse
 from .chat import ChatMessageBase, ChatMessageCreate, ChatMessageResponse, ChatSessionBase, ChatSessionCreate, ChatSessionUpdate, ChatSessionResponse
 from .ticket import TicketAttachment, TicketMessageBase, TicketMessageCreate, TicketMessageResponse, TicketBase, TicketCreate, TicketUpdate, TicketStatusUpdate, TicketAssignUpdate
 from .wfh import WFHRequestBase, WFHRequestCreate, WFHRequestUpdate, WFHRequestStatusUpdate, WFHRequestResponse

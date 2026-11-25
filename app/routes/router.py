@@ -28,7 +28,6 @@ from app.routes import (
     payslip_component,
     feedback,
     shifts,
-    milestone_roadmap,
     ai,
     google_auth,
     users,
@@ -66,7 +65,6 @@ api_router.include_router(payslip.router)
 api_router.include_router(payslip_component.router)
 api_router.include_router(feedback.router)
 api_router.include_router(shifts.router)
-api_router.include_router(milestone_roadmap.router)
 api_router.include_router(ai.router)
 api_router.include_router(google_auth.router, prefix="/auth/google", tags=["google-auth"])
 api_router.include_router(users.router)

@@ -27,6 +27,5 @@ from app.services.api.dashboard import DashboardService
 from app.services.api.attendance import AttendanceService
 from app.services.api.auth import AuthService
 from app.services.api.google_auth import GoogleAuthService
-from app.services.api.milestone_roadmap import MilestoneRoadmapService
 from app.services.api.nda import NDAService
 from app.services.api.ai import AIService
