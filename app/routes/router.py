@@ -16,6 +16,7 @@ from app.routes import (
     blogs,
     leave_types,
     leave_requests,
+    eod_reports,
     tasks,
     attendance,
     dashboard,
@@ -53,6 +54,7 @@ api_router.include_router(assets.router)
 api_router.include_router(blogs.router)
 api_router.include_router(leave_types.router)
 api_router.include_router(leave_requests.router)
+api_router.include_router(eod_reports.router)
 api_router.include_router(tasks.router)
 api_router.include_router(attendance.router)
 api_router.include_router(dashboard.router)

@@ -19,6 +19,7 @@ from app.services.api.payslip import PayslipService
 from app.services.api.checklist_template import ChecklistTemplateService
 from app.services.api.leave_type import LeaveTypeService
 from app.services.api.task import TaskService
+from app.services.api.eod_report import EODReportService
 from app.services.api.profile import ProfileService
 from app.services.api.feedback import FeedbackService
 from app.services.api.leave_request import LeaveRequestService
