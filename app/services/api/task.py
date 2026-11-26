@@ -1,7 +1,7 @@
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
 from bson import ObjectId
-from app.database import tasks_collection, employees_collection, projects_collection
+from app.database import tasks_collection, employees_collection, projects_collection, eod_reports_collection
 from app.models import TaskCreate, TaskUpdate, EODReportItem
 from app.utils import normalize
 import traceback
@@ -81,10 +81,23 @@ class TaskService:
                 query["start_date"] = start_date
 
             tasks = await tasks_collection.find(query).to_list(length=None)
+            task_ids = [str(t["_id"]) for t in tasks]
+            eod_by_task: Dict[str, List[dict]] = {}
+            if task_ids:
+                eod_docs = await eod_reports_collection.find({
+                    "task_id": {"$in": task_ids},
+                    "is_deleted": {"$ne": True},
+                }).sort("timestamp", 1).to_list(length=None)
+                for doc in eod_docs:
+                    norm_doc = normalize(doc)
+                    eod_by_task.setdefault(norm_doc["task_id"], []).append(norm_doc)
 
             results = []
             for t in tasks:
                 norm_task = normalize(t)
+                # Prefer dedicated eod_reports collection; fall back to embedded eod_history if any
+                if norm_task["id"] in eod_by_task:
+                    norm_task["eod_history"] = eod_by_task[norm_task["id"]]
 
                 # Calculate is_overdue flag
                 is_overdue = False
@@ -120,7 +133,15 @@ class TaskService:
             if not task:
                 return None, "Task not found"
 
-            return normalize(task), None
+            norm_task = normalize(task)
+            eod_docs = await eod_reports_collection.find({
+                "task_id": task_id,
+                "is_deleted": {"$ne": True},
+            }).sort("timestamp", 1).to_list(length=None)
+            if eod_docs:
+                norm_task["eod_history"] = [normalize(doc) for doc in eod_docs]
+
+            return norm_task, None
         except Exception as e:
             traceback.print_exc()
             return None, str(e)
@@ -168,25 +189,37 @@ class TaskService:
                 if not existing_task:
                     continue
 
-                # Update existing task history and status
-                eod_entry = {
-                    "date": datetime.utcnow().strftime("%Y-%m-%d"),
-                    "status": "Moved" if item.move_to_tomorrow else item.status,
+                now = datetime.utcnow()
+                report_status = "Moved" if item.move_to_tomorrow else item.status
+                attachments_list = [a.dict() for a in item.new_attachments]
+
+                eod_doc = {
+                    "task_id": task_id,
+                    "task_name": existing_task.get("task_name") or existing_task.get("name") or "Untitled Task",
+                    "project_id": existing_task.get("project_id"),
+                    "priority": existing_task.get("priority"),
+                    "assigned_to": existing_task.get("assigned_to", []),
+                    "date": now.strftime("%Y-%m-%d"),
+                    "status": report_status,
                     "progress": item.progress,
                     "summary": item.eod_summary,
-                    "attachments": [a.dict() for a in item.new_attachments],
-                    "timestamp": datetime.utcnow(),
+                    "attachments": attachments_list,
+                    "move_to_tomorrow": item.move_to_tomorrow,
+                    "timestamp": now,
+                    "is_deleted": False,
                 }
+                insert_result = await eod_reports_collection.insert_one(eod_doc)
+                eod_doc["_id"] = insert_result.inserted_id
 
-                update_fields = {"progress": item.progress, "updated_at": datetime.utcnow()}
+                update_fields = {"progress": item.progress, "updated_at": now}
 
                 if item.move_to_tomorrow:
                     # Visual Rollover: Mark as rolled over today
-                    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+                    today_str = now.strftime("%Y-%m-%d")
                     update_fields["last_rollover_date"] = today_str
 
                     # Smart Rollover: Preserve future deadlines
-                    tomorrow_dt = datetime.utcnow() + timedelta(days=1)
+                    tomorrow_dt = now + timedelta(days=1)
                     tomorrow_str = tomorrow_dt.strftime("%Y-%m-%d")
 
                     existing_end_date = existing_task.get("end_date")
@@ -200,10 +233,9 @@ class TaskService:
                 else:
                     update_fields["status"] = item.status
 
-                # Add to history and update fields
                 await tasks_collection.update_one(
                     {"_id": ObjectId(task_id)},
-                    {"$set": update_fields, "$push": {"eod_history": eod_entry}},
+                    {"$set": update_fields},
                 )
 
                 updated_task = await tasks_collection.find_one({"_id": ObjectId(task_id)})
@@ -223,18 +255,17 @@ class TaskService:
         search: Optional[str] = None,
     ) -> Tuple[Optional[List[dict]], Optional[str]]:
         try:
-            query = {
-                "eod_history": {"$exists": True, "$not": {"$size": 0}},
-                "is_deleted": {"$ne": True}
-            }
+            query: Dict[str, Any] = {"is_deleted": {"$ne": True}}
             if project_id:
                 query["project_id"] = project_id
             if assigned_to:
                 query["assigned_to"] = assigned_to
             if priority:
                 query["priority"] = priority
+            if date:
+                query["date"] = date
 
-            tasks = await tasks_collection.find(query).to_list(length=None)
+            report_docs = await eod_reports_collection.find(query).sort("timestamp", -1).to_list(length=None)
 
             # Fetch all employees and projects for naming
             employees = await employees_collection.find().to_list(length=None)
@@ -249,50 +280,34 @@ class TaskService:
             proj_map = {str(p.get("_id")): p.get("name") for p in projects}
 
             reports = []
-            for task in tasks:
-                task_norm = normalize(task)
-                proj_name = proj_map.get(task_norm.get("project_id"), "Unknown Project")
+            for doc in report_docs:
+                report_norm = normalize(doc)
+                proj_name = proj_map.get(report_norm.get("project_id"), "Unknown Project")
 
-                # assigned_to is a list of IDs. We'll take the first one or join them
-                assigned_ids = task_norm.get("assigned_to", [])
+                assigned_ids = report_norm.get("assigned_to", [])
                 assigned_names = [
                     emp_map.get(eid) or id_to_name_map.get(eid) or eid
                     for eid in assigned_ids
                 ]
                 employee_display = ", ".join(filter(None, assigned_names))
 
-                for entry in task_norm.get("eod_history", []):
-                    if date and entry.get("date") != date:
+                if search:
+                    search_lower = search.lower()
+                    task_name = (report_norm.get("task_name") or "").lower()
+                    summary = (report_norm.get("summary") or "").lower()
+                    emp_name = employee_display.lower()
+
+                    if (
+                        search_lower not in task_name
+                        and search_lower not in summary
+                        and search_lower not in emp_name
+                    ):
                         continue
 
-                    # Search Filtering
-                    if search:
-                        search_lower = search.lower()
-                        task_name = (task_norm.get("task_name") or task_norm.get("name") or "").lower()
-                        summary = (entry.get("summary") or "").lower()
-                        emp_name = employee_display.lower()
+                report_norm["project_name"] = proj_name
+                report_norm["employee_name"] = employee_display
+                reports.append(report_norm)
 
-                        if (
-                            search_lower not in task_name
-                            and search_lower not in summary
-                            and search_lower not in emp_name
-                        ):
-                            continue
-
-                    report_entry = {
-                        "task_id": task_norm["id"],
-                        "task_name": task_norm.get("task_name")
-                        or task_norm.get("name")
-                        or "Untitled Task",
-                        "project_id": task_norm.get("project_id"),
-                        "project_name": proj_name,
-                        "assigned_to": task_norm.get("assigned_to", []),
-                        "employee_name": employee_display,
-                        **entry,
-                    }
-                    reports.append(report_entry)
-
-            reports.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
             return reports, None
         except Exception as e:
             traceback.print_exc()
