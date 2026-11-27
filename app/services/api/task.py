@@ -1,7 +1,7 @@
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 from bson import ObjectId
-from app.database import tasks_collection, eod_reports_collection
+from app.database import tasks_collection, eod_reports_collection, projects_collection
 from app.models import TaskCreate, TaskUpdate
 from app.utils import normalize
 import traceback
@@ -31,6 +31,16 @@ class TaskService:
                     return "End time must be after start time"
 
         return None
+
+    @staticmethod
+    def _build_project_summary(project_doc: dict) -> dict:
+        return {
+            "id": str(project_doc["_id"]),
+            "name": project_doc.get("name"),
+            "logo": project_doc.get("logo"),
+            "status": project_doc.get("status"),
+            "priority": project_doc.get("priority"),
+        }
 
     @staticmethod
     async def create(task_in: TaskCreate) -> Tuple[Optional[dict], Optional[str]]:
@@ -112,24 +122,29 @@ class TaskService:
                 # Fallback to exact start date match if no specific 'date' view requested
                 query["start_date"] = start_date
 
-            tasks = await tasks_collection.find(query).to_list(length=None)
-            task_ids = [str(t["_id"]) for t in tasks]
-            eod_by_task: Dict[str, List[dict]] = {}
-            if task_ids:
-                eod_docs = await eod_reports_collection.find({
-                    "task_id": {"$in": task_ids},
-                    "is_deleted": {"$ne": True},
-                }).sort("timestamp", 1).to_list(length=None)
-                for doc in eod_docs:
-                    norm_doc = normalize(doc)
-                    eod_by_task.setdefault(norm_doc["task_id"], []).append(norm_doc)
+            tasks = await tasks_collection.find(query, {"eod_history": 0}).to_list(length=None)
+
+            project_oids = [
+                ObjectId(pid)
+                for pid in {t.get("project_id") for t in tasks if t.get("project_id")}
+                if ObjectId.is_valid(pid)
+            ]
+            project_map: Dict[str, dict] = {}
+            if project_oids:
+                projects = await projects_collection.find(
+                    {"_id": {"$in": project_oids}},
+                    {"name": 1, "logo": 1, "status": 1, "priority": 1},
+                ).to_list(length=None)
+                for p in projects:
+                    project_map[str(p["_id"])] = TaskService._build_project_summary(p)
 
             results = []
             for t in tasks:
                 norm_task = normalize(t)
-                # Prefer dedicated eod_reports collection; fall back to embedded eod_history if any
-                if norm_task["id"] in eod_by_task:
-                    norm_task["eod_history"] = eod_by_task[norm_task["id"]]
+                proj = project_map.get(norm_task.get("project_id", ""))
+                if proj:
+                    norm_task["project_name"] = proj["name"]
+                    norm_task["project"] = proj
 
                 # Calculate is_overdue flag
                 is_overdue = False
@@ -166,6 +181,17 @@ class TaskService:
                 return None, "Task not found"
 
             norm_task = normalize(task)
+            pid = norm_task.get("project_id")
+            if pid and ObjectId.is_valid(pid):
+                project_doc = await projects_collection.find_one(
+                    {"_id": ObjectId(pid)},
+                    {"name": 1, "logo": 1, "status": 1, "priority": 1},
+                )
+                if project_doc:
+                    proj = TaskService._build_project_summary(project_doc)
+                    norm_task["project_name"] = proj["name"]
+                    norm_task["project"] = proj
+
             eod_docs = await eod_reports_collection.find({
                 "task_id": task_id,
                 "is_deleted": {"$ne": True},
