@@ -52,7 +52,11 @@ async def create_task(
     )
     data, error = await TaskService.create(task)
     if error:
-        return error_response(message=f"Failed to create task: {error}", status_code=500)
+        is_validation_err = any(k in error.lower() for k in ("end date", "end time", "invalid date"))
+        return error_response(
+            message=error if is_validation_err else f"Failed to create task: {error}",
+            status_code=400 if is_validation_err else 500,
+        )
     return success_response(message="Task created successfully", data=data, status_code=201)
 
 
@@ -140,7 +144,13 @@ async def update_task(
     )
     data, error = await TaskService.update(task_id, task)
     if error:
-        status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 500
+        lower_err = error.lower()
+        if "not found" in lower_err or "invalid task id" in lower_err:
+            status_code = 404
+        elif any(k in lower_err for k in ("end date", "end time", "invalid date")):
+            status_code = 400
+        else:
+            status_code = 500
         return error_response(message=error, status_code=status_code)
     return success_response(message="Task updated successfully", data=data)
 

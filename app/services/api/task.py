@@ -10,8 +10,40 @@ import traceback
 class TaskService:
 
     @staticmethod
+    def _validate_task_dates(
+        start_date: Optional[str],
+        end_date: Optional[str],
+        start_time: Optional[str],
+        end_time: Optional[str],
+    ) -> Optional[str]:
+        if start_date and end_date:
+            try:
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+                end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+            except ValueError:
+                return "Invalid date format. Expected YYYY-MM-DD"
+
+            if end_dt < start_dt:
+                return "End date cannot be before start date"
+
+            if end_dt == start_dt and start_time and end_time:
+                if end_time <= start_time:
+                    return "End time must be after start time"
+
+        return None
+
+    @staticmethod
     async def create(task_in: TaskCreate) -> Tuple[Optional[dict], Optional[str]]:
         try:
+            validation_error = TaskService._validate_task_dates(
+                task_in.start_date,
+                task_in.end_date,
+                task_in.start_time,
+                task_in.end_time,
+            )
+            if validation_error:
+                return None, validation_error
+
             task_data = task_in.dict()
             task_data["is_deleted"] = False
             task_data["deleted_at"] = None
@@ -161,6 +193,15 @@ class TaskService:
 
             update_data = {k: v for k, v in task_in.dict().items() if v is not None}
             if update_data:
+                validation_error = TaskService._validate_task_dates(
+                    update_data.get("start_date", existing.get("start_date")),
+                    update_data.get("end_date", existing.get("end_date")),
+                    update_data.get("start_time", existing.get("start_time")),
+                    update_data.get("end_time", existing.get("end_time")),
+                )
+                if validation_error:
+                    return None, validation_error
+
                 update_data["updated_at"] = datetime.utcnow()
                 await tasks_collection.update_one(
                     {"_id": ObjectId(task_id)},
