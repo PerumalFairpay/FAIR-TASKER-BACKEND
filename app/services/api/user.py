@@ -151,6 +151,108 @@ class UserService:
             return None, str(e)
 
     @staticmethod
+    async def update(
+        user_id: str,
+        update_data: dict
+    ) -> Tuple[Optional[dict], Optional[str]]:
+        try:
+            if not ObjectId.is_valid(user_id):
+                return None, "Invalid user ID"
+
+            user = await users_collection.find_one({
+                "_id": ObjectId(user_id),
+                "is_deleted": {"$ne": True}
+            })
+
+            if not user:
+                return None, "User not found"
+
+            update_data = {
+                key: value
+                for key, value in update_data.items()
+                if value is not None
+            }
+
+            if not update_data:
+                return None, "No update data provided"
+
+            # Check duplicate email
+            email = update_data.get("email")
+
+            if email:
+                existing_email = await users_collection.find_one({
+                    "email": email,
+                    "_id": {"$ne": ObjectId(user_id)},
+                    "is_deleted": {"$ne": True}
+                })
+
+                if existing_email:
+                    return None, "Email already exists"
+
+            # Check duplicate employee number
+            employee_no_id = update_data.get("employee_no_id")
+
+            if employee_no_id:
+                existing_employee = await users_collection.find_one({
+                    "employee_no_id": employee_no_id,
+                    "_id": {"$ne": ObjectId(user_id)},
+                    "is_deleted": {"$ne": True}
+                })
+
+                if existing_employee:
+                    return None, "Employee number already exists"
+
+            update_data["updated_at"] = datetime.utcnow()
+
+            await users_collection.update_one(
+                {"_id": ObjectId(user_id)},
+                {"$set": update_data}
+            )
+
+            # Sync employee update
+            emp_update = {}
+            for field in ["email", "mobile", "employee_no_id", "status"]:
+                if field in update_data:
+                    emp_update[field] = update_data[field]
+
+            if "name" in update_data and update_data["name"]:
+                emp_update["name"] = update_data["name"]
+                name_parts = update_data["name"].strip().split(" ", 1)
+                emp_update["first_name"] = name_parts[0]
+                emp_update["last_name"] = name_parts[1] if len(name_parts) > 1 else ""
+
+            if emp_update:
+                emp_update["updated_at"] = datetime.utcnow()
+                emp_query = []
+                emp_id = user.get("employee_id")
+                if emp_id and ObjectId.is_valid(str(emp_id)):
+                    emp_query.append({"_id": ObjectId(str(emp_id))})
+                if user.get("employee_no_id"):
+                    emp_query.append({"employee_no_id": user.get("employee_no_id")})
+                if user.get("email"):
+                    emp_query.append({"email": user.get("email")})
+
+                if emp_query:
+                    await employees_collection.update_many(
+                        {"$or": emp_query, "is_deleted": {"$ne": True}},
+                        {"$set": emp_update}
+                    )
+
+            updated_user = await users_collection.find_one({
+                "_id": ObjectId(user_id)
+            })
+
+            user_norm = normalize(updated_user)
+            user_norm.pop("hashed_password", None)
+            user_norm.pop("password", None)
+
+            return user_norm, None
+
+        except Exception as e:
+            traceback.print_exc()
+            return None, str(e)
+
+    @staticmethod
     async def delete(user_id: str) -> Tuple[bool, Optional[str]]:
         try:
             if not ObjectId.is_valid(user_id):

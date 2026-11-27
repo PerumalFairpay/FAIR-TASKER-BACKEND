@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from app.services.api.user import UserService
 from app.services.api.permission import PermissionService
-from app.models import UserPermissionUpdate
+from app.models import UserPermissionUpdate, UserUpdate
 from app.helper.response_helper import success_response, error_response
 from app.auth import verify_token, get_current_user
 from typing import Optional
@@ -78,6 +78,25 @@ async def get_user(user_id: str):
         return error_response(message=error, status_code=status_code)
     return success_response(
         message="User fetched successfully",
+        data=user
+    )
+
+@router.put("/{user_id}")
+async def update_user(
+    user_id: str,
+    payload: UserUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    update_data = payload.model_dump(exclude_unset=True)
+
+    user, error = await UserService.update(user_id, update_data)
+
+    if error:
+        status_code = 404 if "not found" in error.lower() or "invalid" in error.lower() else 400
+        return error_response(message=error, status_code=status_code)
+
+    return success_response(
+        message="User updated successfully",
         data=user
     )
 

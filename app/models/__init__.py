@@ -1,6 +1,6 @@
 from .permission import PermissionBase, PermissionCreate, PermissionUpdate, PermissionResponse
 from .role import RoleBase, RoleCreate, RoleUpdate, RoleResponse, RolePermissionUpdate
-from .user import UserBase, UserCreate, UserLogin, UserInDB, UserResponse, UserPermissionsUpdate, UserPermissionUpdate, UserPermissionsDetailResponse
+from .user import UserBase, UserCreate, UserLogin, UserInDB, UserResponse, UserPermissionsUpdate, UserPermissionUpdate, UserPermissionsDetailResponse,UserUpdate
 from .department import DepartmentBase, DepartmentCreate, DepartmentUpdate, DepartmentResponse
 from .shift import ShiftBase, ShiftCreate, ShiftUpdate, ShiftResponse
 from .employee import EmployeeDocument, EmployeeDocumentResponse, ChecklistItem, EmployeeChecklistTemplateBase, EmployeeChecklistTemplateCreate, EmployeeChecklistTemplateUpdate, EmployeeChecklistTemplateResponse, EmployeeBase, EmployeeCreate, EmployeeUpdate, EmployeeResponse, EmployeeBasicDetails

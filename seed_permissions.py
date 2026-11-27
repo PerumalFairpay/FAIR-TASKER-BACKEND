@@ -33,6 +33,7 @@ PERMISSIONS_DATA = [
     {"code": "document:access", "name": "Document Access (Manage)", "module": "Document", "description": "Can upload, edit, and delete company documents"},
     {"code": "feedback:view", "name": "View Feedback", "module": "Feedback", "description": "Can view feedback entries"},
     {"code": "shift:view", "name": "View Shifts", "module": "Shift", "description": "Can view shifts"},
+    {"code": "holiday:view", "name": "View Holiday", "module":"Holiday", "description": "Can view holiday logs"},
     {"code": "settings:view", "name": "View Settings", "module": "Settings", "description": "Can view general organization settings"},
     {"code": "role:view", "name": "View Roles", "module": "Role", "description": "Can view roles and permissions configuration"},
     {"code": "user:view", "name": "View Users", "module": "User", "description": "Can view and manage user accounts"},
@@ -147,6 +148,7 @@ async def seed():
             "task:view",
             "document:view",
             "shift:view",
+            "holiday:view",     
             "wfh:view",
         }
 
@@ -187,6 +189,8 @@ async def seed():
     print("Seed process completed successfully!")
     print("=" * 60)
 
+
+seed_permissions = seed
 
 if __name__ == "__main__":
     asyncio.run(seed())

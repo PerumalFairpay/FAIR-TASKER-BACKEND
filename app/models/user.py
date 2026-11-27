@@ -46,3 +46,11 @@ class UserPermissionsDetailResponse(BaseModel):
     role_permissions: List[PermissionResponse] = []
     direct_permissions: List[PermissionResponse] = []
     effective_permissions: List[str] = []
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    employee_no_id: Optional[str] = None
+    email: Optional[EmailStr] = None
+    mobile: Optional[str] = None
+    role_id: Optional[str] = None
+    status: Optional[str] = None
