@@ -28,6 +28,7 @@ PERMISSIONS_DATA = [
     {"code": "expense:view", "name": "View Expenses", "module": "Expense", "description": "Can view expense claims and reports"},
     {"code": "asset:view", "name": "View Assets", "module": "Asset", "description": "Can view company assets and inventory"},
     {"code": "project:view", "name": "View Projects", "module": "Project", "description": "Can view projects"},
+    {"code": "client:view", "name": "View Clients", "module": "Client", "description": "Can view clients and vendors"},
     {"code": "task:view", "name": "View Tasks", "module": "Task", "description": "Can view project tasks"},
     {"code": "document:view", "name": "View Documents", "module": "Document", "description": "Can view company documents and policies"},
     {"code": "document:access", "name": "Document Access (Manage)", "module": "Document", "description": "Can upload, edit, and delete company documents"},
