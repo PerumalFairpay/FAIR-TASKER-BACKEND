@@ -11,9 +11,6 @@ class AttendanceBase(BaseModel):
     device_type: str = "Web"  # Options: "Web", "Mobile", "Biometric", "Manual"
 
     clock_out: Optional[str] = None
-    break_start: Optional[str] = None
-    break_end: Optional[str] = None
-    total_break_hours: float = 0.0
     total_work_hours: float = 0.0
 
     # Primary status: Present | Absent | Leave | Holiday
@@ -50,8 +47,6 @@ class AttendanceUpdate(BaseModel):
     """Payload for Clock Out"""
 
     clock_out: Optional[str] = None
-    break_start: Optional[str] = None
-    break_end: Optional[str] = None
     device_type: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[str] = None
