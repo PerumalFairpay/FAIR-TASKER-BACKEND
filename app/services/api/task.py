@@ -1,9 +1,9 @@
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 from bson import ObjectId
-from app.database import tasks_collection, eod_reports_collection, projects_collection
+from app.database import tasks_collection, eod_reports_collection, projects_collection, users_collection, employees_collection
 from app.models import TaskCreate, TaskUpdate
-from app.utils import normalize
+from app.utils import normalize, get_employee_basic_details
 import traceback
 
 
@@ -41,6 +41,36 @@ class TaskService:
             "status": project_doc.get("status"),
             "priority": project_doc.get("priority"),
         }
+
+    @staticmethod
+    def _build_user_summary(user_doc: dict) -> dict:
+        return {
+            "id": str(user_doc["_id"]),
+            "name": user_doc.get("username") or user_doc.get("name") or user_doc.get("email"),
+            "email": user_doc.get("email"),
+        }
+
+    @staticmethod
+    async def _get_assignee_map(assignee_ids: List[str]) -> Dict[str, dict]:
+        oids = [ObjectId(aid) for aid in set(assignee_ids) if aid and ObjectId.is_valid(aid)]
+        if not oids:
+            return {}
+
+        assignee_map: Dict[str, dict] = {}
+        employees = await employees_collection.find({"_id": {"$in": oids}}).to_list(length=None)
+        for emp in employees:
+            assignee_map[str(emp["_id"])] = get_employee_basic_details(emp)
+
+        missing_oids = [oid for oid in oids if str(oid) not in assignee_map]
+        if missing_oids:
+            users = await users_collection.find(
+                {"_id": {"$in": missing_oids}},
+                {"username": 1, "name": 1, "email": 1},
+            ).to_list(length=None)
+            for u in users:
+                assignee_map[str(u["_id"])] = TaskService._build_user_summary(u)
+
+        return assignee_map
 
     @staticmethod
     async def create(task_in: TaskCreate) -> Tuple[Optional[dict], Optional[str]]:
@@ -138,6 +168,23 @@ class TaskService:
                 for p in projects:
                     project_map[str(p["_id"])] = TaskService._build_project_summary(p)
 
+            assigned_by_oids = [
+                ObjectId(uid)
+                for uid in {t.get("assigned_by") for t in tasks if t.get("assigned_by")}
+                if ObjectId.is_valid(uid)
+            ]
+            user_map: Dict[str, dict] = {}
+            if assigned_by_oids:
+                users = await users_collection.find(
+                    {"_id": {"$in": assigned_by_oids}},
+                    {"username": 1, "name": 1, "email": 1},
+                ).to_list(length=None)
+                for u in users:
+                    user_map[str(u["_id"])] = TaskService._build_user_summary(u)
+
+            all_assignee_ids = [aid for t in tasks for aid in (t.get("assigned_to") or [])]
+            assignee_map = await TaskService._get_assignee_map(all_assignee_ids)
+
             results = []
             for t in tasks:
                 norm_task = normalize(t)
@@ -145,6 +192,17 @@ class TaskService:
                 if proj:
                     norm_task["project_name"] = proj["name"]
                     norm_task["project"] = proj
+
+                assigner = user_map.get(norm_task.get("assigned_by", ""))
+                if assigner:
+                    norm_task["assigned_by_name"] = assigner["name"]
+                    norm_task["assigned_by_details"] = assigner
+
+                norm_task["assigned_to_details"] = [
+                    assignee_map[aid]
+                    for aid in (norm_task.get("assigned_to") or [])
+                    if aid in assignee_map
+                ]
 
                 # Calculate is_overdue flag
                 is_overdue = False
@@ -191,6 +249,23 @@ class TaskService:
                     proj = TaskService._build_project_summary(project_doc)
                     norm_task["project_name"] = proj["name"]
                     norm_task["project"] = proj
+
+            assigned_by_id = norm_task.get("assigned_by")
+            if assigned_by_id and ObjectId.is_valid(assigned_by_id):
+                user_doc = await users_collection.find_one(
+                    {"_id": ObjectId(assigned_by_id)},
+                    {"username": 1, "name": 1, "email": 1},
+                )
+                if user_doc:
+                    assigner = TaskService._build_user_summary(user_doc)
+                    norm_task["assigned_by_name"] = assigner["name"]
+                    norm_task["assigned_by_details"] = assigner
+
+            assignee_ids = norm_task.get("assigned_to") or []
+            assignee_map = await TaskService._get_assignee_map(assignee_ids)
+            norm_task["assigned_to_details"] = [
+                assignee_map[aid] for aid in assignee_ids if aid in assignee_map
+            ]
 
             eod_docs = await eod_reports_collection.find({
                 "task_id": task_id,

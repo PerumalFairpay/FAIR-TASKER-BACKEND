@@ -4,7 +4,8 @@ from app.models import TaskCreate, TaskUpdate, TaskAttachment
 from app.services.api.task import TaskService
 from app.helper.response_helper import success_response, error_response
 from app.helper.file_handler import file_handler
-from app.auth import verify_token
+from app.services.notification_helper import NotificationHelper
+from app.auth import verify_token, get_current_user
 
 router = APIRouter(prefix="/tasks", tags=["tasks"], dependencies=[Depends(verify_token)])
 
@@ -23,7 +24,8 @@ async def create_task(
     tags: List[str] = Form([], alias="tags[]"),
     status: str = Form("Todo"),
     progress: float = Form(0.0),
-    attachments: List[UploadFile] = File([])
+    attachments: List[UploadFile] = File([]),
+    current_user: dict = Depends(get_current_user),
 ):
     task_attachments = []
     if attachments:
@@ -35,6 +37,9 @@ async def create_task(
                 file_type=file.content_type
             ))
 
+    assigner_id = str(current_user["id"])
+    assigner_name = current_user.get("username") or current_user.get("name") or current_user.get("email") or "Someone"
+
     task = TaskCreate(
         project_id=project_id,
         task_name=task_name,
@@ -45,6 +50,7 @@ async def create_task(
         end_time=end_time,
         priority=priority,
         assigned_to=assigned_to,
+        assigned_by=assigner_id,
         tags=tags,
         status=status,
         progress=progress,
@@ -57,6 +63,21 @@ async def create_task(
             message=error if is_validation_err else f"Failed to create task: {error}",
             status_code=400 if is_validation_err else 500,
         )
+
+    if assigned_to:
+        NotificationHelper.trigger_assignee_notification(
+            assignee_ids=assigned_to,
+            title="New Task Assigned",
+            body=f"{assigner_name} assigned you to \"{task_name}\" (Due: {end_date}).",
+            notification_type="task_assigned",
+            data={
+                "task_id": str(data.get("id") or data.get("_id", "")),
+                "project_id": project_id,
+                "assigned_by": assigner_id,
+            },
+            url="/tasks",
+        )
+
     return success_response(message="Task created successfully", data=data, status_code=201)
 
 
@@ -107,7 +128,8 @@ async def update_task(
     status: Optional[str] = Form(None),
     progress: Optional[float] = Form(None),
     is_overdue_moved: Optional[bool] = Form(None),
-    attachments: List[UploadFile] = File(None)
+    attachments: List[UploadFile] = File(None),
+    current_user: dict = Depends(get_current_user),
 ):
     task_attachments = []
     if attachments:
@@ -119,9 +141,12 @@ async def update_task(
                 file_type=file.content_type
             ))
 
+    current_task = None
+    if task_attachments or assigned_to is not None:
+        current_task, _ = await TaskService.get(task_id)
+
     final_attachments = []
     if task_attachments:
-        current_task, _ = await TaskService.get(task_id)
         if current_task and "attachments" in current_task:
             final_attachments.extend(current_task["attachments"])
         final_attachments.extend(task_attachments)
@@ -152,6 +177,27 @@ async def update_task(
         else:
             status_code = 500
         return error_response(message=error, status_code=status_code)
+
+    if assigned_to is not None and data:
+        prev_assignees = set((current_task or {}).get("assigned_to") or [])
+        new_assignees = [uid for uid in assigned_to if uid not in prev_assignees]
+        if new_assignees:
+            assigner_id = str(current_user["id"])
+            assigner_name = current_user.get("username") or current_user.get("name") or current_user.get("email") or "Someone"
+            resolved_task_name = data.get("task_name") or task_name or "a task"
+            NotificationHelper.trigger_assignee_notification(
+                assignee_ids=new_assignees,
+                title="New Task Assigned",
+                body=f"{assigner_name} assigned you to \"{resolved_task_name}\".",
+                notification_type="task_assigned",
+                data={
+                    "task_id": str(data.get("id") or data.get("_id", task_id)),
+                    "project_id": data.get("project_id"),
+                    "assigned_by": assigner_id,
+                },
+                url="/tasks",
+            )
+
     return success_response(message="Task updated successfully", data=data)
 
 

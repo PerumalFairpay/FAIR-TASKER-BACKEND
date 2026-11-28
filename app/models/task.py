@@ -17,6 +17,7 @@ class TaskBase(BaseModel):
     end_time: Optional[str] = None
     priority: str = "Medium"
     assigned_to: List[str] = []
+    assigned_by: Optional[str] = None
     attachments: List[TaskAttachment] = []
     tags: List[str] = []
     status: str = "Todo"

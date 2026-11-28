@@ -165,6 +165,74 @@ class NotificationHelper:
             logger.error(f"Failed to notify employee {employee_id or email}: {e}", exc_info=True)
 
     @classmethod
+    def trigger_assignee_notification(
+        cls,
+        assignee_ids: List[str],
+        title: str,
+        body: str,
+        notification_type: str = "task_assigned",
+        data: Optional[Dict[str, Any]] = None,
+        url: Optional[str] = None,
+    ) -> None:
+        """Resolves mixed user/employee IDs in assigned_to and dispatches notifications."""
+        if not assignee_ids:
+            return
+        cls._dispatch_task(
+            cls.notify_assignees(
+                assignee_ids=assignee_ids,
+                title=title,
+                body=body,
+                notification_type=notification_type,
+                data=data,
+                url=url,
+            )
+        )
+
+    @classmethod
+    async def notify_assignees(
+        cls,
+        assignee_ids: List[str],
+        title: str,
+        body: str,
+        notification_type: str = "task_assigned",
+        data: Optional[Dict[str, Any]] = None,
+        url: Optional[str] = None,
+    ) -> None:
+        """Resolves each ID (either a direct user_id or an employee_id) and notifies them."""
+        try:
+            clean_ids = [str(aid).strip() for aid in assignee_ids if aid and str(aid).strip()]
+            if not clean_ids:
+                return
+
+            oid_list = [ObjectId(aid) for aid in clean_ids if ObjectId.is_valid(aid)]
+            direct_user_ids: set = set()
+            if oid_list:
+                cursor = users_collection.find(
+                    {"_id": {"$in": oid_list}, "is_deleted": {"$ne": True}, "is_active": {"$ne": False}},
+                    {"_id": 1},
+                )
+                direct_user_ids = {str(doc["_id"]) async for doc in cursor}
+
+            resolved_user_ids: List[str] = list(direct_user_ids)
+            for aid in clean_ids:
+                if aid not in direct_user_ids:
+                    uid = await cls.get_user_id_for_employee(employee_id=aid)
+                    if uid:
+                        resolved_user_ids.append(uid)
+
+            if resolved_user_ids:
+                await cls.notify_users(
+                    user_ids=resolved_user_ids,
+                    title=title,
+                    body=body,
+                    notification_type=notification_type,
+                    data=data,
+                    url=url,
+                )
+        except Exception as e:
+            logger.error(f"Failed to notify assignees {assignee_ids}: {e}", exc_info=True)
+
+    @classmethod
     def trigger_user_notification(
         cls,
         user_ids: List[Union[str, int]],
