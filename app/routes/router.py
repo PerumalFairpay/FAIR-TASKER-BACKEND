@@ -34,6 +34,7 @@ from app.routes import (
     users,
     tickets,
     wfh_requests,
+    notifications,
 )
 
 api_router = APIRouter()
@@ -72,5 +73,6 @@ api_router.include_router(google_auth.router, prefix="/auth/google", tags=["goog
 api_router.include_router(users.router)
 api_router.include_router(tickets.router)
 api_router.include_router(wfh_requests.router)
+api_router.include_router(notifications.router)
 
 

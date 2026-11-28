@@ -56,3 +56,12 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+# ====================================================
+# OneSignal Push Notification Environment Variables
+# ====================================================
+ONESIGNAL_APP_ID = os.getenv("ONESIGNAL_APP_ID", "")
+ONESIGNAL_REST_API_KEY = os.getenv("ONESIGNAL_REST_API_KEY", "")
+ONESIGNAL_USER_AUTH_KEY = os.getenv("ONESIGNAL_USER_AUTH_KEY")
+ONESIGNAL_ENABLED = os.getenv("ONESIGNAL_ENABLED", "true").lower() in ("true", "1", "yes")
+ONESIGNAL_DEFAULT_CHANNEL_ID = os.getenv("ONESIGNAL_DEFAULT_CHANNEL_ID")
