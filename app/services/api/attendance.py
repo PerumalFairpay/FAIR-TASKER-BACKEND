@@ -6,6 +6,7 @@ from pymongo import UpdateOne
 import pandas as pd
 import io
 import traceback
+import uuid
 from app.database import (
     attendance_collection,
     employees_collection,
@@ -20,7 +21,8 @@ from app.models import (
     AttendanceCreate,
     AttendanceUpdate,
     AttendanceAdminEdit,
-    BiometricLogItem
+    BiometricLogItem,
+    BreakRequest,
 )
 from app.utils import normalize, get_employee_basic_details
 
@@ -306,30 +308,62 @@ class AttendanceService:
             return None, None, str(e)
 
     @staticmethod
-    async def clock_out(attendance: AttendanceUpdate, employee_id: str, date: str) -> Tuple[Optional[dict], Optional[dict], Optional[str]]:
-        try:
-            target_emp_id = employee_id
-            emp = await employees_collection.find_one({
-                "is_deleted": {"$ne": True},
-                "$or": [
-                    {"employee_no_id": employee_id},
-                    {"_id": ObjectId(employee_id) if ObjectId.is_valid(employee_id) else "000000000000000000000000"}
-                ]
-            })
-            if emp:
-                target_emp_id = str(emp["_id"])
+    async def _resolve_employee_and_attendance(employee_id: str, date: str) -> Tuple[Optional[dict], str, Optional[dict]]:
+        """Resolve employee document, canonical employee_id, and active attendance record for a date."""
+        target_emp_id = employee_id
+        emp = await employees_collection.find_one({
+            "is_deleted": {"$ne": True},
+            "$or": [
+                {"employee_no_id": employee_id},
+                {"_id": ObjectId(employee_id) if ObjectId.is_valid(employee_id) else "000000000000000000000000"}
+            ]
+        })
+        if emp:
+            target_emp_id = str(emp["_id"])
 
+        existing = await attendance_collection.find_one({
+            "employee_id": target_emp_id,
+            "date": date,
+            "is_deleted": {"$ne": True}
+        })
+        if not existing:
             existing = await attendance_collection.find_one({
-                "employee_id": target_emp_id,
+                "employee_id": employee_id,
                 "date": date,
                 "is_deleted": {"$ne": True}
             })
-            if not existing:
-                existing = await attendance_collection.find_one({
-                    "employee_id": employee_id,
-                    "date": date,
-                    "is_deleted": {"$ne": True}
-                })
+        return emp, target_emp_id, existing
+
+    @staticmethod
+    def _close_active_break(
+        breaks: List[dict], end_time_str: str, notes: Optional[str] = None
+    ) -> Tuple[List[dict], float, bool, Optional[str]]:
+        """Close the active break entry and recompute total_break_hours without altering work hours."""
+        updated_breaks = [dict(b) for b in (breaks or [])]
+        active_idx = next((i for i, b in enumerate(updated_breaks) if not b.get("end_time")), None)
+        if active_idx is None:
+            total_hours = round(sum(float(b.get("duration_minutes", 0.0)) for b in updated_breaks) / 60, 2)
+            return updated_breaks, total_hours, False, None
+
+        active_break = updated_breaks[active_idx]
+        start_dt = datetime.fromisoformat(active_break["start_time"].replace("Z", "+00:00"))
+        end_dt = datetime.fromisoformat(end_time_str.replace("Z", "+00:00"))
+        if end_dt < start_dt:
+            return updated_breaks, 0.0, False, "Break end time cannot be earlier than start time"
+
+        duration_minutes = round((end_dt - start_dt).total_seconds() / 60, 2)
+        active_break["end_time"] = end_time_str
+        active_break["duration_minutes"] = duration_minutes
+        if notes is not None:
+            active_break["notes"] = notes
+
+        total_hours = round(sum(float(b.get("duration_minutes", 0.0)) for b in updated_breaks) / 60, 2)
+        return updated_breaks, total_hours, True, None
+
+    @staticmethod
+    async def clock_out(attendance: AttendanceUpdate, employee_id: str, date: str) -> Tuple[Optional[dict], Optional[dict], Optional[str]]:
+        try:
+            emp, target_emp_id, existing = await AttendanceService._resolve_employee_and_attendance(employee_id, date)
 
             if not existing:
                 return None, None, "No clock-in record found for this date"
@@ -337,6 +371,16 @@ class AttendanceService:
             update_data = {k: v for k, v in attendance.dict().items() if v is not None}
             if attendance.location:
                 update_data["location"] = attendance.location
+
+            # Auto-close any open break at clock-out time (without subtracting from total_work_hours)
+            if existing.get("is_on_break") or any(not b.get("end_time") for b in existing.get("breaks", [])):
+                closed_breaks, total_break_hours, _, break_err = AttendanceService._close_active_break(
+                    existing.get("breaks", []), attendance.clock_out
+                )
+                if not break_err:
+                    update_data["breaks"] = closed_breaks
+                    update_data["total_break_hours"] = total_break_hours
+                    update_data["is_on_break"] = False
 
             start_str = existing.get("clock_in")
             end_str = attendance.clock_out
@@ -384,6 +428,68 @@ class AttendanceService:
 
             metrics = await AttendanceService.get_dashboard_metrics(employee_id=target_emp_id)
             return res, metrics, None
+        except Exception as e:
+            traceback.print_exc()
+            return None, None, str(e)
+
+    @staticmethod
+    async def toggle_break(payload: BreakRequest, employee_id: str) -> Tuple[Optional[dict], Optional[str], Optional[str]]:
+        try:
+            ts = payload.timestamp or datetime.now().isoformat()
+            target_date = payload.date or ts.split("T")[0]
+
+            emp, _, existing = await AttendanceService._resolve_employee_and_attendance(employee_id, target_date)
+            if not existing or not existing.get("clock_in"):
+                return None, None, "No active clock-in record found for this date"
+            if existing.get("clock_out"):
+                return None, None, "Cannot manage breaks after clocking out"
+
+            breaks = list(existing.get("breaks") or [])
+            has_active_break = bool(existing.get("is_on_break") or any(not b.get("end_time") for b in breaks))
+
+            action = payload.action or ("end" if has_active_break else "start")
+
+            if action == "start":
+                if has_active_break:
+                    return None, None, "You already have an active break"
+
+                breaks.append({
+                    "id": str(uuid.uuid4()),
+                    "break_type": payload.break_type or "Break",
+                    "start_time": ts,
+                    "end_time": None,
+                    "duration_minutes": 0.0,
+                    "notes": payload.notes,
+                })
+                update_fields = {
+                    "breaks": breaks,
+                    "is_on_break": True,
+                    "updated_at": datetime.utcnow(),
+                }
+                action_taken = "started"
+            else:
+                closed_breaks, total_break_hours, had_active, break_err = AttendanceService._close_active_break(
+                    breaks, ts, notes=payload.notes
+                )
+                if break_err:
+                    return None, None, break_err
+                if not had_active:
+                    return None, None, "No active break found to end"
+
+                update_fields = {
+                    "breaks": closed_breaks,
+                    "total_break_hours": total_break_hours,
+                    "is_on_break": False,
+                    "updated_at": datetime.utcnow(),
+                }
+                action_taken = "ended"
+
+            await attendance_collection.update_one({"_id": existing["_id"]}, {"$set": update_fields})
+            updated_record = await attendance_collection.find_one({"_id": existing["_id"]})
+            res = normalize(updated_record)
+            if emp:
+                res["employee_details"] = get_employee_basic_details(emp)
+            return res, action_taken, None
         except Exception as e:
             traceback.print_exc()
             return None, None, str(e)
