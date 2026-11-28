@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from bson import ObjectId
 
-from app.database import notifications_collection, roles_collection, users_collection
+from app.database import employees_collection, notifications_collection, roles_collection, users_collection
 from app.services.push_notification_service import PushNotificationService
 
 logger = logging.getLogger("notification_helper")
@@ -66,6 +66,103 @@ class NotificationHelper:
             {"_id": 1},
         )
         return [str(doc["_id"]) async for doc in user_cursor]
+
+    @classmethod
+    async def get_user_id_for_employee(
+        cls,
+        employee_id: Optional[str] = None,
+        email: Optional[str] = None,
+    ) -> Optional[str]:
+        """Resolves the active user_id for an employee via user_id or email."""
+        emp_doc = None
+        if employee_id and ObjectId.is_valid(str(employee_id)):
+            emp_doc = await employees_collection.find_one(
+                {"_id": ObjectId(str(employee_id)), "is_deleted": {"$ne": True}},
+                {"user_id": 1, "email": 1},
+            )
+
+        resolved_user_id = emp_doc.get("user_id") if emp_doc else None
+        if resolved_user_id:
+            return str(resolved_user_id)
+
+        resolved_email = email or (emp_doc.get("email") if emp_doc else None)
+        if not resolved_email:
+            return None
+
+        user_doc = await users_collection.find_one(
+            {
+                "is_deleted": {"$ne": True},
+                "is_active": {"$ne": False},
+                "email": re.compile(f"^{re.escape(resolved_email.strip())}$", re.IGNORECASE),
+            },
+            {"_id": 1},
+        )
+        return str(user_doc["_id"]) if user_doc else None
+
+    @classmethod
+    def trigger_employee_notification(
+        cls,
+        title: str,
+        body: str,
+        employee_id: Optional[str] = None,
+        email: Optional[str] = None,
+        notification_type: str = "general",
+        data: Optional[Dict[str, Any]] = None,
+        url: Optional[str] = None,
+        image_url: Optional[str] = None,
+        send_push: bool = True,
+        save_in_app: bool = True,
+    ) -> None:
+        """Fire-and-forget notification dispatch to a single employee."""
+        cls._dispatch_task(
+            cls.notify_employee(
+                employee_id=employee_id,
+                email=email,
+                title=title,
+                body=body,
+                notification_type=notification_type,
+                data=data,
+                url=url,
+                image_url=image_url,
+                send_push=send_push,
+                save_in_app=save_in_app,
+            )
+        )
+
+    @classmethod
+    async def notify_employee(
+        cls,
+        title: str,
+        body: str,
+        employee_id: Optional[str] = None,
+        email: Optional[str] = None,
+        notification_type: str = "general",
+        data: Optional[Dict[str, Any]] = None,
+        url: Optional[str] = None,
+        image_url: Optional[str] = None,
+        send_push: bool = True,
+        save_in_app: bool = True,
+    ) -> None:
+        """Resolves an employee's user account and sends them a notification."""
+        try:
+            user_id = await cls.get_user_id_for_employee(
+                employee_id=employee_id,
+                email=email,
+            )
+            if user_id:
+                await cls.notify_users(
+                    user_ids=[user_id],
+                    title=title,
+                    body=body,
+                    notification_type=notification_type,
+                    data=data,
+                    url=url,
+                    image_url=image_url,
+                    send_push=send_push,
+                    save_in_app=save_in_app,
+                )
+        except Exception as e:
+            logger.error(f"Failed to notify employee {employee_id or email}: {e}", exc_info=True)
 
     @classmethod
     def trigger_user_notification(

@@ -235,6 +235,29 @@ async def update_leave_status(
             rejection_reason=status_update.rejection_reason
         )
 
+        normalized_status = (status_update.status or "").strip().lower()
+        if normalized_status in ("approved", "rejected"):
+            status_label = "Approved" if normalized_status == "approved" else "Rejected"
+            notif_body = (
+                f"Your {lt_details.get('name')} request ({data.get('start_date')} to {data.get('end_date')}) "
+                f"has been {status_label.lower()}."
+            )
+            if normalized_status == "rejected" and status_update.rejection_reason:
+                notif_body += f" Reason: {status_update.rejection_reason}"
+
+            NotificationHelper.trigger_employee_notification(
+                employee_id=str(data.get("employee_id", "")) or None,
+                email=emp_details.get("email"),
+                title=f"Leave Request {status_label}",
+                body=notif_body,
+                notification_type=f"leave_request_{normalized_status}",
+                data={
+                    "leave_request_id": str(data.get("id") or data.get("_id", leave_request_id)),
+                    "status": status_label,
+                },
+                url="/leave-management/request",
+            )
+
     return success_response(
         message=f"Leave request {status_update.status} successfully",
         data=data
