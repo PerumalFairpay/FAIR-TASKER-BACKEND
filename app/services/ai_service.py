@@ -217,9 +217,16 @@ async def _inspect_collection_fields(collection_name: str, limit_samples: int = 
         return []
 
 
+def _extract_role_name(user: dict) -> str:
+    raw_role = user.get("role")
+    if isinstance(raw_role, dict):
+        return str(raw_role.get("name") or "employee").lower()
+    return str(raw_role or "employee").lower()
+
+
 async def get_tools_for_user(user: dict, current_query: Optional[str] = None):
     """Returns dynamic MongoDB query + RAG tools scoped strictly to the user's role."""
-    role = (user.get("role") or "employee").lower()
+    role = _extract_role_name(user)
     is_admin = role == "admin"
     emp_no_id = user.get("employee_no_id")
     user_id = str(user.get("id") or user.get("_id") or "")
@@ -467,7 +474,7 @@ async def chat_stream(query: str, history: list, user: dict) -> AsyncGenerator[s
         last_context = history[-1].get("content", "")
     full_context_text = f"{last_context} {query}".strip()
 
-    role = (user.get("role") or "employee").lower()
+    role = _extract_role_name(user)
     is_admin = role == "admin"
     allowed_collections = _get_allowed_collections(is_admin)
 
