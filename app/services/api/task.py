@@ -190,12 +190,10 @@ class TaskService:
                 norm_task = normalize(t)
                 proj = project_map.get(norm_task.get("project_id", ""))
                 if proj:
-                    norm_task["project_name"] = proj["name"]
                     norm_task["project"] = proj
 
                 assigner = user_map.get(norm_task.get("assigned_by", ""))
                 if assigner:
-                    norm_task["assigned_by_name"] = assigner["name"]
                     norm_task["assigned_by_details"] = assigner
 
                 norm_task["assigned_to_details"] = [
@@ -247,7 +245,6 @@ class TaskService:
                 )
                 if project_doc:
                     proj = TaskService._build_project_summary(project_doc)
-                    norm_task["project_name"] = proj["name"]
                     norm_task["project"] = proj
 
             assigned_by_id = norm_task.get("assigned_by")
@@ -258,7 +255,6 @@ class TaskService:
                 )
                 if user_doc:
                     assigner = TaskService._build_user_summary(user_doc)
-                    norm_task["assigned_by_name"] = assigner["name"]
                     norm_task["assigned_by_details"] = assigner
 
             assignee_ids = norm_task.get("assigned_to") or []
