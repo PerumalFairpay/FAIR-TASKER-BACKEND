@@ -7,6 +7,7 @@ from app.database import employees_collection
 from app.helper.response_helper import success_response, error_response
 from app.helper.file_handler import save_upload_file
 from app.services.leave_email_service import send_leave_application_email, send_leave_status_email
+from app.services.notification_helper import NotificationHelper
 from app.auth import verify_token, get_current_user
 
 router = APIRouter(prefix="/leave-requests", tags=["leave-requests"], dependencies=[Depends(verify_token)])
@@ -83,6 +84,18 @@ async def create_leave_request(
                 end_date=end_date,
                 total_days=data.get("total_days"),
                 reason=reason
+            )
+
+            NotificationHelper.trigger_role_notification(
+                roles=["admin"],
+                title="New Leave Request",
+                body=f"{emp_details.get('name')} requested {lt_details.get('name')} ({start_date} to {end_date}, {data.get('total_days')} day(s)).",
+                notification_type="leave_request",
+                data={
+                    "leave_request_id": str(data.get("id") or data.get("_id", "")),
+                    "status": "Pending",
+                },
+                url="/leave-management/request",
             )
 
     return success_response(message="Leave request submitted successfully", data=data, status_code=201)

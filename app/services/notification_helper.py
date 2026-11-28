@@ -1,10 +1,13 @@
 import asyncio
 import logging
+import re
 import threading
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
-from app.database import notifications_collection, users_collection
+from bson import ObjectId
+
+from app.database import notifications_collection, roles_collection, users_collection
 from app.services.push_notification_service import PushNotificationService
 
 logger = logging.getLogger("notification_helper")
@@ -31,6 +34,38 @@ class NotificationHelper:
             return ""
         text = text.strip()
         return text if len(text) <= max_length else text[: max_length - 3] + "..."
+
+    @classmethod
+    async def get_user_ids_by_roles(cls, roles: List[str]) -> List[str]:
+        """Fetches active, non-deleted user IDs matching any of the given role names."""
+        clean_roles = [r.strip() for r in roles if r and r.strip()]
+        if not clean_roles:
+            return []
+
+        role_patterns = [re.compile(f"^{re.escape(r)}$", re.IGNORECASE) for r in clean_roles]
+        role_cursor = roles_collection.find(
+            {"name": {"$in": role_patterns}, "is_deleted": {"$ne": True}},
+            {"_id": 1},
+        )
+        role_oids: List[ObjectId] = []
+        role_id_strs: List[str] = []
+        async for role_doc in role_cursor:
+            role_oids.append(role_doc["_id"])
+            role_id_strs.append(str(role_doc["_id"]))
+
+        or_conditions: List[Dict[str, Any]] = [{"role": {"$in": role_patterns}}]
+        if role_id_strs:
+            or_conditions.append({"role_id": {"$in": role_id_strs + role_oids}})
+
+        user_cursor = users_collection.find(
+            {
+                "is_deleted": {"$ne": True},
+                "is_active": {"$ne": False},
+                "$or": or_conditions,
+            },
+            {"_id": 1},
+        )
+        return [str(doc["_id"]) async for doc in user_cursor]
 
     @classmethod
     def trigger_user_notification(
@@ -61,6 +96,67 @@ class NotificationHelper:
                 save_in_app=save_in_app,
             )
         )
+
+    @classmethod
+    def trigger_role_notification(
+        cls,
+        roles: List[str],
+        title: str,
+        body: str,
+        notification_type: str = "general",
+        data: Optional[Dict[str, Any]] = None,
+        url: Optional[str] = None,
+        image_url: Optional[str] = None,
+        send_push: bool = True,
+        save_in_app: bool = True,
+    ) -> None:
+        """Fire-and-forget notification dispatch to all active users with the given roles."""
+        if not roles:
+            return
+        cls._dispatch_task(
+            cls.notify_roles(
+                roles=roles,
+                title=title,
+                body=body,
+                notification_type=notification_type,
+                data=data,
+                url=url,
+                image_url=image_url,
+                send_push=send_push,
+                save_in_app=save_in_app,
+            )
+        )
+
+    @classmethod
+    async def notify_roles(
+        cls,
+        roles: List[str],
+        title: str,
+        body: str,
+        notification_type: str = "general",
+        data: Optional[Dict[str, Any]] = None,
+        url: Optional[str] = None,
+        image_url: Optional[str] = None,
+        send_push: bool = True,
+        save_in_app: bool = True,
+    ) -> None:
+        """Resolves active users for the given roles and sends them notifications."""
+        try:
+            user_ids = await cls.get_user_ids_by_roles(roles)
+            if user_ids:
+                await cls.notify_users(
+                    user_ids=user_ids,
+                    title=title,
+                    body=body,
+                    notification_type=notification_type,
+                    data=data,
+                    url=url,
+                    image_url=image_url,
+                    send_push=send_push,
+                    save_in_app=save_in_app,
+                )
+        except Exception as e:
+            logger.error(f"Failed to notify roles {roles}: {e}", exc_info=True)
 
     @classmethod
     async def notify_users(
