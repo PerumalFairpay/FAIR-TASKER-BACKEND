@@ -13,7 +13,17 @@ from .asset import AssetCategoryBase, AssetCategoryCreate, AssetCategoryUpdate, 
 from .blog import BlogBase, BlogCreate, BlogUpdate, BlogResponse
 from .leave import LeaveTypeBase, LeaveTypeCreate, LeaveTypeUpdate, LeaveTypeResponse, LeaveRequestBase, LeaveRequestCreate, LeaveRequestUpdate, LeaveRequestStatusUpdate, LeaveRequestResponse
 from .task import TaskAttachment, TaskBase, TaskCreate, TaskUpdate, TaskStatusUpdate, EODReportItem, EODReportRequest, TaskResponse
-from .attendance import AttendanceBase, AttendanceCreate, AttendanceUpdate, AttendanceAdminEdit, AttendanceResponse, BiometricLogItem, BiometricSyncRequest
+from .attendance import (
+    BreakEntry,
+    BreakRequest,
+    AttendanceBase,
+    AttendanceCreate,
+    AttendanceUpdate,
+    AttendanceAdminEdit,
+    AttendanceResponse,
+    BiometricLogItem,
+    BiometricSyncRequest,
+)
 from .system_configuration import SystemConfigurationBase, SystemConfigurationCreate, SystemConfigurationUpdate, SystemConfigurationResponse
 from .nda import NDARequestBase, NDARequestCreate, NDARequestUpdate, NDAStatusUpdate, NDARequestResponse, NDADropdownItem, NDASignatureRequest, NDARegenerateRequest
 from .payslip import PayslipBase, PayslipCreate, PayslipUpdate, PayslipResponse, PayslipComponentBase, PayslipComponentCreate, PayslipComponentUpdate, PayslipComponentResponse

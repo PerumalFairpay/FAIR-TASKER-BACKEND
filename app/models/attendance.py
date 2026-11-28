@@ -1,7 +1,26 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List, Any, Dict, Union
+from typing import Optional, List, Any, Dict, Union, Literal
 from datetime import datetime
 from .employee import EmployeeBasicDetails
+
+class BreakEntry(BaseModel):
+    id: str
+    break_type: str = "Break"
+    start_time: str  # ISO 8601 timestamp
+    end_time: Optional[str] = None
+    duration_minutes: float = 0.0
+    notes: Optional[str] = None
+
+
+class BreakRequest(BaseModel):
+    """Payload for starting or ending a break (auto-toggles if action is omitted)"""
+
+    date: Optional[str] = None  # Format: "YYYY-MM-DD"
+    timestamp: Optional[str] = None  # ISO 8601 timestamp
+    action: Optional[Literal["start", "end"]] = None
+    break_type: str = "Break"
+    notes: Optional[str] = None
+
 
 class AttendanceBase(BaseModel):
     employee_id: str
@@ -12,6 +31,9 @@ class AttendanceBase(BaseModel):
 
     clock_out: Optional[str] = None
     total_work_hours: float = 0.0
+    breaks: List[BreakEntry] = Field(default_factory=list)
+    total_break_hours: float = 0.0
+    is_on_break: bool = False
 
     # Primary status: Present | Absent | Leave | Holiday
     status: str = "Present"

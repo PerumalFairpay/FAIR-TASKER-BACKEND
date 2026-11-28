@@ -7,6 +7,7 @@ from app.models import (
     AttendanceCreate,
     AttendanceUpdate,
     BiometricSyncRequest,
+    BreakRequest,
 )
 from app.auth import verify_token, get_current_user
 from app.services.api.attendance import AttendanceService
@@ -55,6 +56,27 @@ async def clock_out(
         message="Clocked out successfully",
         data=data,
         meta=metrics
+    )
+
+
+@router.post("/break", dependencies=[Depends(verify_token)])
+async def toggle_break(
+    payload: Optional[BreakRequest] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    employee_id = current_user.get("employee_no_id") or current_user.get("id")
+    data, action_taken, error = await AttendanceService.toggle_break(payload or BreakRequest(), employee_id)
+    if error:
+        lower_err = error.lower()
+        status_code = 404 if "no active" in lower_err else (
+            400 if "already" in lower_err or "cannot" in lower_err or "earlier" in lower_err else 500
+        )
+        return error_response(message=error, status_code=status_code)
+
+    return success_response(
+        message=f"Break {action_taken} successfully",
+        data=data,
+        status_code=200
     )
 
 
