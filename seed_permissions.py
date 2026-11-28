@@ -21,7 +21,8 @@ from bson import ObjectId
 PERMISSIONS_DATA = [
     {"code": "dashboard:view", "name": "View Dashboard", "module": "Dashboard", "description": "Can access dashboard and analytics summary"},
     {"code": "employee:view", "name": "View Employees", "module": "Employee", "description": "Can view employee directories and profiles"},
-    {"code": "attendance:view", "name": "View Attendance", "module": "Attendance", "description": "Can view attendance logs and history"},
+    {"code": "attendance:view", "name": "View Attendance", "module": "Attendance", "description": "Can view all employees' attendance logs and history"},
+    {"code": "my_attendance:view", "name": "View My Attendance", "module": "Attendance", "description": "Can view own attendance logs and history"},
     {"code": "leave:view", "name": "View Leaves", "module": "Leave", "description": "Can view leave history and leave balances"},
     {"code": "leave:access", "name": "Leave Access (Manage)", "module": "Leave", "description": "Can manage and configure leave types and rules"},
     {"code": "payslip:view", "name": "View Payslips", "module": "Payroll", "description": "Can view and download payslips"},
@@ -139,7 +140,7 @@ async def seed():
         emp_role_id = str(employee_role["_id"])
         employee_codes = {
             "dashboard:view",
-            "attendance:view",
+            "my_attendance:view",
             "leave:view",
             "payslip:view",
             "expense:view",
