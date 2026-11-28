@@ -1,8 +1,11 @@
 from typing import Dict, Any, List, Optional, Tuple
-from app.database import users_collection, employees_collection
+from app.database import users_collection, employees_collection, password_resets_collection
 from app.models import UserLogin
-from app.utils import verify_password
+from app.utils import verify_password, get_password_hash
 from app.auth import create_access_token
+from app.services.auth_email_service import send_password_reset_email
+import secrets
+from datetime import datetime, timedelta
 import traceback
 
 
@@ -69,3 +72,71 @@ class AuthService:
         except Exception as e:
             traceback.print_exc()
             return None, str(e)
+
+    @staticmethod
+    async def forgot_password(email: str) -> Tuple[bool, Optional[str]]:
+        try:
+            email_clean = email.strip().lower()
+            user = await users_collection.find_one({"email": email_clean, "is_deleted": {"$ne": True}})
+            if not user:
+                # To prevent user enumeration attacks or confusing messages, we return success but don't error out
+                return True, None
+
+            # Invalidate any existing active tokens for this email
+            await password_resets_collection.delete_many({"email": email_clean})
+
+            # Generate secure random token
+            token = secrets.token_urlsafe(32)
+            expire_at = datetime.utcnow() + timedelta(minutes=30)
+
+            await password_resets_collection.insert_one({
+                "email": email_clean,
+                "token": token,
+                "expire_at": expire_at,
+                "created_at": datetime.utcnow()
+            })
+
+            # Send email via dedicated email service
+            user_name = user.get("name", "User")
+            send_password_reset_email(to_email=email_clean, user_name=user_name, token=token)
+
+            return True, None
+        except Exception as e:
+            traceback.print_exc()
+            return False, str(e)
+
+    @staticmethod
+    async def reset_password(token: str, new_password: str) -> Tuple[bool, Optional[str]]:
+        try:
+            if not token:
+                return False, "Token is required"
+
+            if not new_password or len(new_password) < 6:
+                return False, "Password must be at least 6 characters long"
+
+            reset_record = await password_resets_collection.find_one({"token": token})
+            if not reset_record:
+                return False, "Invalid or expired password reset link"
+
+            if reset_record.get("expire_at") < datetime.utcnow():
+                await password_resets_collection.delete_one({"_id": reset_record["_id"]})
+                return False, "Password reset link has expired. Please request a new one"
+
+            email = reset_record.get("email")
+            user = await users_collection.find_one({"email": email, "is_deleted": {"$ne": True}})
+            if not user:
+                return False, "User not found"
+
+            hashed_password = get_password_hash(new_password)
+            await users_collection.update_one(
+                {"_id": user["_id"]},
+                {"$set": {"hashed_password": hashed_password, "updated_at": datetime.utcnow()}}
+            )
+
+            # Invalidate the token
+            await password_resets_collection.delete_many({"email": email})
+
+            return True, None
+        except Exception as e:
+            traceback.print_exc()
+            return False, str(e)
